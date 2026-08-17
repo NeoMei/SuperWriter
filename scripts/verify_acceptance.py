@@ -14,6 +14,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -46,6 +47,10 @@ def require_keys(value: object, expected: set[str], label: str) -> None:
 
 def valid_digest(value: object) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def is_json_integer(value: object) -> bool:
+    return type(value) is int
 
 
 def project_path(root: Path, value: object, label: str) -> Path:
@@ -81,26 +86,88 @@ def markdown_rows(text: str):
 
 
 def normalized(value: str) -> str:
-    return "".join(re.findall(r"[0-9A-Za-z\u3400-\u9fff]+", value)).casefold()
+    return "".join(character for character in unicodedata.normalize("NFKC", value).casefold()
+                   if character.isalnum())
 
 
-def markdown_fingerprints(text: str):
-    headings, paragraphs, tables = [], [], []
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("!["):
+def markdown_block_sequence(text: str):
+    blocks = []
+    paragraph = []
+
+    def append(kind: str, source: str) -> None:
+        value = normalized(source)
+        if source.strip() and not value:
+            fail(f"canonical merged draft {kind} has no Unicode letters or numbers")
+        if value:
+            blocks.append((kind, value))
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            append("paragraph", " ".join(paragraph))
+            paragraph.clear()
+
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            flush_paragraph()
             continue
-        value = normalized(stripped)
-        if len(value) < 4:
+        if re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", stripped):
+            flush_paragraph()
             continue
-        if stripped.startswith("#"):
-            headings.append(value)
-        elif stripped.startswith("|") and not re.fullmatch(r"[|:\- ]+", stripped):
-            tables.append(value)
-        else:
-            paragraphs.append(value)
-    tokens = sorted(set(re.findall(r"[A-Za-z]+\d+|\d+(?:\.\d+)?%|[A-Z][A-Za-z0-9]{2,}", text)))
-    return {"headings": headings, "paragraphs": paragraphs, "tables": tables, "tokens": [normalized(item) for item in tokens]}
+        heading = re.match(r"^#{1,6}\s*(.*)$", stripped)
+        if heading:
+            flush_paragraph()
+            append("heading", heading.group(1))
+            continue
+        image = re.fullmatch(r"!\[([^]]*)\]\([^)]*\)", stripped)
+        if image:
+            flush_paragraph()
+            append("image caption", image.group(1))
+            continue
+        if stripped.startswith("|"):
+            flush_paragraph()
+            if not re.fullmatch(r"[|:\- ]+", stripped):
+                cells = [cell.strip() for cell in stripped.strip("|").split("|") if cell.strip()]
+                append("table row", " ".join(cells))
+            continue
+        paragraph.append(stripped)
+    flush_paragraph()
+    return blocks
+
+
+def require_ordered_source_coverage(label: str, text: str, source_blocks) -> None:
+    compact = normalized(text)
+    cursor = 0
+    for kind, block in source_blocks:
+        position = compact.find(block, cursor)
+        if position < 0:
+            fail(f"{label} content does not cover current merged draft in order ({kind}): {block[:48]}")
+        cursor = position + len(block)
+
+
+def require_ordered_export_coverage(label: str, text: str, source_blocks) -> None:
+    paragraphs = [value for kind, value in source_blocks if kind == "paragraph"]
+    if not paragraphs:
+        fail("canonical merged draft has no substantive paragraphs")
+    first_paragraph = paragraphs[0]
+    headings = [value for kind, value in source_blocks if kind == "heading"]
+    source_compact = "".join(value for _, value in source_blocks)
+    cursor = 0
+    started = False
+    for body, original in export_body_lines(text):
+        wrapped_heading = next((heading for heading in headings if heading in body), None)
+        if wrapped_heading is not None:
+            body = wrapped_heading
+        if not started:
+            if body not in first_paragraph:
+                continue
+            started = True
+        position = source_compact.find(body, cursor)
+        if position < 0:
+            fail(f"{label} contains substantive body text absent or out of order in canonical merged draft: {original[:48]}")
+        cursor = position + len(body)
+    if not started:
+        fail(f"{label} content does not contain the first canonical merged-draft paragraph")
 
 
 def export_body_lines(text: str):
@@ -115,7 +182,7 @@ def export_body_lines(text: str):
         if re.search(r"[Pp]\d+", stripped):
             stripped = re.sub(r"(?:\.{2,}|\s+)\d+\s*$", "", stripped)
         value = normalized(stripped)
-        if len(value) >= 12:
+        if len(value) >= 4:
             yield value, raw.strip()
 
 
@@ -464,7 +531,9 @@ def main() -> None:
         fail("acceptance manifest is missing: 验收清单.json")
     manifest = load_json(manifest_path, "acceptance manifest")
     require_keys(manifest, {"version", "points", "required_terms", "pipeline", "chapters", "point_chapters", "figures", "outputs", "pdf"}, "acceptance manifest")
-    if not isinstance(manifest, dict) or manifest.get("version") != 1:
+    if not isinstance(manifest, dict) or not is_json_integer(manifest.get("version")):
+        fail("acceptance manifest integer fields must use JSON integers")
+    if manifest.get("version") != 1:
         fail("acceptance manifest version is unsupported")
 
     points = manifest.get("points")
@@ -491,9 +560,21 @@ def main() -> None:
     if not valid_digest(outputs.get("merged_sha256")):
         fail("acceptance manifest merged digest is invalid")
 
-    if pipeline.get("completed_stage") != 9 or pipeline.get("human_gates") != [2, 5, 8] or pipeline.get("machine_gates") != [0, 3, 6, 7]:
-        fail("acceptance manifest pipeline/gate contract is invalid")
+    human_gates = pipeline.get("human_gates")
+    machine_gates = pipeline.get("machine_gates")
     evidence = pipeline.get("stage_evidence")
+    integer_scalars = (pipeline.get("completed_stage"), pdf_contract.get("min_pages"), pdf_contract.get("max_pages"))
+    if (not all(is_json_integer(value) for value in integer_scalars)
+            or not isinstance(human_gates, list)
+            or not all(is_json_integer(value) for value in human_gates)
+            or not isinstance(machine_gates, list)
+            or not all(is_json_integer(value) for value in machine_gates)
+            or (isinstance(evidence, list)
+                and any(isinstance(entry, dict) and not is_json_integer(entry.get("stage")) for entry in evidence))):
+        fail("acceptance manifest integer fields must use JSON integers")
+
+    if pipeline.get("completed_stage") != 9 or human_gates != [2, 5, 8] or machine_gates != [0, 3, 6, 7]:
+        fail("acceptance manifest pipeline/gate contract is invalid")
     if not isinstance(evidence, list) or [entry.get("stage") for entry in evidence if isinstance(entry, dict)] != list(range(10)):
         fail("acceptance manifest must declare stage 0 through 9 evidence")
     for entry in evidence:
@@ -655,23 +736,16 @@ def main() -> None:
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
     extracted = (("DOCX", docx_text), ("PDF", pdf_text))
-    fingerprints = markdown_fingerprints(merged)
-    source_compact = normalized(merged)
+    source_blocks = markdown_block_sequence(merged)
+    if not source_blocks:
+        fail("canonical merged draft has no substantive content")
     for label, text in extracted:
         for value in [*points, *terms, *(figure[2] for figure in validated_figures)]:
             if normalized(value) not in normalized(text):
                 fail(f"{label} markitdown output is missing required text: {value}")
     for label, text in extracted:
-        compact = normalized(text)
-        for kind in ("headings", "paragraphs", "tables", "tokens"):
-            for fingerprint in fingerprints[kind]:
-                if fingerprint not in compact:
-                    fail(f"{label} content does not cover current merged draft {kind}: {fingerprint[:48]}")
-        for body, original in export_body_lines(text):
-            if "|" in original and any(heading in body for heading in fingerprints["headings"]):
-                continue  # WPS-generated table-of-contents row wrapper.
-            if body not in source_compact:
-                fail(f"{label} contains substantive body text absent from canonical merged draft: {original[:48]}")
+        require_ordered_source_coverage(label, text, source_blocks)
+        require_ordered_export_coverage(label, text, source_blocks)
 
     metadata = subprocess.run(["pdfinfo", str(pdf_path)], text=True, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, check=False)
@@ -684,7 +758,7 @@ def main() -> None:
         fail("PDF delivery must contain at least one page")
     pages = int(page_match.group(1))
     minimum, maximum = pdf_contract.get("min_pages"), pdf_contract.get("max_pages")
-    if not isinstance(minimum, int) or not isinstance(maximum, int) or minimum < 1 or maximum < minimum or not minimum <= pages <= maximum:
+    if not is_json_integer(minimum) or not is_json_integer(maximum) or minimum < 1 or maximum < minimum or not minimum <= pages <= maximum:
         fail("PDF delivery page count violates acceptance manifest constraints")
     if pdf_contract.get("page_size") != "A4":
         fail("acceptance manifest PDF page size must be A4")

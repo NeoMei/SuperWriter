@@ -219,6 +219,53 @@ PY
 expect_rejected stale-exports-with-digest "FAIL: DOCX content does not cover current merged draft" \
   "$stale_exports_with_digest" --acceptance-dir "$stale_exports_with_digest/验收/模拟客户A/模拟标段1"
 
+reversed_merged="$(fresh_fixture reversed-merged)"
+python3 - "$reversed_merged/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+merged.write_text("\n".join(reversed(merged.read_text(encoding="utf-8").splitlines())) + "\n", encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected reversed-merged "FAIL: DOCX content does not cover current merged draft in order" \
+  "$reversed_merged" --acceptance-dir "$reversed_merged/验收/模拟客户A/模拟标段1"
+
+duplicated_merged_paragraph="$(fresh_fixture duplicated-merged-paragraph)"
+python3 - "$duplicated_merged_paragraph/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+paragraph = next(block for block in merged.read_text(encoding="utf-8").split("\n\n") if block.startswith("基于招标需求"))
+merged.write_text(merged.read_text(encoding="utf-8") + "\n" + paragraph + "\n", encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected duplicated-merged-paragraph "FAIL: DOCX content does not cover current merged draft in order" \
+  "$duplicated_merged_paragraph" --acceptance-dir "$duplicated_merged_paragraph/验收/模拟客户A/模拟标段1"
+
+for unicode_case in \
+  'hiragana:こんにちはさようならあいうえお' \
+  'hangul:현재문서는최종납품본문입니다' \
+  'extended-han:𠀀𠀁𠀂𠀃𠀄𠀅𠀆𠀇'; do
+  name="${unicode_case%%:*}"
+  text="${unicode_case#*:}"
+  unicode_merged="$(fresh_fixture "unicode-$name")"
+  python3 - "$unicode_merged/验收/模拟客户A/模拟标段1" "$text" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+merged.write_text(merged.read_text(encoding="utf-8") + "\n" + sys.argv[2] + "\n", encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  expect_rejected "unicode-$name" "FAIL: DOCX content does not cover current merged draft in order" \
+    "$unicode_merged" --acceptance-dir "$unicode_merged/验收/模拟客户A/模拟标段1"
+done
+
 deleted_export_body="$(fresh_fixture deleted-export-body)"
 python3 - "$deleted_export_body/验收/模拟客户A/模拟标段1" <<'PY'
 import hashlib, json, re, sys
@@ -232,7 +279,7 @@ manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
-expect_rejected deleted-export-body "FAIL: DOCX contains substantive body text absent from canonical merged draft" \
+expect_rejected deleted-export-body "FAIL: DOCX contains substantive body text absent or out of order in canonical merged draft" \
   "$deleted_export_body" --acceptance-dir "$deleted_export_body/验收/模拟客户A/模拟标段1"
 
 repointed_merged="$(fresh_fixture repointed-merged)"
@@ -345,6 +392,38 @@ path.write_text(text.replace('{\n  "version": 1,', '{\n  "version": 1,\n  "versi
 PY
 expect_rejected duplicate-manifest-key "FAIL: acceptance manifest is invalid: duplicate key: version" \
   "$duplicate_manifest_key" --acceptance-dir "$duplicate_manifest_key/验收/模拟客户A/模拟标段1"
+
+for integer_case in \
+  'version-float:version:float' \
+  'completed-stage-bool:completed_stage:bool' \
+  'human-gate-float:human_gates:float' \
+  'machine-gate-bool:machine_gates:bool' \
+  'evidence-stage-float:stage_evidence:float' \
+  'min-pages-bool:min_pages:bool' \
+  'max-pages-float:max_pages:float'; do
+  name="${integer_case%%:*}"
+  remainder="${integer_case#*:}"
+  field="${remainder%%:*}"
+  kind="${remainder#*:}"
+  invalid_integer="$(fresh_fixture "invalid-integer-$name")"
+  python3 - "$invalid_integer/验收/模拟客户A/模拟标段1/验收清单.json" "$field" "$kind" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1]); field, kind = sys.argv[2:]
+data = json.loads(path.read_text(encoding="utf-8"))
+if field == "version": target, key = data, "version"
+elif field == "completed_stage": target, key = data["pipeline"], "completed_stage"
+elif field == "human_gates": target, key = data["pipeline"]["human_gates"], 0
+elif field == "machine_gates": target, key = data["pipeline"]["machine_gates"], 0
+elif field == "stage_evidence": target, key = data["pipeline"]["stage_evidence"][1], "stage"
+else: target, key = data["pdf"], field
+value = target[key]
+target[key] = bool(value) if kind == "bool" else float(value)
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  expect_rejected "invalid-integer-$name" "FAIL: acceptance manifest integer fields must use JSON integers" \
+    "$invalid_integer" --acceptance-dir "$invalid_integer/验收/模拟客户A/模拟标段1"
+done
 
 unknown_manifest_key="$(fresh_fixture unknown-manifest-key)"
 python3 - "$unknown_manifest_key/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
@@ -522,6 +601,27 @@ path.write_text(text.replace('{\n  "version": 1,', '{\n  "version": 1,\n  "versi
 PY
 reinstall_fixture "$duplicate_stage_key"
 expect_rejected duplicate-stage-key "FAIL: stage interaction contract is invalid: duplicate key: version" "$duplicate_stage_key"
+
+for contract_case in 'version:float' 'stage:bool' 'gate:float'; do
+  field="${contract_case%%:*}"
+  kind="${contract_case#*:}"
+  invalid_contract_integer="$(fresh_fixture "contract-$field-$kind")"
+  python3 - "$invalid_contract_integer/references/阶段契约.json" "$field" "$kind" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1]); field, kind = sys.argv[2:]
+data = json.loads(path.read_text(encoding="utf-8"))
+if field == "version": target, key = data, "version"
+elif field == "stage": target, key = data["stages"][0], "stage"
+else: target, key = data["stages"][0], "gate"
+value = target[key]
+target[key] = bool(value) if kind == "bool" else float(value)
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  reinstall_fixture "$invalid_contract_integer"
+  expect_rejected "contract-$field-$kind" "FAIL: stage interaction contract integer fields must use JSON integers" \
+    "$invalid_contract_integer"
+done
 
 invalid_gate_metadata="$(fresh_fixture invalid-gate-metadata)"
 python3 - "$invalid_gate_metadata/references/门禁清单.md" <<'PY'

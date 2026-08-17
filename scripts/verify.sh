@@ -62,6 +62,15 @@ skill = Path(sys.argv[1]).read_text(encoding="utf-8")
 gates = Path(sys.argv[2]).read_text(encoding="utf-8")
 try: stage_contract = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys)
 except (OSError, ValueError) as exc: fail(f"stage interaction contract is invalid: {exc}")
+if (not isinstance(stage_contract, dict)
+        or type(stage_contract.get("version")) is not int
+        or not isinstance(stage_contract.get("stages"), list)
+        or any(not isinstance(item, dict)
+               or type(item.get("stage")) is not int
+               or (item.get("gate") is not None and item.get("gate") != "delivery"
+                   and type(item.get("gate")) is not int)
+               for item in stage_contract.get("stages", []))):
+    fail("stage interaction contract integer fields must use JSON integers")
 stages = list(re.finditer(r"^\*\*阶段 (\d+) ([^*]+)\*\*", skill, re.M))
 if [int(item.group(1)) for item in stages] != list(range(10)):
     fail("expected stage 0 preprocessing plus business stages 1-9")
