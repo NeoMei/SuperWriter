@@ -66,7 +66,8 @@ new_fixture() {
   TEST_HOME="$CASE_ROOT/home"
   AGENTS_SOURCE="$CASE_ROOT/agents-source"
   OPENCODE_SOURCE="$CASE_ROOT/opencode-source"
-  WPS_SOURCE="$CASE_ROOT/WPSComposer-source"
+  WPS_REPO="$CASE_ROOT/wps-repo"
+  WPS_SOURCE="$WPS_REPO/skills/WPSComposer"
 
   mkdir -p "$TEST_HOME/.codex" "$AGENTS_SOURCE" \
     "$OPENCODE_SOURCE/obsidian-excalidraw" "$WPS_SOURCE/scripts/macos_probe"
@@ -78,16 +79,40 @@ new_fixture() {
   done
   printf '%s\n' '# obsidian-excalidraw' > "$OPENCODE_SOURCE/obsidian-excalidraw/SKILL.md"
   printf '%s\n' '# WPSComposer' > "$WPS_SOURCE/SKILL.md"
-  for runtime in \
-    scripts/__init__.py scripts/_colors.py scripts/artifact_transport.py \
-    scripts/document_model.py scripts/md_parser.py scripts/orchestrator.py \
-    scripts/pdf.py scripts/slide.py scripts/writer.py \
-    scripts/macos_probe/__init__.py scripts/macos_probe/runtime.py \
+  for runtime in __init__.py \
+    scripts/__init__.py scripts/_base.py scripts/_colors.py scripts/_dispatch.py \
+    scripts/artifact_transport.py scripts/conversion.py scripts/design_presets.py \
+    scripts/document_api.py scripts/document_model.py scripts/formatting.py \
+    scripts/generation_plan.py scripts/heading_numbering.py scripts/layout_templates.py \
+    scripts/math_render.py scripts/md_parser.py scripts/numbering_native.py \
+    scripts/orchestrator.py scripts/pdf.py scripts/quality_checks.py \
+    scripts/recording_composers.py scripts/reference_styles.py scripts/sheet.py \
+    scripts/slide.py scripts/windows_conversion.py scripts/wps_engine.py scripts/writer.py \
+    scripts/macos_probe/__init__.py scripts/macos_probe/__main__.py \
+    scripts/macos_probe/bridge.py scripts/macos_probe/conversion.py \
+    scripts/macos_probe/generation.py scripts/macos_probe/inspection.py \
+    scripts/macos_probe/models.py scripts/macos_probe/runner.py \
+    scripts/macos_probe/runtime.py scripts/macos_probe/templates.py \
     scripts/plugins/__init__.py scripts/plugins/excalidraw.py \
     scripts/renderers/__init__.py scripts/renderers/sheet_renderer.py \
     scripts/renderers/slide_renderer.py scripts/renderers/writer_renderer.py; do
     mkdir -p "$WPS_SOURCE/$(dirname "$runtime")"
     printf '# fixture: %s\n' "$runtime" > "$WPS_SOURCE/$runtime"
+  done
+  printf '%s\n' 'from . import design_presets' 'from .macos_probe import generation' > "$WPS_SOURCE/scripts/orchestrator.py"
+  printf '%s\n' 'from .. import reference_styles, heading_numbering, math_render' > "$WPS_SOURCE/scripts/renderers/writer_renderer.py"
+  printf '%s\n' 'from .. import artifact_transport, generation_plan' 'from . import bridge, models, runtime, templates' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+  for vendor in \
+    addin/bridge-client.js addin/index.html addin/manifest.xml \
+    addin/presentation.js addin/ribbon.xml addin/spreadsheet.js addin/writer.js \
+    package-lock.json package.json node_modules/wpsjs/package.json \
+    node_modules/wpsjs/src/index.js node_modules/wpsjs/src/lib/debug.js \
+    node_modules/wpsjs/src/lib/debug_publish.js node_modules/wpsjs/src/lib/util.js \
+    node_modules/wpsjs/src/lib/res/etDemo.xlsx \
+    node_modules/wpsjs/src/lib/res/wppDemo.pptx \
+    node_modules/wpsjs/src/lib/res/wpsDemo.docx; do
+    mkdir -p "$WPS_REPO/macos/wps-jsapi-probe/$(dirname "$vendor")"
+    printf 'fixture vendor asset: %s\n' "$vendor" > "$WPS_REPO/macos/wps-jsapi-probe/$vendor"
   done
   AGENTS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$AGENTS_SOURCE")"
   OPENCODE_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$OPENCODE_SOURCE")"
@@ -147,13 +172,13 @@ HOME="$TEST_HOME" \
 
 # Path safety: a relative WPS source must be canonicalized before it is linked.
 new_fixture relative-wps
-WPS_SOURCE_RELATIVE="WPSComposer-source"
+WPS_SOURCE_RELATIVE="wps-repo/skills/WPSComposer"
 (
   cd "$CASE_ROOT"
   WPS_SOURCE="$WPS_SOURCE_RELATIVE"
   run_install >/dev/null
 )
-WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$CASE_ROOT/WPSComposer-source")"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$CASE_ROOT/wps-repo/skills/WPSComposer")"
 assert_basic_install
 
 # Path safety: exact and symlink/same-inode source-target overlap must fail before deletion.

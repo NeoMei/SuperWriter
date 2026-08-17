@@ -50,3 +50,34 @@ $ git diff --check
 ## 已知范围外事项
 
 真实环境直接执行默认 `bash install.sh` 会被 Task 1 安全前检拒绝，因为默认 dependency source 与 agents host target 是同一路径。最终真实同步使用临时只读 source snapshot 调用同一事务安装器后完成静态与显式验收；本任务未越界修改安装器。
+
+## 复审修复（追加提交）
+
+独立复审指出 5 项 Important，逐项复现后均确认成立。修改生产代码前，扩展 mutation suite 并观察到 9 个明确 RED：缺 WPS import 叶子、缺 vendor、source 与三宿主同时缺 dependency、停等同义词漏报、确认记录误报、`非人工` metadata 假绿、malformed PNG 假绿、合法 Adam7 假红、同比例无关 DOCX media 假绿。
+
+### 修复
+
+- WPS runtime 从固定 18 项改为从生成、三类 renderer、macOS generation/conversion/inspection 与 Excalidraw plugin 入口递归解析本地 Python import 闭包；同时 pin add-in、wpsjs CLI/debug 代码、package lock 与三个官方 Office template 等关键 vendor assets。
+- 每个依赖 source、每个 host root、每个安装 skill 都必须是包含 `SKILL.md` 的非空真实目录；不再允许空 manifest 相等。
+- `SKILL.md` gate action 与 `references/门禁清单.md` gate heading 改用精确的 `interaction=machine|human` metadata。正文停等 lint 仅辅助检测明确动作表达，既覆盖“征得用户同意”，又允许“加载客户确认记录后自动继续”。
+- acceptance 明确 preflight 系统 `sips`；手写逻辑只读取 PNG signature/IHDR 宽高。完整解码、Adam7、color/depth 合法性和统一 sRGB/尺寸转换交给 ImageIO-backed `sips`，输出 192×96 24-bit BMP。
+- 源图与 DOCX relationship 指向的 embedded 图统一解码后，以 RGB 平均绝对误差和大误差像素比例绑定内容。现有 WPS 重采样通过，同宽高比纯色无关图失败。
+
+### Skill 契约范围扩展
+
+复审要求结构化 gate/action metadata，无法仅修改验证器而保持契约有唯一机器来源，因此必要扩展到 `SKILL.md` 与 `references/门禁清单.md`。按 `writing-skills` 复核：frontmatter description 仍仅为 `Use when...` trigger；阶段仍为 0–9；门仍为 0/2/3/5/6/7/8；人工停点仍仅门 2/5/8，流程语义未改变。
+
+### 最终验证
+
+```text
+bash -n install.sh scripts/verify.sh tests/test_install.sh tests/test_verify_artifacts.sh tests/fixtures/fake_markitdown.sh
+bash tests/test_install.sh
+PASS: install is path-safe, marker-safe, and transactional across all hosts and routes
+bash tests/test_verify_artifacts.sh
+PASS: verifier rejects malformed native acceptance artifacts with explicit diagnostics
+bash scripts/verify.sh
+PASS: superwriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+bash scripts/verify.sh --acceptance-dir "$PWD/验收/模拟客户A/模拟标段1"
+PASS: superwriter static contracts and explicit acceptance artifacts ... are satisfied
+git diff --check
+```

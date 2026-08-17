@@ -14,11 +14,14 @@ fresh_fixture() {
   git -C "$REPO_ROOT" archive HEAD | tar -x -C "$fixture"
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
+  cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
+  cp -R "$REPO_ROOT/references/." "$fixture/references/"
 
   local test_home="$fixture-test-home"
   local agents_source="$fixture-agents-source"
   local opencode_source="$fixture-opencode-source"
-  local wps_source="$fixture-WPSComposer-source"
+  local wps_repo="$fixture-wps-repo"
+  local wps_source="$wps_repo/skills/WPSComposer"
   mkdir -p "$test_home/.codex" "$agents_source" \
     "$opencode_source/obsidian-excalidraw" \
     "$wps_source/scripts/macos_probe" "$wps_source/scripts/plugins" \
@@ -32,16 +35,45 @@ fresh_fixture() {
   printf '%s\n' '# obsidian-excalidraw' > "$opencode_source/obsidian-excalidraw/SKILL.md"
   printf '%s\n' 'Excalidraw runtime' > "$opencode_source/obsidian-excalidraw/runtime.txt"
   printf '%s\n' '# WPSComposer' > "$wps_source/SKILL.md"
-  for runtime in \
-    scripts/__init__.py scripts/_colors.py scripts/artifact_transport.py \
-    scripts/document_model.py scripts/md_parser.py scripts/orchestrator.py \
-    scripts/pdf.py scripts/slide.py scripts/writer.py \
-    scripts/macos_probe/__init__.py scripts/macos_probe/runtime.py \
+  for runtime in __init__.py \
+    scripts/__init__.py scripts/_base.py scripts/_colors.py scripts/_dispatch.py \
+    scripts/artifact_transport.py scripts/conversion.py scripts/design_presets.py \
+    scripts/document_api.py scripts/document_model.py scripts/formatting.py \
+    scripts/generation_plan.py scripts/heading_numbering.py scripts/layout_templates.py \
+    scripts/math_render.py scripts/md_parser.py scripts/numbering_native.py \
+    scripts/orchestrator.py scripts/pdf.py scripts/quality_checks.py \
+    scripts/recording_composers.py scripts/reference_styles.py scripts/sheet.py \
+    scripts/slide.py scripts/windows_conversion.py scripts/wps_engine.py scripts/writer.py \
+    scripts/macos_probe/__init__.py scripts/macos_probe/__main__.py \
+    scripts/macos_probe/bridge.py scripts/macos_probe/conversion.py \
+    scripts/macos_probe/generation.py scripts/macos_probe/inspection.py \
+    scripts/macos_probe/models.py scripts/macos_probe/runner.py \
+    scripts/macos_probe/runtime.py scripts/macos_probe/templates.py \
     scripts/plugins/__init__.py scripts/plugins/excalidraw.py \
     scripts/renderers/__init__.py scripts/renderers/sheet_renderer.py \
     scripts/renderers/slide_renderer.py scripts/renderers/writer_renderer.py; do
     mkdir -p "$wps_source/$(dirname "$runtime")"
     printf '# fixture: %s\n' "$runtime" > "$wps_source/$runtime"
+  done
+  printf '%s\n' 'from . import design_presets' 'from .macos_probe import generation' > \
+    "$wps_source/scripts/orchestrator.py"
+  printf '%s\n' 'from .. import reference_styles, heading_numbering, math_render' > \
+    "$wps_source/scripts/renderers/writer_renderer.py"
+  printf '%s\n' 'from .. import artifact_transport, generation_plan' \
+    'from . import bridge, models, runtime, templates' > \
+    "$wps_source/scripts/macos_probe/generation.py"
+  for vendor in \
+    addin/bridge-client.js addin/index.html addin/manifest.xml \
+    addin/presentation.js addin/ribbon.xml addin/spreadsheet.js addin/writer.js \
+    package-lock.json package.json node_modules/wpsjs/package.json \
+    node_modules/wpsjs/src/index.js node_modules/wpsjs/src/lib/debug.js \
+    node_modules/wpsjs/src/lib/debug_publish.js node_modules/wpsjs/src/lib/util.js \
+    node_modules/wpsjs/src/lib/res/etDemo.xlsx \
+    node_modules/wpsjs/src/lib/res/wppDemo.pptx \
+    node_modules/wpsjs/src/lib/res/wpsDemo.docx; do
+    mkdir -p "$wps_repo/macos/wps-jsapi-probe/$(dirname "$vendor")"
+    printf 'fixture vendor asset: %s\n' "$vendor" > \
+      "$wps_repo/macos/wps-jsapi-probe/$vendor"
   done
 
   HOME="$test_home" \
@@ -64,7 +96,7 @@ verify_fixture() {
   HOME="$fixture-test-home" \
     SUPERWRITER_AGENTS_SKILLS_ROOT="$fixture-agents-source" \
     SUPERWRITER_OPENCODE_SKILLS_ROOT="$fixture-opencode-source" \
-    WPSCOMPOSER_SKILL_SOURCE="$fixture-WPSComposer-source" \
+    WPSCOMPOSER_SKILL_SOURCE="$fixture-wps-repo/skills/WPSComposer" \
     bash "$fixture/scripts/verify.sh" "$@"
 }
 
@@ -73,7 +105,7 @@ reinstall_fixture() {
   HOME="$fixture-test-home" \
     SUPERWRITER_AGENTS_SKILLS_ROOT="$fixture-agents-source" \
     SUPERWRITER_OPENCODE_SKILLS_ROOT="$fixture-opencode-source" \
-    WPSCOMPOSER_SKILL_SOURCE="$fixture-WPSComposer-source" \
+    WPSCOMPOSER_SKILL_SOURCE="$fixture-wps-repo/skills/WPSComposer" \
     bash "$fixture/install.sh" >/dev/null
 }
 
@@ -96,7 +128,24 @@ expect_rejected() {
   fi
 }
 
+expect_accepted() {
+  local name="$1"
+  local fixture="$2"
+  shift 2
+  local output="$TEST_ROOT/$name.output"
+
+  if ! verify_fixture "$fixture" "$@" >"$output" 2>&1; then
+    echo "FAIL: verifier rejected valid fixture: $name" >&2
+    sed -n '1,160p' "$output" >&2
+    failures=$((failures + 1))
+  else
+    echo "PASS: verifier accepted $name"
+  fi
+}
+
 baseline="$(fresh_fixture baseline)"
+PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
+  'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
@@ -131,8 +180,19 @@ printf '%s\n' tampered > "$dependency_tamper-test-home/.agents/skills/grilling/r
 expect_rejected dependency-tamper "FAIL: managed tree manifest differs" "$dependency_tamper"
 
 wps_runtime="$(fresh_fixture wps-runtime)"
-rm "$wps_runtime-WPSComposer-source/scripts/renderers/writer_renderer.py"
+rm "$wps_runtime-wps-repo/skills/WPSComposer/scripts/reference_styles.py"
 expect_rejected wps-runtime "FAIL: required WPSComposer runtime asset is missing" "$wps_runtime"
+
+wps_vendor="$(fresh_fixture wps-vendor)"
+rm "$wps_vendor-wps-repo/macos/wps-jsapi-probe/addin/writer.js"
+expect_rejected wps-vendor "FAIL: required WPSComposer vendor asset is missing" "$wps_vendor"
+
+missing_dependency="$(fresh_fixture missing-dependency)"
+rm -rf "$missing_dependency-agents-source/grill-me"
+for host in .agents .claude .codex; do
+  rm -rf "$missing_dependency-test-home/$host/skills/grill-me"
+done
+expect_rejected missing-dependency "FAIL: managed skill source is missing: grill-me" "$missing_dependency"
 
 # Gate metadata is exact, and artificial waits are forbidden outside gates 2/5/8.
 unlabelled_pause="$(fresh_fixture unlabelled-pause)"
@@ -148,6 +208,41 @@ path.write_text(text.replace(needle, needle + "：写作前必须停下等待用
 PY
 reinstall_fixture "$unlabelled_pause"
 expect_rejected unlabelled-pause "FAIL: stage 4 contains an unapproved user-wait instruction" "$unlabelled_pause"
+
+synonym_pause="$(fresh_fixture synonym-pause)"
+python3 - "$synonym_pause/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = "**阶段 4 分章写作**"
+path.write_text(text.replace(needle, needle + "：继续前必须先征得用户同意；", 1), encoding="utf-8")
+PY
+reinstall_fixture "$synonym_pause"
+expect_rejected synonym-pause "FAIL: stage 4 contains an unapproved user-wait instruction" "$synonym_pause"
+
+confirmation_record="$(fresh_fixture confirmation-record)"
+python3 - "$confirmation_record/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = "**阶段 4 分章写作**"
+path.write_text(text.replace(needle, needle + "：加载门 2 客户确认记录后自动继续；", 1), encoding="utf-8")
+PY
+reinstall_fixture "$confirmation_record"
+expect_accepted confirmation-record "$confirmation_record"
+
+invalid_gate_metadata="$(fresh_fixture invalid-gate-metadata)"
+python3 - "$invalid_gate_metadata/references/门禁清单.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(text.replace("## 门 5 章节核查 [interaction=human]", "## 门 5 章节核查（非人工）", 1), encoding="utf-8")
+PY
+reinstall_fixture "$invalid_gate_metadata"
+expect_rejected invalid-gate-metadata "FAIL: gate interaction metadata is invalid" "$invalid_gate_metadata"
 
 # Backup discovery is name/date independent and never permits backup skills in a host root.
 discoverable_backup="$(fresh_fixture discoverable-backup)"
@@ -225,7 +320,7 @@ expect_rejected diagram-reverse-binding "FAIL: Excalidraw arrow endpoints must l
 
 png_signature="$(fresh_fixture png-signature)"
 printf x > "$png_signature/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png"
-expect_rejected png-signature "FAIL: rendered architecture diagram is not a valid PNG" "$png_signature" --acceptance-dir "$png_signature/验收/模拟客户A/模拟标段1"
+expect_rejected png-signature "FAIL: rendered architecture diagram does not have a valid PNG header" "$png_signature" --acceptance-dir "$png_signature/验收/模拟客户A/模拟标段1"
 
 png_crc="$(fresh_fixture png-crc)"
 python3 - "$png_crc/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" <<'PY'
@@ -237,7 +332,7 @@ payload = bytearray(path.read_bytes())
 payload[29] ^= 0x01  # Corrupt the IHDR CRC without changing dimensions.
 path.write_bytes(payload)
 PY
-expect_rejected png-crc "FAIL: rendered architecture diagram is not a valid PNG" "$png_crc" --acceptance-dir "$png_crc/验收/模拟客户A/模拟标段1"
+expect_rejected png-crc "FAIL: rendered architecture diagram is not decodable by sips" "$png_crc" --acceptance-dir "$png_crc/验收/模拟客户A/模拟标段1"
 
 png_dimensions="$(fresh_fixture png-dimensions)"
 python3 - "$png_dimensions/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" <<'PY'
@@ -258,6 +353,61 @@ path.write_bytes(
 )
 PY
 expect_rejected png-dimensions "FAIL: rendered architecture diagram dimensions are unreasonable" "$png_dimensions" --acceptance-dir "$png_dimensions/验收/模拟客户A/模拟标段1"
+
+png_invalid_combination="$(fresh_fixture png-invalid-combination)"
+python3 - "$png_invalid_combination/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" <<'PY'
+from pathlib import Path
+import struct
+import sys
+import zlib
+
+path = Path(sys.argv[1])
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+path.write_bytes(
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", 368, 188, 1, 2, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00" * ((368 * 3 + 7) // 8)) * 188))
+    + chunk(b"IEND", b"")
+)
+PY
+expect_rejected png-invalid-combination "FAIL: rendered architecture diagram is not decodable by sips" "$png_invalid_combination" --acceptance-dir "$png_invalid_combination/验收/模拟客户A/模拟标段1"
+
+png_adam7="$(fresh_fixture png-adam7)"
+python3 - "$png_adam7/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" \
+  "$png_adam7/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" <<'PY'
+from pathlib import Path
+import struct
+import sys
+import zipfile
+import zlib
+
+png_path = Path(sys.argv[1])
+docx_path = Path(sys.argv[2])
+width, height = 368, 188
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+passes = ((0, 0, 8, 8), (4, 0, 8, 8), (0, 4, 4, 8), (2, 0, 4, 4), (0, 2, 2, 4), (1, 0, 2, 2), (0, 1, 1, 2))
+raw = bytearray()
+for x0, y0, dx, dy in passes:
+    pass_width = len(range(x0, width, dx))
+    for _ in range(y0, height, dy):
+        raw.append(0)
+        raw.extend(b"\xff\xff\xff" * pass_width)
+payload = (
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 1))
+    + chunk(b"IDAT", zlib.compress(bytes(raw)))
+    + chunk(b"IEND", b"")
+)
+png_path.write_bytes(payload)
+temporary = docx_path.with_suffix(".tmp.docx")
+with zipfile.ZipFile(docx_path, "r") as source, zipfile.ZipFile(temporary, "w") as target:
+    for item in source.infolist():
+        target.writestr(item, payload if item.filename == "word/media/image1.png" else source.read(item.filename))
+temporary.replace(docx_path)
+PY
+expect_accepted png-adam7 "$png_adam7" --acceptance-dir "$png_adam7/验收/模拟客户A/模拟标段1"
 
 docx_application="$(fresh_fixture docx-application)"
 python3 - "$docx_application/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" <<'PY'
@@ -343,8 +493,8 @@ def chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
 unrelated = (
     b"\x89PNG\r\n\x1a\n"
-    + chunk(b"IHDR", struct.pack(">IIBBBBB", 240, 240, 8, 2, 0, 0, 0))
-    + chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00" * (240 * 3)) * 240))
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", 368, 188, 8, 2, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00" * (368 * 3)) * 188))
     + chunk(b"IEND", b"")
 )
 with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(temporary, "w") as target:
@@ -356,7 +506,7 @@ with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(temporary, "w") as ta
     target.writestr("word/media/unrelated.png", unrelated)
 temporary.replace(path)
 PY
-expect_rejected docx-relationship "FAIL: DOCX embedded diagram aspect ratio differs from the rendered diagram" "$docx_relationship" --acceptance-dir "$docx_relationship/验收/模拟客户A/模拟标段1"
+expect_rejected docx-relationship "FAIL: DOCX embedded diagram pixels differ from the rendered diagram" "$docx_relationship" --acceptance-dir "$docx_relationship/验收/模拟客户A/模拟标段1"
 
 docx_bad_png="$(fresh_fixture docx-bad-png)"
 python3 - "$docx_bad_png/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" <<'PY'
@@ -372,7 +522,7 @@ with zipfile.ZipFile(path, "r") as source, zipfile.ZipFile(temporary, "w") as ta
         target.writestr(item, payload)
 temporary.replace(path)
 PY
-expect_rejected docx-bad-png "FAIL: DOCX embedded diagram is not a valid PNG" "$docx_bad_png" --acceptance-dir "$docx_bad_png/验收/模拟客户A/模拟标段1"
+expect_rejected docx-bad-png "FAIL: DOCX embedded diagram does not have a valid PNG header" "$docx_bad_png" --acceptance-dir "$docx_bad_png/验收/模拟客户A/模拟标段1"
 
 docx_text="$(fresh_fixture docx-text)"
 shim_docx="$TEST_ROOT/shim-docx"

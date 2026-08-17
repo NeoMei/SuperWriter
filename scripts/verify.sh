@@ -50,30 +50,36 @@ if [int(item.group(1)) for item in stages] != list(range(10)):
     fail("expected stage 0 preprocessing plus business stages 1-9")
 if "**阶段 0 启动预处理**" not in skill: fail("stage 0 must be startup preprocessing")
 if "**阶段 1 素材入库**" not in skill: fail("stage 1 must begin the nine business stages")
-headings = re.findall(r"^## 门 (\d+) ([^\n]+)$", gates, re.M)
-if [int(number) for number, _ in headings] != [0, 2, 3, 5, 6, 7, 8]:
+headings = re.findall(r"^## 门 (\d+) ([^\n]+?) \[interaction=(machine|human)\]$", gates, re.M)
+expected_interactions = [(0, "machine"), (2, "human"), (3, "machine"), (5, "human"), (6, "machine"), (7, "machine"), (8, "human")]
+if [(int(number), interaction) for number, _, interaction in headings] != expected_interactions:
+    fail("gate interaction metadata is invalid")
+if [int(number) for number, _, _ in headings] != [0, 2, 3, 5, 6, 7, 8]:
     fail("expected exactly seven process gates: 0/2/3/5/6/7/8")
 if "## 交付验收（阶段 9 导出）" not in gates:
     fail("stage 9 export must be delivery acceptance, not a gate")
-if [int(number) for number, metadata in headings if "人工" in metadata] != [2, 5, 8]:
-    fail("gate metadata may mark only gates 2/5/8 as human")
-if re.findall(r"\[门 (\d+)·人工\]", skill) != ["2", "5", "8"]:
-    fail("only gates 2/5/8 may stop for a user")
-wait = re.compile(r"等待用户|等用户|停下|暂停[^。；\n]*(?:用户|确认)|询问用户|请用户|用户确认|客户确认")
+actions = re.findall(r"^\[门 (\d+)·interaction=(machine|human)\]", skill, re.M)
+if [(int(number), interaction) for number, interaction in actions] != expected_interactions:
+    fail("skill gate action metadata is invalid")
+wait = re.compile(
+    r"等待用户|等候用户|等用户|停下|暂停[^。；\n]*(?:用户|客户|确认|同意)|"
+    r"询问用户|请用户|请示客户|"
+    r"(?:征得|取得|获得)[^。；\n]{0,12}(?:用户|客户)[^。；\n]{0,12}(?:同意|确认|许可)"
+)
 for index, match in enumerate(stages):
     stage = int(match.group(1))
     end = stages[index + 1].start() if index + 1 < len(stages) else len(skill)
     if stage not in {2, 5, 8} and wait.search(skill[match.start():end]):
         fail(f"stage {stage} contains an unapproved user-wait instruction")
 for required in (
-    "[门 0·机器]：核对评分点总数与原文一致，全覆盖无遗漏报警。",
-    "[门 3·机器]：核对大纲与应答矩阵章节映射一致后锁定矩阵；此后章节变更必须回溯矩阵。",
+    "[门 0·interaction=machine]：核对评分点总数与原文一致，全覆盖无遗漏报警。",
+    "[门 3·interaction=machine]：核对大纲与应答矩阵章节映射一致后锁定矩阵；此后章节变更必须回溯矩阵。",
     "评分点总数抽查",
 ):
     if required not in skill: fail(f"skill gate contract is missing: {required}")
 for required in (
-    "## 门 0 矩阵全覆盖（机器）",
-    "## 门 3 大纲与矩阵一致性（机器）",
+    "## 门 0 矩阵全覆盖 [interaction=machine]",
+    "## 门 3 大纲与矩阵一致性 [interaction=machine]",
     "评分点总数抽查已纳入门 2 客户确认清单",
 ):
     if required not in gates: fail(f"gate checklist contract is missing: {required}")
@@ -95,7 +101,7 @@ PY
 
 python3 -B - "$SOURCE_DIR" "$AGENTS_SKILLS_ROOT" "$OPENCODE_SKILLS_ROOT" "$WPSCOMPOSER_SKILL_SOURCE" "${HOSTS[@]}" <<'PY'
 from pathlib import Path
-import hashlib, os, stat, sys
+import ast, hashlib, os, stat, sys
 def fail(message):
     print(f"FAIL: {message}", file=sys.stderr); raise SystemExit(1)
 def manifest(root):
@@ -113,12 +119,71 @@ def manifest(root):
 source, agents, opencode, wps = map(Path, sys.argv[1:5]); hosts = list(map(Path, sys.argv[5:]))
 dependencies = ["grilling", "grill-me", "grill-with-docs", "to-spec", "domain-modeling", "ai-image-to-ppt"]
 superwriter_files = ["SKILL.md", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md"]
-wps_runtime = [
-    "SKILL.md", "scripts/__init__.py", "scripts/_colors.py", "scripts/artifact_transport.py",
-    "scripts/document_model.py", "scripts/md_parser.py", "scripts/orchestrator.py", "scripts/pdf.py",
-    "scripts/slide.py", "scripts/writer.py", "scripts/macos_probe/__init__.py", "scripts/macos_probe/runtime.py",
-    "scripts/plugins/__init__.py", "scripts/plugins/excalidraw.py", "scripts/renderers/__init__.py",
-    "scripts/renderers/sheet_renderer.py", "scripts/renderers/slide_renderer.py", "scripts/renderers/writer_renderer.py",
+
+def module_path(module):
+    stem = wps.joinpath(*module.split("."))
+    file_path = stem.with_suffix(".py")
+    if file_path.is_file(): return file_path, False
+    package_path = stem / "__init__.py"
+    if package_path.is_file(): return package_path, True
+    return None, False
+
+def import_closure(entrypoints):
+    pending = list(entrypoints); seen = set(); files = set()
+    while pending:
+        module = pending.pop()
+        if module in seen: continue
+        path, is_package = module_path(module)
+        if path is None: fail(f"required WPSComposer runtime asset is missing: {module.replace('.', '/')}.py")
+        seen.add(module); files.add(path.relative_to(wps).as_posix())
+        parts = module.split(".") if is_package else module.split(".")[:-1]
+        for depth in range(1, len(module.split("."))):
+            package = ".".join(module.split(".")[:depth])
+            package_path, _ = module_path(package)
+            if package_path is not None: files.add(package_path.relative_to(wps).as_posix())
+        try: tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except (OSError, SyntaxError, UnicodeError) as exc: fail(f"WPSComposer runtime asset is not importable: {path}: {exc}")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "scripts" or alias.name.startswith("scripts."):
+                        pending.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    keep = len(parts) - (node.level - 1)
+                    if keep < 0: fail(f"WPSComposer runtime has an invalid relative import: {path}")
+                    base = parts[:keep]
+                    if node.module: base.extend(node.module.split("."))
+                    target = ".".join(base)
+                    if target:
+                        target_path, _ = module_path(target)
+                        if target_path is None: fail(f"required WPSComposer runtime asset is missing: {target.replace('.', '/')}.py")
+                        pending.append(target)
+                    if node.module is None:
+                        for alias in node.names:
+                            candidate = ".".join(base + [alias.name])
+                            candidate_path, _ = module_path(candidate)
+                            if candidate_path is None: fail(f"required WPSComposer runtime asset is missing: {candidate.replace('.', '/')}.py")
+                            pending.append(candidate)
+                elif node.module and (node.module == "scripts" or node.module.startswith("scripts.")):
+                    pending.append(node.module)
+    return sorted(files)
+
+wps_runtime = ["SKILL.md"] + import_closure([
+    "scripts.orchestrator", "scripts.renderers.writer_renderer",
+    "scripts.renderers.slide_renderer", "scripts.renderers.sheet_renderer",
+    "scripts.macos_probe.generation", "scripts.macos_probe.conversion",
+    "scripts.macos_probe.inspection", "scripts.plugins.excalidraw",
+])
+vendor_root = wps.parents[1] / "macos/wps-jsapi-probe"
+wps_vendor = [
+    "addin/bridge-client.js", "addin/index.html", "addin/manifest.xml",
+    "addin/presentation.js", "addin/ribbon.xml", "addin/spreadsheet.js", "addin/writer.js",
+    "package-lock.json", "package.json", "node_modules/wpsjs/package.json",
+    "node_modules/wpsjs/src/index.js", "node_modules/wpsjs/src/lib/debug.js",
+    "node_modules/wpsjs/src/lib/debug_publish.js", "node_modules/wpsjs/src/lib/util.js",
+    "node_modules/wpsjs/src/lib/res/etDemo.xlsx", "node_modules/wpsjs/src/lib/res/wppDemo.pptx",
+    "node_modules/wpsjs/src/lib/res/wpsDemo.docx",
 ]
 expected_superwriter = {"references": ("dir", "")}
 for rel in superwriter_files:
@@ -127,12 +192,23 @@ for rel in superwriter_files:
     expected_superwriter[rel] = ("file", hashlib.sha256(path.read_bytes()).hexdigest())
 for rel in wps_runtime:
     if not (wps / rel).is_file(): fail(f"required WPSComposer runtime asset is missing: {rel}")
-expected_skills = {name: manifest(agents / name) for name in dependencies}
-expected_skills["obsidian-excalidraw"] = manifest(opencode / "obsidian-excalidraw")
+for rel in wps_vendor:
+    path = vendor_root / rel
+    if not path.is_file() or path.stat().st_size == 0: fail(f"required WPSComposer vendor asset is missing: {rel}")
+expected_skills = {}
+for name in dependencies:
+    root = agents / name
+    if not root.is_dir() or not (root / "SKILL.md").is_file(): fail(f"managed skill source is missing: {name}")
+    expected_skills[name] = manifest(root)
+excalidraw_root = opencode / "obsidian-excalidraw"
+if not excalidraw_root.is_dir() or not (excalidraw_root / "SKILL.md").is_file(): fail("managed skill source is missing: obsidian-excalidraw")
+expected_skills["obsidian-excalidraw"] = manifest(excalidraw_root)
 for host in hosts:
+    if not host.is_dir(): fail(f"managed host root is missing: {host}")
     if manifest(host / "superwriter") != expected_superwriter:
         fail(f"managed tree manifest differs: {host / 'superwriter'}")
     for name, expected in expected_skills.items():
+        if not (host / name).is_dir() or not (host / name / "SKILL.md").is_file(): fail(f"managed skill installation is missing: {host / name}")
         if manifest(host / name) != expected: fail(f"managed tree manifest differs: {host / name}")
     link = host / "WPSComposer"
     if not link.is_symlink(): fail(f"WPSComposer is not linked at {host}")
@@ -171,7 +247,7 @@ fi
 
 [ -d "$ACCEPTANCE_DIR" ] || fail "acceptance directory does not exist: $ACCEPTANCE_DIR"
 ACCEPTANCE_DIR="$(cd "$ACCEPTANCE_DIR" && pwd)"
-for command in markitdown pdfinfo file unzip; do require_command "$command"; done
+for command in markitdown pdfinfo file unzip sips; do require_command "$command"; done
 BID_NAME="$(basename "$ACCEPTANCE_DIR")"
 DIAGRAM_MD="$ACCEPTANCE_DIR/配图/图1-国产化适配架构.excalidraw.md"
 DIAGRAM_PNG="$ACCEPTANCE_DIR/配图/图1-国产化适配架构.png"
@@ -211,35 +287,44 @@ PY
 
 python3 -B - "$DIAGRAM_PNG" "$DELIVERY_DOCX" <<'PY'
 from pathlib import Path
-import posixpath, struct, sys, xml.etree.ElementTree as ET, zipfile, zlib
+import posixpath, struct, subprocess, sys, tempfile, xml.etree.ElementTree as ET, zipfile
 def fail(message): print(f"FAIL: {message}", file=sys.stderr); raise SystemExit(1)
-def png_dimensions(payload, label):
+def png_header(payload, label):
     try:
-        if payload[:8] != b"\x89PNG\r\n\x1a\n": raise ValueError()
-        position = 8; chunks = []; idat = []
-        while position < len(payload):
-            if position + 12 > len(payload): raise ValueError()
-            length = struct.unpack(">I", payload[position:position+4])[0]; kind = payload[position+4:position+8]
-            end = position + 12 + length
-            if end > len(payload): raise ValueError()
-            data = payload[position+8:position+8+length]
-            crc = struct.unpack(">I", payload[position+8+length:end])[0]
-            if zlib.crc32(kind + data) & 0xffffffff != crc: raise ValueError()
-            chunks.append((kind, data)); position = end
-            if kind == b"IDAT": idat.append(data)
-            if kind == b"IEND": break
-        if position != len(payload) or not chunks or chunks[0][0] != b"IHDR" or chunks[-1][0] != b"IEND": raise ValueError()
-        ihdr = chunks[0][1]
-        if len(ihdr) != 13 or not idat: raise ValueError()
-        width, height, depth, color, compression, filtering, interlace = struct.unpack(">IIBBBBB", ihdr)
-        channels = {0:1, 2:3, 3:1, 4:2, 6:4}.get(color)
-        if not width or not height or channels is None or depth not in {1,2,4,8,16} or compression or filtering or interlace: raise ValueError()
-        decoded = zlib.decompress(b"".join(idat)); row_bytes = (width * channels * depth + 7) // 8
-        if len(decoded) != height * (row_bytes + 1): raise ValueError()
+        if len(payload) < 33 or payload[:8] != b"\x89PNG\r\n\x1a\n": raise ValueError()
+        if struct.unpack(">I", payload[8:12])[0] != 13 or payload[12:16] != b"IHDR": raise ValueError()
+        width, height = struct.unpack(">II", payload[16:24])
+        if not width or not height: raise ValueError()
         return width, height
-    except (struct.error, ValueError, zlib.error): fail(f"{label} is not a valid PNG")
+    except (struct.error, ValueError): fail(f"{label} does not have a valid PNG header")
+def bmp_pixels(path, label):
+    try:
+        payload = path.read_bytes()
+        if payload[:2] != b"BM": raise ValueError()
+        offset = struct.unpack_from("<I", payload, 10)[0]
+        dib_size, width, height, planes, depth, compression = struct.unpack_from("<IiiHHI", payload, 14)
+        if dib_size < 40 or width != 192 or abs(height) != 96 or planes != 1 or depth != 24 or compression != 0: raise ValueError()
+        stride = ((width * 3 + 3) // 4) * 4
+        rows = []
+        for row_index in range(abs(height)):
+            row = payload[offset + row_index * stride:offset + row_index * stride + width * 3]
+            if len(row) != width * 3: raise ValueError()
+            rows.append(bytes(channel for index in range(0, len(row), 3) for channel in (row[index + 2], row[index + 1], row[index])))
+        if height > 0: rows.reverse()
+        return b"".join(rows)
+    except (OSError, IndexError, struct.error, ValueError): fail(f"{label} sips output is unreadable")
+def normalized_pixels(payload, label, directory, stem):
+    source = directory / f"{stem}.png"; output = directory / f"{stem}.bmp"
+    source.write_bytes(payload)
+    result = subprocess.run(
+        ["sips", "-m", "/System/Library/ColorSync/Profiles/sRGB Profile.icc", "-s", "format", "bmp", "-z", "96", "192", str(source), "--out", str(output)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+    )
+    if result.returncode != 0 or not output.is_file(): fail(f"{label} is not decodable by sips")
+    return bmp_pixels(output, label)
 source_path, docx = Path(sys.argv[1]), Path(sys.argv[2])
-source_width, source_height = png_dimensions(source_path.read_bytes(), "rendered architecture diagram")
+source_payload = source_path.read_bytes()
+source_width, source_height = png_header(source_payload, "rendered architecture diagram")
 if not (100 <= source_width <= 20000 and 100 <= source_height <= 20000): fail("rendered architecture diagram dimensions are unreasonable")
 try:
     with zipfile.ZipFile(docx) as archive:
@@ -262,10 +347,19 @@ if relationship is None or not relationship.get("Type", "").endswith("/image"): 
 member = posixpath.normpath(posixpath.join("word", relationship.get("Target", "")))
 if member.startswith("../") or not member.startswith("word/media/") or member not in names: fail("DOCX expected diagram relationship target is missing")
 with zipfile.ZipFile(docx) as archive: embedded = archive.read(member)
-embedded_width, embedded_height = png_dimensions(embedded, "DOCX embedded diagram")
+embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
 if not (100 <= embedded_width <= 20000 and 100 <= embedded_height <= 20000): fail("DOCX embedded diagram dimensions are unreasonable")
 source_ratio = source_width / source_height; embedded_ratio = embedded_width / embedded_height
 if abs(source_ratio - embedded_ratio) / source_ratio > 0.002: fail("DOCX embedded diagram aspect ratio differs from the rendered diagram")
+with tempfile.TemporaryDirectory(prefix="superwriter-image-verify-") as temporary:
+    directory = Path(temporary)
+    source_pixels = normalized_pixels(source_payload, "rendered architecture diagram", directory, "source")
+    embedded_pixels = normalized_pixels(embedded, "DOCX embedded diagram", directory, "embedded")
+differences = [abs(left - right) for left, right in zip(source_pixels, embedded_pixels)]
+mean_error = sum(differences) / len(differences)
+large_error_ratio = sum(value > 24 for value in differences) / len(differences)
+if mean_error > 4.0 or large_error_ratio > 0.02:
+    fail("DOCX embedded diagram pixels differ from the rendered diagram")
 PY
 
 verify_markitdown_terms() {
