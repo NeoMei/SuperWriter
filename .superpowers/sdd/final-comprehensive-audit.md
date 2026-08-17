@@ -50,3 +50,10 @@ The repository includes and passes the simulated small-bid acceptance. A real-cu
 
 No reproduced Critical, Important, or worthwhile Minor code defect remains open after the final review and full-suite run. The branches are ready for local fast-forward integration and installation.
 
+## Integration and installation completion
+
+- Superwriter `main` was fast-forwarded to the audited branch.
+- WPSComposer `master` was fast-forwarded to `1f89f463451d44dbe9edf5ceb9614797964f30b0`; the pre-existing untracked `uv.lock` remained untouched.
+- The audited Superwriter and WPSComposer skill were installed to all three hosts (`~/.agents/skills`, `~/.claude/skills`, and `~/.codex/skills`).
+- Post-install static verification and explicit simulated-bid acceptance both passed against the installed mirrors.
+- Post-merge WPSComposer verification on `master` passed all `828` tests. The existing local virtualenv received the optional `pypdf` and `reportlab` test dependencies; this did not modify repository files.
