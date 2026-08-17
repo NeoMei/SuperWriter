@@ -2,16 +2,65 @@
 # superwriter 幂等安装：三宿主技能镜像 + Codex AGENTS.md 路由块 + 依赖技能镜像
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
+AGENTS_SKILLS_ROOT="${SUPERWRITER_AGENTS_SKILLS_ROOT:-$HOME/.agents/skills}"
+OPENCODE_SKILLS_ROOT="${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$HOME/.opencode/skills}"
+WPSCOMPOSER_SKILL_SOURCE="${WPSCOMPOSER_SKILL_SOURCE:-/Users/neomei/项目/WpsComposer/skills/WPSComposer}"
+
+DEPENDENCIES=(grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt)
+
+require_file() {
+  [ -f "$1" ] || {
+    echo "Missing required skill file: $1" >&2
+    exit 1
+  }
+}
+
+require_file "$SRC/SKILL.md"
+for skill in "${DEPENDENCIES[@]}"; do
+  require_file "$AGENTS_SKILLS_ROOT/$skill/SKILL.md"
+done
+require_file "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw/SKILL.md"
+require_file "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md"
+[ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || {
+  echo "WPSComposer source is incomplete: $WPSCOMPOSER_SKILL_SOURCE" >&2
+  exit 1
+}
 
 for d in "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+  rm -rf "$d/superwriter"
   mkdir -p "$d/superwriter"
   cp "$SRC/SKILL.md" "$d/superwriter/SKILL.md"
-  mkdir -p "$d/superwriter/references"
-  cp "$SRC"/references/*.md "$d/superwriter/references/"
+  cp -R "$SRC/references" "$d/superwriter/references"
+
+  for skill in "${DEPENDENCIES[@]}"; do
+    source_skill="$AGENTS_SKILLS_ROOT/$skill"
+    target_skill="$d/$skill"
+    if [ "$source_skill" != "$target_skill" ]; then
+      rm -rf "$target_skill"
+      mkdir -p "$target_skill"
+      cp -R "$source_skill/." "$target_skill/"
+    fi
+  done
+
+  rm -rf "$d/obsidian-excalidraw"
+  mkdir -p "$d/obsidian-excalidraw"
+  cp -R "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw/." "$d/obsidian-excalidraw/"
+
+  rm -rf "$d/WPSComposer"
+  ln -s "$WPSCOMPOSER_SKILL_SOURCE" "$d/WPSComposer"
 done
 
-if ! grep -q 'pipeline:superwriter' "$HOME/.codex/AGENTS.md" 2>/dev/null; then
-  cat >> "$HOME/.codex/AGENTS.md" <<'BLOCK'
+agents_file="$HOME/.codex/AGENTS.md"
+mkdir -p "$(dirname "$agents_file")"
+route_file="$(mktemp)"
+if [ -f "$agents_file" ]; then
+  awk '
+    /<!-- pipeline:superwriter:start -->/ { skipping=1; next }
+    /<!-- pipeline:superwriter:end -->/ { skipping=0; next }
+    !skipping { print }
+  ' "$agents_file" > "$route_file"
+fi
+cat >> "$route_file" <<'BLOCK'
 
 <!-- pipeline:superwriter:start -->
 # superwriter 路由
@@ -22,14 +71,6 @@ if ! grep -q 'pipeline:superwriter' "$HOME/.codex/AGENTS.md" 2>/dev/null; then
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用
 <!-- pipeline:superwriter:end -->
 BLOCK
-fi
-
-# Codex 侧深访依赖镜像
-for s in grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt; do
-  if [ -d "$HOME/.agents/skills/$s" ]; then
-    mkdir -p "$HOME/.codex/skills/$s"
-    cp -R "$HOME/.agents/skills/$s/." "$HOME/.codex/skills/$s/"
-  fi
-done
+mv "$route_file" "$agents_file"
 
 echo "superwriter installed to 3 hosts."
