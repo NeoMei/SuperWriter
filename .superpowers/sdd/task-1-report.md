@@ -96,3 +96,49 @@ PASS: superwriter installation, gate contract, backup isolation, and acceptance 
 - 为保证宿主级原子提交，会复制每个现有 skills 根形成完整候选树；运行时间和临时磁盘占用与现有技能树大小成正比。
 - 宿主 skills 根若本身是叶符号链接会被拒绝，避免原子替换时悄悄改变链接语义；父目录中的符号链接仍会被规范化并限制在 HOME 内。
 - 回滚覆盖正常的单次提交失败；若底层文件系统在回滚 `mv` 时也持续失败，脚本无法承诺自动恢复，但事务备份在该次回滚尝试期间不会被主动当作源文件删除。
+
+## 独立复审修复（追加）
+
+复审报告 `.superpowers/sdd/task-1-review.md` 的 Critical 1 / Important 2 均经代码路径与隔离故障注入确认。
+
+### RED：提交失败后回滚 `mv` 再失败
+
+命令：`bash tests/test_install.sh`
+
+```text
+FAIL: rollback failure deleted the only agents backup
+```
+
+测试先让 `new-skills -> .claude/skills` 失败，再让 `backup-skills -> .agents/skills` 恢复失败。修复后回滚逐项检查退出码；无法恢复的 stage root 不参与 EXIT cleanup，并打印 `Rollback incomplete: ... backup retained at <path>`，供人工恢复。
+
+### RED：AGENTS.md realpath 污染 source/managed target
+
+命令：`bash tests/test_install.sh`
+
+```text
+FAIL: route referent inside WPS source: install unexpectedly succeeded
+```
+
+新增 AGENTS symlink 分别指向 HOME 内 WPS 源 `SKILL.md`、Codex `superwriter/SKILL.md` 的测试。修复将规范化 route referent 纳入 source、host root、managed target 边界图；冲突在 staging 前失败且原文件哈希不变。
+
+### RED：staging 失败残留宿主父目录
+
+命令：`bash tests/test_install.sh`
+
+```text
+FAIL: staging failure at .claude left host parents or content behind
+```
+
+新增第二、第三宿主候选树 `cp` 失败注入并比较整个 HOME 摘要。修复记录本事务实际创建的宿主父目录，EXIT 删除 staging 后仅逆序移除仍为空的自建目录；已有父目录及非空目录不受影响。
+
+### 复审修复 GREEN
+
+```text
+bash -n install.sh tests/test_install.sh && bash tests/test_install.sh
+```
+
+退出码 0：
+
+```text
+PASS: install is path-safe, marker-safe, and transactional across all hosts and routes
+```

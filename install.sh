@@ -126,6 +126,32 @@ fi
 canonical_path_into agents_file "$RAW_HOME/.codex/AGENTS.md"
 path_is_within "$agents_file" "$HOME_ROOT" || die "Unsafe AGENTS.md path outside HOME"
 [ "$agents_file" != "$HOME_ROOT" ] || die "Unsafe AGENTS.md path equals HOME"
+if ! python3 -B - "$agents_file" "${#sources[@]}" "${#host_roots[@]}" \
+  "${sources[@]}" "${host_roots[@]}" "${targets[@]}" <<'PY'
+import os
+import sys
+
+route = sys.argv[1]
+source_count = int(sys.argv[2])
+host_count = int(sys.argv[3])
+items = sys.argv[4:]
+boundaries = items[:source_count + host_count]
+boundaries.extend(os.path.realpath(path) for path in items[source_count + host_count:])
+for boundary in boundaries:
+    try:
+        overlaps = os.path.commonpath((route, boundary)) == boundary
+    except ValueError:
+        overlaps = False
+    if overlaps:
+        print(
+            f"Unsafe AGENTS.md overlap: route {route!r} resolves inside source or managed target {boundary!r}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+PY
+then
+  exit 1
+fi
 if [ -e "$agents_file" ] || [ -L "$agents_file" ]; then
   [ -f "$agents_file" ] || die "Codex route path is not a regular file: $agents_file"
   [ -r "$agents_file" ] || die "Codex route file is not readable: $agents_file"
@@ -154,14 +180,27 @@ done
 stage_roots=()
 stage_new_roots=()
 stage_backups=()
+preserved_stage_roots=()
 host_had_existing=(0 0 0)
 host_backup_moved=(0 0 0)
 host_committed=(0 0 0)
+host_parent_created=(0 0 0)
 
 cleanup_staging() {
-  local stage_root
+  local stage_root preserved_stage preserve cleanup_index cleanup_parent
   for stage_root in "${stage_roots[@]}"; do
+    preserve=0
+    for preserved_stage in "${preserved_stage_roots[@]-}"; do
+      [ "$stage_root" = "$preserved_stage" ] && preserve=1
+    done
+    [ "$preserve" -eq 1 ] && continue
     [ -n "$stage_root" ] && rm -rf "$stage_root"
+  done
+  for ((cleanup_index=${#host_roots[@]} - 1; cleanup_index >= 0; cleanup_index--)); do
+    if [ "${host_parent_created[$cleanup_index]}" -eq 1 ]; then
+      cleanup_parent="$(dirname "${host_roots[$cleanup_index]}")"
+      rmdir "$cleanup_parent" 2>/dev/null || true
+    fi
   done
 }
 trap cleanup_staging EXIT
@@ -170,7 +209,10 @@ trap cleanup_staging EXIT
 for index in "${!host_roots[@]}"; do
   host_root="${host_roots[$index]}"
   host_parent="$(dirname "$host_root")"
+  parent_existed=0
+  [ -d "$host_parent" ] && parent_existed=1
   mkdir -p "$host_parent"
+  [ "$parent_existed" -eq 0 ] && host_parent_created[$index]=1
   [ -d "$host_parent" ] && [ -w "$host_parent" ] || die "Host parent is not writable: $host_parent"
   stage_root="$(mktemp -d "$host_parent/.superwriter-install.XXXXXX")"
   stage_new="$stage_root/new-skills"
@@ -243,24 +285,42 @@ route_committed=0
 [ -f "$agents_file" ] && route_had_existing=1
 
 rollback_transaction() {
-  local rollback_index rollback_target
+  local rollback_index rollback_target rollback_failed
+  rollback_failed=0
   set +e
   if [ "$route_committed" -eq 1 ]; then
-    rm -f "$agents_file"
+    if ! rm -f "$agents_file"; then
+      rollback_failed=1
+    fi
   fi
   if [ "$route_backup_moved" -eq 1 ]; then
-    mv "$route_backup" "$agents_file"
+    if mv "$route_backup" "$agents_file"; then
+      route_backup_moved=0
+    else
+      preserved_stage_roots+=("${stage_roots[2]}")
+      echo "Rollback incomplete: route backup retained at $route_backup" >&2
+      rollback_failed=1
+    fi
   fi
   for ((rollback_index=${#host_roots[@]} - 1; rollback_index >= 0; rollback_index--)); do
     rollback_target="${host_roots[$rollback_index]}"
     if [ "${host_committed[$rollback_index]}" -eq 1 ]; then
-      rm -rf "$rollback_target"
+      if ! rm -rf "$rollback_target"; then
+        rollback_failed=1
+      fi
     fi
     if [ "${host_backup_moved[$rollback_index]}" -eq 1 ]; then
-      mv "${stage_backups[$rollback_index]}" "$rollback_target"
+      if mv "${stage_backups[$rollback_index]}" "$rollback_target"; then
+        host_backup_moved[$rollback_index]=0
+      else
+        preserved_stage_roots+=("${stage_roots[$rollback_index]}")
+        echo "Rollback incomplete: host backup retained at ${stage_backups[$rollback_index]}" >&2
+        rollback_failed=1
+      fi
     fi
   done
   set -e
+  [ "$rollback_failed" -eq 0 ]
 }
 
 # Commit whole host trees only after every candidate and route file is ready.
@@ -268,13 +328,13 @@ for index in "${!host_roots[@]}"; do
   host_root="${host_roots[$index]}"
   if [ "${host_had_existing[$index]}" -eq 1 ]; then
     if ! mv "$host_root" "${stage_backups[$index]}"; then
-      rollback_transaction
+      rollback_transaction || die "Rollback incomplete after host backup failure"
       die "Failed to back up host during transaction: $host_root"
     fi
     host_backup_moved[$index]=1
   fi
   if ! mv "${stage_new_roots[$index]}" "$host_root"; then
-    rollback_transaction
+    rollback_transaction || die "Rollback incomplete after host commit failure"
     die "Failed to commit host during transaction: $host_root"
   fi
   host_committed[$index]=1
@@ -282,13 +342,13 @@ done
 
 if [ "$route_had_existing" -eq 1 ]; then
   if ! mv "$agents_file" "$route_backup"; then
-    rollback_transaction
+    rollback_transaction || die "Rollback incomplete after route backup failure"
     die "Failed to back up Codex route during transaction"
   fi
   route_backup_moved=1
 fi
 if ! mv "$route_stage" "$agents_file"; then
-  rollback_transaction
+  rollback_transaction || die "Rollback incomplete after route commit failure"
   die "Failed to commit Codex route during transaction"
 fi
 route_committed=1

@@ -226,6 +226,29 @@ for marker_case in unmatched-start unmatched-end duplicated; do
   [ "$route_before" = "$route_after" ] || fail "invalid route markers ($marker_case) changed user content"
 done
 
+# Route path safety: AGENTS.md referents must not overlap a source or managed target.
+new_fixture route-wps-source-overlap
+WPS_SOURCE="$TEST_HOME/sources/WPSComposer"
+mkdir -p "$WPS_SOURCE/scripts/macos_probe"
+printf '%s\n' '# WPS source must survive' > "$WPS_SOURCE/SKILL.md"
+source_before="$(shasum -a 256 "$WPS_SOURCE/SKILL.md")"
+rm "$TEST_HOME/.codex/AGENTS.md"
+ln -s "$WPS_SOURCE/SKILL.md" "$TEST_HOME/.codex/AGENTS.md"
+expect_failure "route referent inside WPS source" run_install
+source_after="$(shasum -a 256 "$WPS_SOURCE/SKILL.md")"
+[ "$source_before" = "$source_after" ] || fail "route overlap modified the WPS source"
+
+new_fixture route-managed-target-overlap
+managed_route_target="$TEST_HOME/.codex/skills/superwriter/SKILL.md"
+mkdir -p "$(dirname "$managed_route_target")"
+printf '%s\n' '# managed target must survive' > "$managed_route_target"
+target_before="$(shasum -a 256 "$managed_route_target")"
+rm "$TEST_HOME/.codex/AGENTS.md"
+ln -s "$managed_route_target" "$TEST_HOME/.codex/AGENTS.md"
+expect_failure "route referent inside managed target" run_install
+target_after="$(shasum -a 256 "$managed_route_target")"
+[ "$target_before" = "$target_after" ] || fail "route overlap modified the managed target"
+
 # Transaction preflight: a bad second or third host must leave every host and route unchanged.
 for failed_host in .claude .codex; do
   new_fixture "preflight-${failed_host#.}"
@@ -236,6 +259,38 @@ for failed_host in .claude .codex; do
   expect_failure "preflight failure at $failed_host" run_install
   after_state="$(snapshot_tree "$TEST_HOME")"
   [ "$before_state" = "$after_state" ] || fail "preflight failure at $failed_host changed a host or route"
+done
+
+# Transaction staging: copy failures must remove host parents created by this run.
+for failed_host in .claude .codex; do
+  new_fixture "staging-${failed_host#.}"
+  mkdir -p "$CASE_ROOT/bin"
+  fail_marker="$CASE_ROOT/cp-failed"
+  cat > "$CASE_ROOT/bin/cp" <<'SH'
+#!/usr/bin/env bash
+destination="${!#}"
+if [[ "$destination" == *"/$SUPERWRITER_FAIL_STAGE_HOST/.superwriter-install."*"/new-skills/superwriter/SKILL.md" ]] && \
+   [ ! -e "$SUPERWRITER_FAIL_CP_MARKER" ]; then
+  : > "$SUPERWRITER_FAIL_CP_MARKER"
+  exit 95
+fi
+exec /bin/cp "$@"
+SH
+  chmod +x "$CASE_ROOT/bin/cp"
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  set +e
+  output="$(
+    PATH="$CASE_ROOT/bin:$PATH" \
+      SUPERWRITER_FAIL_STAGE_HOST="$failed_host" \
+      SUPERWRITER_FAIL_CP_MARKER="$fail_marker" \
+      run_install 2>&1
+  )"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "staging failure at $failed_host unexpectedly succeeded"
+  [ -e "$fail_marker" ] || fail "staging failure at $failed_host was not injected"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$before_state" = "$after_state" ] || fail "staging failure at $failed_host left host parents or content behind"
 done
 
 # Transaction commit: injected failures at the second or third host must roll back earlier commits.
@@ -270,5 +325,46 @@ SH
   after_state="$(snapshot_tree "$TEST_HOME")"
   [ "$before_state" = "$after_state" ] || fail "commit failure at $failed_host did not roll back all hosts/routes"
 done
+
+# Transaction recovery: if restoring a backup also fails, EXIT must retain the only old tree.
+new_fixture rollback-double-failure
+seed_existing_hosts
+mkdir -p "$CASE_ROOT/bin"
+commit_fail_target="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$TEST_HOME/.claude/skills")"
+restore_fail_target="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$TEST_HOME/.agents/skills")"
+commit_fail_marker="$CASE_ROOT/commit-failed"
+cat > "$CASE_ROOT/bin/mv" <<'SH'
+#!/usr/bin/env bash
+source_path="$1"
+destination="${!#}"
+if [ "$destination" = "$SUPERWRITER_COMMIT_FAIL_TARGET" ] && \
+   [[ "$source_path" == */new-skills ]] && [ ! -e "$SUPERWRITER_COMMIT_FAIL_MARKER" ]; then
+  : > "$SUPERWRITER_COMMIT_FAIL_MARKER"
+  exit 96
+fi
+if [ "$destination" = "$SUPERWRITER_RESTORE_FAIL_TARGET" ] && \
+   [[ "$source_path" == */backup-skills ]]; then
+  exit 97
+fi
+exec /bin/mv "$@"
+SH
+chmod +x "$CASE_ROOT/bin/mv"
+set +e
+output="$(
+  PATH="$CASE_ROOT/bin:$PATH" \
+    SUPERWRITER_COMMIT_FAIL_TARGET="$commit_fail_target" \
+    SUPERWRITER_RESTORE_FAIL_TARGET="$restore_fail_target" \
+    SUPERWRITER_COMMIT_FAIL_MARKER="$commit_fail_marker" \
+    run_install 2>&1
+)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "double transaction failure unexpectedly succeeded"
+[ -e "$commit_fail_marker" ] || fail "double transaction commit failure was not injected"
+retained_backup="$(find "$TEST_HOME/.agents" -path '*/.superwriter-install.*/backup-skills/superwriter/OLD' -print -quit 2>/dev/null || true)"
+[ -n "$retained_backup" ] || fail "rollback failure deleted the only agents backup"
+grep -q '^old-.agents$' "$retained_backup" || fail "retained agents backup is not the original tree"
+[[ "$output" == *"Rollback incomplete"* ]] || fail "rollback failure did not report incomplete recovery"
+[[ "$output" == *"$(dirname "$(dirname "$retained_backup")")"* ]] || fail "rollback failure did not print the retained recovery path"
 
 echo "PASS: install is path-safe, marker-safe, and transactional across all hosts and routes"
