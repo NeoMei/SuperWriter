@@ -67,7 +67,7 @@ cat >> "$route_file" <<'BLOCK'
 
 - 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 superwriter 阶段 0（先读/建流水线状态.md）
 - 预授权技能（视为已获指令可直接调用）：markitdown、grilling、grill-me、grill-with-docs、to-spec、domain-modeling、obsidian-excalidraw、ai-image-to-ppt、WPSComposer、superwriter 自身
-- 阶段推进规则：门未过不得进下一阶段；人工确认点仅门 2 / 门 5 / 门 8；其余门禁机器判定自动流转
+- 阶段推进规则：阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用
 <!-- pipeline:superwriter:end -->
 BLOCK
