@@ -154,6 +154,34 @@ expect_accepted() {
   fi
 }
 
+refresh_svg_delivery() {
+  local root="$1"
+  local svg="$root/配图/图1-国产化适配架构.svg"
+  local png="$root/配图/图1-国产化适配架构.png"
+  local docx="$root/导出/技术标-模拟标段1.docx"
+  local manifest="$root/验收清单.json"
+  sips -s format png "$svg" --out "$png" >/dev/null
+  python3 - "$svg" "$png" "$docx" "$manifest" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+import zipfile
+
+svg, png, docx, manifest_path = map(Path, sys.argv[1:])
+payload = png.read_bytes()
+temporary = docx.with_suffix(".tmp.docx")
+with zipfile.ZipFile(docx, "r") as source, zipfile.ZipFile(temporary, "w") as target:
+    for item in source.infolist():
+        target.writestr(item, payload if item.filename == "word/media/image1.png" else source.read(item.filename))
+temporary.replace(docx)
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["figures"][0]["render_source_sha256"] = hashlib.sha256(svg.read_bytes()).hexdigest()
+manifest["figures"][0]["render_sha256"] = hashlib.sha256(payload).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
 baseline="$(fresh_fixture baseline)"
 PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
@@ -247,6 +275,10 @@ root = Path(sys.argv[1]); source = root / "配图/图1-国产化适配架构.exc
 text = source.read_text(encoding="utf-8"); match = re.search(r"```json\n(.*?)\n```", text, re.S); scene = json.loads(match.group(1))
 for item in scene["elements"]:
     if item.get("id") in {"apps", "apps-label"}: item["x"] += 120
+    if item.get("id") == "arr-0":
+        item["x"] += 120
+        item["width"] = 120
+        item["points"] = [[0, 0], [-120, 70]]
 payload = json.dumps(scene, ensure_ascii=False, separators=(",", ":")); source.write_text(text[:match.start(1)] + payload + text[match.end(1):], encoding="utf-8")
 elements = scene["elements"]; by_id = {item["id"]: item for item in elements}; parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510">', '<rect width="1000" height="510" fill="white"/>']
 for node_id in ("apps", "adapter", "postgresql", "dameng"):
@@ -262,6 +294,47 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\
 PY
 expect_rejected figure-source-svg-old-png "FAIL: SVG raster differs from accepted PNG" \
   "$figure_source_svg_old_png" --acceptance-dir "$figure_source_svg_old_png/验收/模拟客户A/模拟标段1"
+
+svg_edge_far_from_nodes="$(fresh_fixture svg-edge-far-from-nodes)"
+python3 - "$svg_edge_far_from_nodes/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.svg" <<'PY'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+path = Path(sys.argv[1])
+tree = ET.parse(path)
+root = tree.getroot()
+namespace = root.tag.partition("}")[0].lstrip("{")
+group = next(item for item in root.findall(f".//{{{namespace}}}g") if item.get("data-edge-from") == "apps")
+line = group.find(f"{{{namespace}}}line")
+for key, value in {"x1": "700", "y1": "100", "x2": "900", "y2": "100"}.items():
+    line.set(key, value)
+tree.write(path, encoding="unicode")
+PY
+refresh_svg_delivery "$svg_edge_far_from_nodes/验收/模拟客户A/模拟标段1"
+expect_rejected svg-edge-far-from-nodes "FAIL: SVG edge start is not near its declared source node boundary" \
+  "$svg_edge_far_from_nodes" --acceptance-dir "$svg_edge_far_from_nodes/验收/模拟客户A/模拟标段1"
+
+svg_edge_endpoints_swapped="$(fresh_fixture svg-edge-endpoints-swapped)"
+python3 - "$svg_edge_endpoints_swapped/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.svg" <<'PY'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+
+path = Path(sys.argv[1])
+tree = ET.parse(path)
+root = tree.getroot()
+namespace = root.tag.partition("}")[0].lstrip("{")
+group = next(item for item in root.findall(f".//{{{namespace}}}g") if item.get("data-edge-from") == "apps")
+line = group.find(f"{{{namespace}}}line")
+x1, y1, x2, y2 = (line.get(name) for name in ("x1", "y1", "x2", "y2"))
+for key, value in {"x1": x2, "y1": y2, "x2": x1, "y2": y1}.items():
+    line.set(key, value)
+tree.write(path, encoding="unicode")
+PY
+refresh_svg_delivery "$svg_edge_endpoints_swapped/验收/模拟客户A/模拟标段1"
+expect_rejected svg-edge-endpoints-swapped "FAIL: SVG edge start is not near its declared source node boundary" \
+  "$svg_edge_endpoints_swapped" --acceptance-dir "$svg_edge_endpoints_swapped/验收/模拟客户A/模拟标段1"
 
 duplicate_manifest_key="$(fresh_fixture duplicate-manifest-key)"
 python3 - "$duplicate_manifest_key/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'

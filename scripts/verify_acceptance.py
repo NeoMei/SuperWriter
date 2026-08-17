@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import posixpath
@@ -202,6 +203,91 @@ def excalidraw_scene(source: Path):
         fail(f"native Excalidraw JSON is invalid: {exc}")
 
 
+def svg_path_endpoints(value: str):
+    token_pattern = r"[MmLlHhVvCcSsQqTtAaZz]|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?"
+    tokens = re.findall(token_pattern, value)
+    if not tokens or re.sub(token_pattern, "", value).replace(",", "").strip():
+        fail("SVG edge path data is invalid")
+    arities = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "A": 7}
+    index = 0
+    command = None
+    current = (0.0, 0.0)
+    first = None
+    subpath_start = None
+    while index < len(tokens):
+        token = tokens[index]
+        if token.isalpha():
+            command = token
+            index += 1
+            if command.upper() == "Z":
+                if subpath_start is None:
+                    fail("SVG edge path closes before it starts")
+                current = subpath_start
+                command = None
+                continue
+        if command is None:
+            fail("SVG edge path data is invalid")
+        upper = command.upper()
+        arity = arities[upper]
+        if index + arity > len(tokens) or any(item.isalpha() for item in tokens[index:index + arity]):
+            fail("SVG edge path data is invalid")
+        numbers = [float(item) for item in tokens[index:index + arity]]
+        if not all(math.isfinite(item) for item in numbers):
+            fail("SVG edge path data is invalid")
+        index += arity
+        relative = command.islower()
+        if upper == "H":
+            endpoint = (current[0] + numbers[0] if relative else numbers[0], current[1])
+        elif upper == "V":
+            endpoint = (current[0], current[1] + numbers[0] if relative else numbers[0])
+        else:
+            x, y = numbers[-2:]
+            endpoint = (current[0] + x, current[1] + y) if relative else (x, y)
+        if upper == "M":
+            if first is not None:
+                fail("SVG edge path must contain one connected subpath")
+            first = endpoint
+            subpath_start = endpoint
+            command = "l" if relative else "L"
+        current = endpoint
+    if first is None or current == first:
+        fail("SVG edge path endpoints are invalid")
+    return first, current
+
+
+def svg_edge_endpoints(group, namespace: str):
+    primitives = [child for child in group if child.tag.rsplit("}", 1)[-1] in {"line", "path"}]
+    if len(primitives) != 1:
+        fail("each SVG edge must contain exactly one visible line or path")
+    primitive = primitives[0]
+    if group.get("transform") or primitive.get("transform"):
+        fail("SVG edge transforms are unsupported")
+    kind = primitive.tag.rsplit("}", 1)[-1]
+    try:
+        if kind == "line":
+            start = (float(primitive.get("x1")), float(primitive.get("y1")))
+            end = (float(primitive.get("x2")), float(primitive.get("y2")))
+        else:
+            start, end = svg_path_endpoints(primitive.get("d") or "")
+    except (TypeError, ValueError):
+        fail("SVG edge coordinates are invalid")
+    if not all(math.isfinite(value) for point in (start, end) for value in point) or start == end:
+        fail("SVG edge coordinates are invalid")
+    return primitive, start, end
+
+
+def near_rectangle_boundary(point, rectangle) -> bool:
+    x, y = point
+    left, top = float(rectangle["x"]), float(rectangle["y"])
+    right = left + float(rectangle["width"])
+    bottom = top + float(rectangle["height"])
+    tolerance = max(4.0, min(right - left, bottom - top) * 0.05)
+    if not (left - tolerance <= x <= right + tolerance and top - tolerance <= y <= bottom + tolerance):
+        return False
+    distance = min(abs(x - left), abs(x - right), abs(y - top), abs(y - bottom))
+    return distance <= tolerance
+
+
 def validate_svg_source(svg: Path, expected_nodes, expected_edges, rectangles):
     try:
         root = ET.parse(svg).getroot()
@@ -236,6 +322,7 @@ def validate_svg_source(svg: Path, expected_nodes, expected_edges, rectangles):
         if normalized(svg_label) != normalized(label):
             fail(f"Excalidraw and SVG node labels differ: {node_id}")
     svg_edges = []
+    edge_primitives = set()
     for group in groups:
         start, end = group.get("data-edge-from"), group.get("data-edge-to")
         if not start and not end:
@@ -243,9 +330,28 @@ def validate_svg_source(svg: Path, expected_nodes, expected_edges, rectangles):
         text = group.find(f"{{{namespace}}}text")
         if not start or not end or text is None:
             fail("SVG directed topology/edge label is invalid")
+        primitive, visible_start, visible_end = svg_edge_endpoints(group, namespace)
+        edge_primitives.add(id(primitive))
+        if start not in rectangles or end not in rectangles:
+            fail("SVG edge metadata references an unknown node")
+        if not near_rectangle_boundary(visible_start, rectangles[start]):
+            fail("SVG edge start is not near its declared source node boundary")
+        if not near_rectangle_boundary(visible_end, rectangles[end]):
+            fail("SVG edge end is not near its declared target node boundary")
         svg_edges.append((start, end, "".join(text.itertext())))
+    if len(svg_edges) != len(set(svg_edges)):
+        fail("SVG contains duplicate directed edges")
     if sorted(svg_edges) != sorted(expected_edges):
         fail("Excalidraw and SVG directed topology/edge labels differ")
+    parent = {child: node for node in root.iter() for child in node}
+    for primitive in root.findall(f".//{{{namespace}}}line") + root.findall(f".//{{{namespace}}}path"):
+        ancestors = []
+        node = primitive
+        while node in parent:
+            node = parent[node]
+            ancestors.append(node.tag.rsplit("}", 1)[-1])
+        if id(primitive) not in edge_primitives and not any(name in {"defs", "marker", "clipPath", "mask"} for name in ancestors):
+            fail("SVG contains an unbound visible edge primitive")
 
 
 def validate_figure(root: Path, item: object):

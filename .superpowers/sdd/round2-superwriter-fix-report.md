@@ -49,3 +49,9 @@ The independent review at `round2-superwriter-fix-review.md` found two Important
 - JSON parsing rejects duplicate keys. The acceptance manifest is a closed schema at every object level, digests must be lowercase SHA-256, and point/term/chapter/evidence/figure path uniqueness is enforced. The stage contract uses the same duplicate-key rejection and its existing exact-value comparison rejects unknown fields.
 
 The repository demo had a stale, text-only SVG that did not correspond to its Excalidraw/PNG. Correcting that original source-render inconsistency required regenerating only the diagram chain: the SVG was replaced by the structured canonical render, the PNG was produced from it with `sips`, and only `word/media/image1.png` was replaced in the demo DOCX. The PDF was then converted from that DOCX through the real WPS conversion backend. DOCX package validity, `WPS Office` application metadata, DOCX/PDF extracted正文, WPS PDF Creator, three A4 pages, SVG→PNG pixels, and PNG→DOCX pixels were revalidated; no bid prose or layout semantics were rewritten by a test bypass.
+
+## Visible SVG edge binding follow-up
+
+The remaining review finding was reproduced with two end-to-end mutations. Moving the visible `apps → adapter` line far from both nodes, or swapping its start/end coordinates, still passed after the altered SVG was rasterized with `sips`, embedded into the DOCX, and both digests were refreshed.
+
+SVG edge validation now reads the actual coordinates of each declared `<line>` or `<path>`. The visible start and end must fall on or within a bounded tolerance of the Excalidraw-bound source and target rectangle boundaries in that order. Each edge group must contain exactly one connected primitive; missing, duplicate, unbound, transformed, degenerate, non-finite, or disconnected edge geometry fails closed. Both new mutations, the unchanged demo, and the complete artifact mutation suite were rerun after implementation.
