@@ -86,8 +86,11 @@ def markdown_rows(text: str):
 
 
 def normalized(value: str) -> str:
-    return "".join(character for character in unicodedata.normalize("NFKC", value).casefold()
-                   if character.isalnum())
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKC", value).casefold()
+        if unicodedata.category(character)[0] in {"L", "M", "N", "S"} or character == "\u200d"
+    )
 
 
 def markdown_block_sequence(text: str):
@@ -97,7 +100,7 @@ def markdown_block_sequence(text: str):
     def append(kind: str, source: str) -> None:
         value = normalized(source)
         if source.strip() and not value:
-            fail(f"canonical merged draft {kind} has no Unicode letters or numbers")
+            fail(f"canonical merged draft {kind} has no synchronized Unicode content")
         if value:
             blocks.append((kind, value))
 
@@ -136,7 +139,7 @@ def markdown_block_sequence(text: str):
 
 
 def require_ordered_source_coverage(label: str, text: str, source_blocks) -> None:
-    compact = normalized(text)
+    compact = normalized_export_text(text)
     cursor = 0
     for kind, block in source_blocks:
         position = compact.find(block, cursor)
@@ -154,13 +157,24 @@ def require_ordered_export_coverage(label: str, text: str, source_blocks) -> Non
     source_compact = "".join(value for _, value in source_blocks)
     cursor = 0
     started = False
-    for body, original in export_body_lines(text):
-        wrapped_heading = next((heading for heading in headings if heading in body), None)
+    for kind, content, original, table_wrapped in export_lines(text):
+        if kind in {"page", "separator", "image"}:
+            continue
+        if kind == "toc":
+            if started:
+                fail(f"{label} contains an unexpected table-of-contents marker in body text")
+            continue
+        body = normalized(content)
+        if not body:
+            continue  # Unicode punctuation and spacing are explicitly folded.
+        wrapped_heading = recognized_export_heading(content, table_wrapped, headings)
         if wrapped_heading is not None:
             body = wrapped_heading
         if not started:
-            if body not in first_paragraph:
+            if wrapped_heading is not None:
                 continue
+            if body not in first_paragraph:
+                fail(f"{label} contains unrecognized content before the first canonical merged-draft paragraph: {original[:48]}")
             started = True
         position = source_compact.find(body, cursor)
         if position < 0:
@@ -170,20 +184,48 @@ def require_ordered_export_coverage(label: str, text: str, source_blocks) -> Non
         fail(f"{label} content does not contain the first canonical merged-draft paragraph")
 
 
-def export_body_lines(text: str):
+def recognized_export_heading(content: str, table_wrapped: bool, headings) -> str | None:
+    candidate = content.strip()
+    candidate = re.sub(r"^#{1,6}\s*", "", candidate)
+    if table_wrapped:
+        candidate = re.sub(r"^第(?:[一二三四五六七八九十百]+|\d+)节\s*", "", candidate)
+    value = normalized(candidate)
+    if value in headings:
+        return value
+    toc_candidate = re.sub(r"(?:\.{2,}|…{2,}|\s+)\d+\s*$", "", candidate)
+    value = normalized(toc_candidate)
+    return value if value in headings else None
+
+
+def export_lines(text: str):
     for raw in text.splitlines():
         stripped = raw.strip()
-        if not stripped or stripped.startswith("Page") or stripped == "目 录" or "base64" in stripped:
+        if not stripped:
             continue
-        if re.fullmatch(r"[|:\- .]+", stripped):
+        if re.fullmatch(r"Page\s*\d+", stripped, re.I):
+            yield "page", "", raw.strip(), False
             continue
-        # Generated TOC rows are permitted wrappers. Strip their trailing page
-        # number and compare the heading itself with the canonical source.
-        if re.search(r"[Pp]\d+", stripped):
-            stripped = re.sub(r"(?:\.{2,}|\s+)\d+\s*$", "", stripped)
-        value = normalized(stripped)
-        if len(value) >= 4:
-            yield value, raw.strip()
+        if stripped == "目 录":
+            yield "toc", "", raw.strip(), False
+            continue
+        if re.fullmatch(r"!\[[^]]*\]\(data:image/[^;\s)]+;base64(?:,[^)]*|\.\.\.)\)", stripped, re.I):
+            yield "image", "", raw.strip(), False
+            continue
+        table_wrapped = stripped.startswith("|") and stripped.endswith("|")
+        if table_wrapped:
+            if re.fullmatch(r"[|:\- .]+", stripped):
+                yield "separator", "", raw.strip(), True
+                continue
+            cells = [cell.strip() for cell in stripped.strip("|").split("|") if cell.strip()]
+            content = " ".join(cells)
+        else:
+            content = stripped
+        yield "content", content, raw.strip(), table_wrapped
+
+
+def normalized_export_text(text: str) -> str:
+    return "".join(normalized(content) for kind, content, _, _ in export_lines(text)
+                   if kind == "content")
 
 
 def extracted_text(label: str, path: Path) -> str:
@@ -740,8 +782,9 @@ def main() -> None:
     if not source_blocks:
         fail("canonical merged draft has no substantive content")
     for label, text in extracted:
+        compact = normalized_export_text(text)
         for value in [*points, *terms, *(figure[2] for figure in validated_figures)]:
-            if normalized(value) not in normalized(text):
+            if normalized(value) not in compact:
                 fail(f"{label} markitdown output is missing required text: {value}")
     for label, text in extracted:
         require_ordered_source_coverage(label, text, source_blocks)

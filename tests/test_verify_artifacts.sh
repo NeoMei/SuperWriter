@@ -266,6 +266,62 @@ PY
     "$unicode_merged" --acceptance-dir "$unicode_merged/验收/模拟客户A/模拟标段1"
 done
 
+for unicode_detail in \
+  'combining-mark:架构师:架构̣̇师' \
+  'emoji-zwj-vs:国产化适配架构:国产化适配👩‍💻️架构'; do
+  name="${unicode_detail%%:*}"
+  remainder="${unicode_detail#*:}"
+  before="${remainder%%:*}"
+  after="${remainder#*:}"
+  unicode_detail_merged="$(fresh_fixture "unicode-detail-$name")"
+  python3 - "$unicode_detail_merged/验收/模拟客户A/模拟标段1" "$before" "$after" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+text = merged.read_text(encoding="utf-8")
+assert sys.argv[2] in text
+merged.write_text(text.replace(sys.argv[2], sys.argv[3], 1), encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  expect_rejected "unicode-detail-$name" "FAIL: DOCX content does not cover current merged draft in order" \
+    "$unicode_detail_merged" --acceptance-dir "$unicode_detail_merged/验收/模拟客户A/模拟标段1"
+done
+
+ordered_text_shim="$TEST_ROOT/shim-ordered-text"
+mkdir -p "$ordered_text_shim"
+cp "$REPO_ROOT/tests/fixtures/fake_markitdown.sh" "$ordered_text_shim/markitdown"
+chmod +x "$ordered_text_shim/markitdown"
+canonical_docx_text="$(markitdown "$REPO_ROOT/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx")"
+canonical_pdf_text="$(markitdown "$REPO_ROOT/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.pdf")"
+
+pre_body_export="$(fresh_fixture pre-body-export)"
+pre_body_docx="${canonical_docx_text/基于招标需求/未声明新增正文$'\n'基于招标需求}"
+PATH="$ordered_text_shim:$PATH" FAKE_MARKITDOWN_DOCX_OUTPUT="$pre_body_docx" \
+  FAKE_MARKITDOWN_PDF_OUTPUT="$canonical_pdf_text" \
+  expect_rejected pre-body-export "FAIL: DOCX contains unrecognized content before the first canonical merged-draft paragraph" \
+    "$pre_body_export" --acceptance-dir "$pre_body_export/验收/模拟客户A/模拟标段1"
+
+malicious_heading_export="$(fresh_fixture malicious-heading-export)"
+malicious_heading_docx="$(printf '%s\n' "$canonical_docx_text" | python3 -c \
+  'import sys; text = sys.stdin.read(); old = "## 4. 实施与保障方案"; assert old in text; print(text.replace(old, "恶意新增" + old, 1), end="")')"
+PATH="$ordered_text_shim:$PATH" FAKE_MARKITDOWN_DOCX_OUTPUT="$malicious_heading_docx" \
+  FAKE_MARKITDOWN_PDF_OUTPUT="$canonical_pdf_text" \
+  expect_rejected malicious-heading-export "FAIL: DOCX contains substantive body text absent or out of order in canonical merged draft" \
+    "$malicious_heading_export" --acceptance-dir "$malicious_heading_export/验收/模拟客户A/模拟标段1"
+
+for export_extra in 'short:泄密' 'emoji:🚨🔒'; do
+  name="${export_extra%%:*}"
+  extra="${export_extra#*:}"
+  extra_export="$(fresh_fixture "extra-export-$name")"
+  extra_docx="$canonical_docx_text"$'\n'"$extra"
+  PATH="$ordered_text_shim:$PATH" FAKE_MARKITDOWN_DOCX_OUTPUT="$extra_docx" \
+    FAKE_MARKITDOWN_PDF_OUTPUT="$canonical_pdf_text" \
+    expect_rejected "extra-export-$name" "FAIL: DOCX contains substantive body text absent or out of order in canonical merged draft" \
+      "$extra_export" --acceptance-dir "$extra_export/验收/模拟客户A/模拟标段1"
+done
+
 deleted_export_body="$(fresh_fixture deleted-export-body)"
 python3 - "$deleted_export_body/验收/模拟客户A/模拟标段1" <<'PY'
 import hashlib, json, re, sys
@@ -279,7 +335,7 @@ manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
-expect_rejected deleted-export-body "FAIL: DOCX contains substantive body text absent or out of order in canonical merged draft" \
+expect_rejected deleted-export-body "FAIL: DOCX contains" \
   "$deleted_export_body" --acceptance-dir "$deleted_export_body/验收/模拟客户A/模拟标段1"
 
 repointed_merged="$(fresh_fixture repointed-merged)"
