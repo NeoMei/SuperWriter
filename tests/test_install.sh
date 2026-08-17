@@ -170,6 +170,16 @@ HOME="$TEST_HOME" \
   WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
   bash "$REPO_ROOT/scripts/verify.sh"
 
+# Default agents/opencode sources live in managed host trees. Snapshotting them
+# before mutation must make a no-source-root-override replay safe.
+new_fixture default-managed-sources
+mkdir -p "$TEST_HOME/.agents/skills" "$TEST_HOME/.opencode/skills"
+cp -R "$AGENTS_SOURCE/." "$TEST_HOME/.agents/skills/"
+cp -R "$OPENCODE_SOURCE/." "$TEST_HOME/.opencode/skills/"
+HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+assert_basic_install
+
 # Path safety: a relative WPS source must be canonicalized before it is linked.
 new_fixture relative-wps
 WPS_SOURCE_RELATIVE="wps-repo/skills/WPSComposer"
@@ -180,6 +190,14 @@ WPS_SOURCE_RELATIVE="wps-repo/skills/WPSComposer"
 )
 WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$CASE_ROOT/wps-repo/skills/WPSComposer")"
 assert_basic_install
+(
+  cd "$CASE_ROOT"
+  HOME="$TEST_HOME" \
+    SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+    SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+    WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE_RELATIVE" \
+    bash "$REPO_ROOT/scripts/verify.sh"
+)
 
 # Path safety: exact and symlink/same-inode source-target overlap must fail before deletion.
 new_fixture exact-source-target

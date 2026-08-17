@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "points": ["P01", "P02", "P03"],
+  "required_terms": ["PostgreSQL", "达梦", "数据管理平台", "适配层复用率 90%"],
+  "pipeline": {
+    "status": "流水线状态.md",
+    "score_table": "评分表解析.md",
+    "matrix": "应答矩阵.md",
+    "outline": "大纲.md",
+    "completed_stage": 9,
+    "human_gates": [2, 5, 8],
+    "machine_gates": [0, 3, 6, 7],
+    "stage_evidence": [
+      {"stage": 0, "path": "评分表解析.md"},
+      {"stage": 1, "path": "CONTEXT.md"},
+      {"stage": 2, "path": "深访记录.md"},
+      {"stage": 3, "path": "大纲.md"},
+      {"stage": 4, "path": "章节/02-总体技术方案.md"},
+      {"stage": 5, "path": "章节/缺口登记.md"},
+      {"stage": 6, "path": "配图/图1-国产化适配架构.excalidraw.md"},
+      {"stage": 7, "path": "合并稿.md"},
+      {"stage": 8, "path": "终稿审定.md"},
+      {"stage": 9, "path": "导出/技术标-模拟标段1.docx"}
+    ]
+  },
+  "chapters": [
+    {"number": "2", "path": "章节/02-总体技术方案.md", "points": ["P01"]},
+    {"number": "3", "path": "章节/03-数据平台架构.md", "points": ["P02"]},
+    {"number": "4", "path": "章节/04-实施保障.md", "points": ["P02"]},
+    {"number": "5", "path": "章节/05-团队业绩.md", "points": ["P03"]}
+  ],
+  "point_chapters": {"P01": "2", "P02": "3", "P03": "5"},
+  "figures": [
+    {
+      "source": "配图/图1-国产化适配架构.excalidraw.md",
+      "render": "配图/图1-国产化适配架构.png",
+      "caption": "图 1 国产化适配架构",
+      "source_sha256": "d08f885b64bf257faf865da19ed52f94ba6ee728e32fd3a6e70fc745a4befeee",
+      "render_sha256": "c04c11aa45e1b987f6b33f70894d4134caf879f868ef7bd62514a8aa8aa8cb97",
+      "nodes": [
+        {"id": "apps", "label": "业务应用层"},
+        {"id": "adapter", "label": "国产化适配层\n复用率 90%"},
+        {"id": "postgresql", "label": "PostgreSQL"},
+        {"id": "dameng", "label": "达梦数据库"}
+      ],
+      "edges": [
+        {"from": "apps", "to": "adapter", "label": "统一访问"},
+        {"from": "adapter", "to": "postgresql", "label": "双栈适配"},
+        {"from": "adapter", "to": "dameng", "label": "双栈适配"}
+      ],
+      "renderer": null
+    }
+  ],
+  "outputs": {
+    "merged": "合并稿.md",
+    "merged_sha256": "d1db1b756303003c6dbb32cbb8b692b9f053ff3228295b8b355a59d9bd1eb615",
+    "docx": "导出/技术标-模拟标段1.docx",
+    "pdf": "导出/技术标-模拟标段1.pdf"
+  },
+  "pdf": {"min_pages": 1, "max_pages": 20, "page_size": "A4"}
+}

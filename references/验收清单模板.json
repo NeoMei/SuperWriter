@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "points": ["P01"],
+  "required_terms": ["项目专用必含词"],
+  "pipeline": {
+    "status": "流水线状态.md",
+    "score_table": "评分表解析.md",
+    "matrix": "应答矩阵.md",
+    "outline": "大纲.md",
+    "completed_stage": 9,
+    "human_gates": [2, 5, 8],
+    "machine_gates": [0, 3, 6, 7],
+    "stage_evidence": [
+      {"stage": 0, "path": "评分表解析.md"},
+      {"stage": 1, "path": "CONTEXT.md"},
+      {"stage": 2, "path": "深访记录.md"},
+      {"stage": 3, "path": "大纲.md"},
+      {"stage": 4, "path": "章节/02-示例.md"},
+      {"stage": 5, "path": "章节/缺口登记.md"},
+      {"stage": 6, "path": "配图/图1-示例.excalidraw.md"},
+      {"stage": 7, "path": "合并稿.md"},
+      {"stage": 8, "path": "终稿审定.md"},
+      {"stage": 9, "path": "导出/技术标-示例.docx"}
+    ]
+  },
+  "chapters": [
+    {"number": "2", "path": "章节/02-示例.md", "points": ["P01"]}
+  ],
+  "point_chapters": {"P01": "2"},
+  "figures": [
+    {
+      "source": "配图/图1-示例.excalidraw.md",
+      "render": "配图/图1-示例.png",
+      "caption": "图 1 示例",
+      "source_sha256": "生成时填写",
+      "render_sha256": "生成时填写",
+      "nodes": [{"id": "node-a", "label": "节点 A"}],
+      "edges": [],
+      "renderer": null
+    }
+  ],
+  "outputs": {
+    "merged": "合并稿.md",
+    "merged_sha256": "生成时填写",
+    "docx": "导出/技术标-示例.docx",
+    "pdf": "导出/技术标-示例.pdf"
+  },
+  "pdf": {"min_pages": 1, "max_pages": 200, "page_size": "A4"}
+}

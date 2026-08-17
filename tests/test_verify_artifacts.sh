@@ -13,9 +13,12 @@ fresh_fixture() {
   mkdir -p "$fixture"
   git -C "$REPO_ROOT" archive HEAD | tar -x -C "$fixture"
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
+  cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
   cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
   cp -R "$REPO_ROOT/references/." "$fixture/references/"
+  cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/验收清单.json" \
+    "$fixture/验收/模拟客户A/模拟标段1/验收清单.json"
 
   local test_home="$fixture-test-home"
   local agents_source="$fixture-agents-source"
@@ -149,6 +152,71 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
+# Acceptance is project-declared and must reject missing pipeline evidence,
+# stale exports, and editable/rendered diagram divergence.
+missing_acceptance_manifest="$(fresh_fixture missing-acceptance-manifest)"
+rm -f "$missing_acceptance_manifest/验收/模拟客户A/模拟标段1/验收清单.json"
+expect_rejected missing-acceptance-manifest "FAIL: acceptance manifest is missing" \
+  "$missing_acceptance_manifest" --acceptance-dir "$missing_acceptance_manifest/验收/模拟客户A/模拟标段1"
+
+missing_pipeline_evidence="$(fresh_fixture missing-pipeline-evidence)"
+rm "$missing_pipeline_evidence/验收/模拟客户A/模拟标段1/流水线状态.md"
+expect_rejected missing-pipeline-evidence "FAIL: required pipeline evidence is missing" \
+  "$missing_pipeline_evidence" --acceptance-dir "$missing_pipeline_evidence/验收/模拟客户A/模拟标段1"
+
+stale_exports="$(fresh_fixture stale-exports)"
+printf '\n## 6. 新增交付承诺【P01】\n本承诺必须出现在当前 DOCX 与 PDF。\n' >> \
+  "$stale_exports/验收/模拟客户A/模拟标段1/合并稿.md"
+expect_rejected stale-exports "FAIL: merged draft digest differs from the generation manifest" \
+  "$stale_exports" --acceptance-dir "$stale_exports/验收/模拟客户A/模拟标段1"
+
+stale_exports_with_digest="$(fresh_fixture stale-exports-with-digest)"
+python3 - "$stale_exports_with_digest/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+merged.write_text(merged.read_text(encoding="utf-8") + "\n## 6. 新增交付承诺【P01】\n本承诺必须出现在当前 DOCX 与 PDF。\n", encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected stale-exports-with-digest "FAIL: DOCX content does not cover current merged draft" \
+  "$stale_exports_with_digest" --acceptance-dir "$stale_exports_with_digest/验收/模拟客户A/模拟标段1"
+
+matrix_count="$(fresh_fixture matrix-count)"
+sed -i '' '/^| P03 |/d' "$matrix_count/验收/模拟客户A/模拟标段1/应答矩阵.md"
+expect_rejected matrix-count "FAIL: score-table count, matrix count, and manifest point IDs differ" \
+  "$matrix_count" --acceptance-dir "$matrix_count/验收/模拟客户A/模拟标段1"
+
+stage_incomplete="$(fresh_fixture stage-incomplete)"
+sed -i '' 's/当前阶段：9（完成）/当前阶段：8（待审定）/' "$stage_incomplete/验收/模拟客户A/模拟标段1/流水线状态.md"
+expect_rejected stage-incomplete "FAIL: pipeline status does not record stage 9 complete" \
+  "$stage_incomplete" --acceptance-dir "$stage_incomplete/验收/模拟客户A/模拟标段1"
+
+outline_mapping="$(fresh_fixture outline-mapping)"
+sed -i '' 's/2\. 总体技术方案【P01】/6. 总体技术方案【P01】/' "$outline_mapping/验收/模拟客户A/模拟标段1/大纲.md"
+expect_rejected outline-mapping "FAIL: outline is missing primary chapter mapping" \
+  "$outline_mapping" --acceptance-dir "$outline_mapping/验收/模拟客户A/模拟标段1"
+
+unresolved_placeholder="$(fresh_fixture unresolved-placeholder)"
+printf '\n【缺口：待补充证明】\n' >> "$unresolved_placeholder/验收/模拟客户A/模拟标段1/章节/02-总体技术方案.md"
+expect_rejected unresolved-placeholder "FAIL: unresolved placeholder remains in accepted prose" \
+  "$unresolved_placeholder" --acceptance-dir "$unresolved_placeholder/验收/模拟客户A/模拟标段1"
+
+diagram_overlap="$(fresh_fixture diagram-overlap)"
+python3 - "$diagram_overlap/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.excalidraw.md" <<'PY'
+import json, re, sys
+from pathlib import Path
+path = Path(sys.argv[1]); text = path.read_text(encoding="utf-8")
+match = re.search(r"```json\n(.*?)\n```", text, re.S); scene = json.loads(match.group(1))
+for item in scene["elements"]:
+    if item.get("type") == "rectangle": item["x"] = item["y"] = 100
+payload = json.dumps(scene, ensure_ascii=False, separators=(",", ":"))
+path.write_text(text[:match.start(1)] + payload + text[match.end(1):], encoding="utf-8")
+PY
+expect_rejected diagram-overlap "FAIL: Excalidraw node geometry overlaps" \
+  "$diagram_overlap" --acceptance-dir "$diagram_overlap/验收/模拟客户A/模拟标段1"
+
 # Static verification must never silently substitute the repository demo.
 static_only="$(fresh_fixture static-only)"
 mv "$static_only/验收" "$static_only/验收-not-discoverable"
@@ -163,6 +231,8 @@ superwriter_files=(
   references/应答矩阵模板.md
   references/素材打标规范.md
   references/门禁清单.md
+  references/阶段契约.json
+  references/验收清单模板.json
 )
 for relative in "${superwriter_files[@]}"; do
   mutation_name="superwriter-$(basename "$relative" | shasum -a 256 | cut -c1-10)"
@@ -194,7 +264,8 @@ for host in .agents .claude .codex; do
 done
 expect_rejected missing-dependency "FAIL: managed skill source is missing: grill-me" "$missing_dependency"
 
-# Gate metadata is exact, and artificial waits are forbidden outside gates 2/5/8.
+# Stage interaction metadata is the sole execution contract. Prose cannot create
+# another pause, while a metadata mutation must be rejected.
 unlabelled_pause="$(fresh_fixture unlabelled-pause)"
 python3 - "$unlabelled_pause/SKILL.md" <<'PY'
 from pathlib import Path
@@ -207,7 +278,7 @@ assert needle in text
 path.write_text(text.replace(needle, needle + "：写作前必须停下等待用户确认；", 1), encoding="utf-8")
 PY
 reinstall_fixture "$unlabelled_pause"
-expect_rejected unlabelled-pause "FAIL: stage 4 contains an unapproved user-wait instruction" "$unlabelled_pause"
+expect_accepted unlabelled-pause "$unlabelled_pause"
 
 synonym_pause="$(fresh_fixture synonym-pause)"
 python3 - "$synonym_pause/SKILL.md" <<'PY'
@@ -219,7 +290,7 @@ needle = "**阶段 4 分章写作**"
 path.write_text(text.replace(needle, needle + "：继续前必须先征得用户同意；", 1), encoding="utf-8")
 PY
 reinstall_fixture "$synonym_pause"
-expect_rejected synonym-pause "FAIL: stage 4 contains an unapproved user-wait instruction" "$synonym_pause"
+expect_accepted synonym-pause "$synonym_pause"
 
 confirmation_record="$(fresh_fixture confirmation-record)"
 python3 - "$confirmation_record/SKILL.md" <<'PY'
@@ -232,6 +303,22 @@ path.write_text(text.replace(needle, needle + "：加载门 2 客户确认记录
 PY
 reinstall_fixture "$confirmation_record"
 expect_accepted confirmation-record "$confirmation_record"
+
+invalid_stage_contract="$(fresh_fixture invalid-stage-contract)"
+python3 - "$invalid_stage_contract/references/阶段契约.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+if path.exists():
+    data = json.loads(path.read_text(encoding="utf-8"))
+else:
+    data = {"version": 1, "stages": [{"stage": n, "interaction": "machine", "action": "continue"} for n in range(10)]}
+data["stages"][4]["interaction"] = "human"
+data["stages"][4]["action"] = "wait"
+path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+PY
+reinstall_fixture "$invalid_stage_contract"
+expect_rejected invalid-stage-contract "FAIL: stage interaction contract is invalid" "$invalid_stage_contract"
 
 invalid_gate_metadata="$(fresh_fixture invalid-gate-metadata)"
 python3 - "$invalid_gate_metadata/references/门禁清单.md" <<'PY'
@@ -278,7 +365,7 @@ rectangle["type"] = "ellipse"
 replacement = json.dumps(scene, ensure_ascii=False, separators=(",", ":"))
 path.write_text(text[:match.start(1)] + replacement + text[match.end(1):], encoding="utf-8")
 PY
-expect_rejected diagram-count "FAIL: native Excalidraw must contain exactly 4 rectangle elements" "$diagram_count" --acceptance-dir "$diagram_count/验收/模拟客户A/模拟标段1"
+expect_rejected diagram-count "FAIL: native Excalidraw must contain exactly 4 declared rectangle elements" "$diagram_count" --acceptance-dir "$diagram_count/验收/模拟客户A/模拟标段1"
 
 diagram_binding="$(fresh_fixture diagram-binding)"
 python3 - "$diagram_binding/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.excalidraw.md" <<'PY'
@@ -375,7 +462,10 @@ expect_rejected png-invalid-combination "FAIL: rendered architecture diagram is 
 
 png_adam7="$(fresh_fixture png-adam7)"
 python3 - "$png_adam7/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" \
-  "$png_adam7/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" <<'PY'
+  "$png_adam7/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" \
+  "$png_adam7/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import hashlib
+import json
 from pathlib import Path
 import struct
 import sys
@@ -384,6 +474,7 @@ import zlib
 
 png_path = Path(sys.argv[1])
 docx_path = Path(sys.argv[2])
+manifest_path = Path(sys.argv[3])
 width, height = 368, 188
 def chunk(kind, data):
     return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
@@ -406,6 +497,9 @@ with zipfile.ZipFile(docx_path, "r") as source, zipfile.ZipFile(temporary, "w") 
     for item in source.infolist():
         target.writestr(item, payload if item.filename == "word/media/image1.png" else source.read(item.filename))
 temporary.replace(docx_path)
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["figures"][0]["render_sha256"] = hashlib.sha256(payload).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 expect_accepted png-adam7 "$png_adam7" --acceptance-dir "$png_adam7/验收/模拟客户A/模拟标段1"
 
@@ -556,7 +650,7 @@ payload = path.read_bytes()
 assert b"/Count 3" in payload
 path.write_bytes(payload.replace(b"/Count 3", b"/Count 2", 1))
 PY
-expect_rejected pdf-pages "FAIL: PDF delivery must contain exactly 3 pages" "$pdf_pages" --acceptance-dir "$pdf_pages/验收/模拟客户A/模拟标段1"
+expect_accepted pdf-pages "$pdf_pages" --acceptance-dir "$pdf_pages/验收/模拟客户A/模拟标段1"
 
 pdf_size="$(fresh_fixture pdf-size)"
 python3 - "$pdf_size/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.pdf" <<'PY'
@@ -568,7 +662,7 @@ payload = path.read_bytes()
 assert b"595.3 841.9" in payload
 path.write_bytes(payload.replace(b"595.3 841.9", b"600.0 841.9"))
 PY
-expect_rejected pdf-size "FAIL: PDF delivery pages must be A4" "$pdf_size" --acceptance-dir "$pdf_size/验收/模拟客户A/模拟标段1"
+expect_rejected pdf-size "FAIL: PDF delivery page 1 must be A4" "$pdf_size" --acceptance-dir "$pdf_size/验收/模拟客户A/模拟标段1"
 
 pdf_text="$(fresh_fixture pdf-text)"
 shim_pdf="$TEST_ROOT/shim-pdf"
@@ -576,8 +670,8 @@ mkdir -p "$shim_pdf"
 cp "$REPO_ROOT/tests/fixtures/fake_markitdown.sh" "$shim_pdf/markitdown"
 chmod +x "$shim_pdf/markitdown"
 PATH="$shim_pdf:$PATH" \
-  FAKE_MARKITDOWN_DOCX_OUTPUT="P01 P02 P03 PostgreSQL 达梦 图 1 国产化适配架构" \
-  FAKE_MARKITDOWN_PDF_OUTPUT="P01 P02 P03 PostgreSQL 达梦" \
+  FAKE_MARKITDOWN_DOCX_OUTPUT="P01 P02 P03 PostgreSQL 达梦 数据管理平台 适配层复用率 90% 图 1 国产化适配架构" \
+  FAKE_MARKITDOWN_PDF_OUTPUT="P01 P02 P03 PostgreSQL 达梦 数据管理平台 适配层复用率 90%" \
   expect_rejected pdf-text "FAIL: PDF markitdown output is missing required text: 图 1 国产化适配架构" "$pdf_text" --acceptance-dir "$pdf_text/验收/模拟客户A/模拟标段1"
 
 missing_command="$(fresh_fixture missing-command)"

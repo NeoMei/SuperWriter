@@ -74,6 +74,26 @@ require_file "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md"
   exit 1
 }
 
+# The default agents dependency source is itself the first managed host. Take
+# an immutable transaction snapshot before any target tree can be moved or
+# removed, then build every host from that snapshot.
+source_snapshot_root="$(mktemp -d /tmp/superwriter-source-snapshot.XXXXXX)"
+cleanup_source_snapshot() {
+  [ -n "${source_snapshot_root:-}" ] && rm -rf "$source_snapshot_root"
+}
+trap cleanup_source_snapshot EXIT
+snapshot_dependency_sources=()
+for dependency_index in "${!DEPENDENCIES[@]}"; do
+  skill="${DEPENDENCIES[$dependency_index]}"
+  source_skill="${dependency_sources[$dependency_index]}"
+  snapshot_skill="$source_snapshot_root/$skill"
+  mkdir -p "$snapshot_skill"
+  cp -R "$source_skill/." "$snapshot_skill/"
+  require_file "$snapshot_skill/SKILL.md"
+  snapshot_dependency_sources+=("$snapshot_skill")
+done
+dependency_sources=("${snapshot_dependency_sources[@]}")
+
 host_roots=()
 for host_path in "$RAW_HOME/.agents/skills" "$RAW_HOME/.claude/skills" "$RAW_HOME/.codex/skills"; do
   canonical_path_into host_root "$host_path"
@@ -202,6 +222,7 @@ cleanup_staging() {
       rmdir "$cleanup_parent" 2>/dev/null || true
     fi
   done
+  cleanup_source_snapshot
 }
 trap cleanup_staging EXIT
 

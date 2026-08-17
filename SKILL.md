@@ -9,6 +9,8 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
 
 接到任务先确定/创建客户工作区（结构见下），读取 `<标段名>/流水线状态.md`（不存在则初始化为阶段 0）。每完成一阶段更新该文件。阶段 0 是启动预处理；阶段 1–9 是九个业务阶段。门未过不得进入下一阶段；除三类人工确认点外不得中途询问用户。
 
+`references/阶段契约.json` 是每阶段 `interaction` 与 `action` 的唯一执行语义。只有 `interaction=human, action=wait` 才等待；`interaction=machine, action=continue` 必须自行执行并继续，阶段 prose 中即使出现“用户答复”“客户确认记录”等措辞也不构成新的等待点。
+
 ## 客户工作区结构
 
 ```
@@ -16,7 +18,7 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
   素材库/{案例,人员,资质,业绩}/
   <标段名>/
     流水线状态.md  评分表解析.md  应答矩阵.md
-    CONTEXT.md  adr/  大纲.md  章节/  配图/  合并稿.md  导出/
+    CONTEXT.md  adr/  大纲.md  章节/  配图/  合并稿.md  验收清单.json  导出/
 ```
 
 **保密规则（最高优先级）**：一切子代理/工具调用的上下文只注入当前客户工作区路径；禁止读取、引用或泄漏其他客户目录的任何素材。
@@ -49,7 +51,7 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
 [门 8·interaction=human]：用户审定。
 
 **阶段 9 导出**：wpscomposer：`generate("合并稿.md", format="docx", preset="proposal")`，再 `format="pdf"`；产出入 `导出/`。
-[交付验收]：检查 docx 与 pdf 均可打开且无乱码；这是交付验收，不是流程门。
+[交付验收]：生成/更新项目内 `验收清单.json`，记录当前合并稿 SHA-256、评分点、正文必含词、图源/渲染摘要与拓扑、交付路径及页约束；检查 docx 与 pdf 均为当前合并稿导出、可打开且无乱码。这是交付验收，不是流程门。清单字段契约见 `references/验收清单模板.json`。
 
 ## 各门核查细则
 
