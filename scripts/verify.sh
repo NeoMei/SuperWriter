@@ -21,6 +21,14 @@ fail() {
   exit 1
 }
 
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "required command is unavailable: $1"
+}
+
+for required_command in awk sed tr grep shasum readlink unzip file python3 markitdown pdfinfo; do
+  require_command "$required_command"
+done
+
 [ -f "$AGENTS_SKILLS_ROOT/grilling/SKILL.md" ] || fail "agents skill source is unavailable"
 [ -f "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw/SKILL.md" ] || fail "Excalidraw skill source is unavailable"
 [ -f "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md" ] || fail "WPSComposer source is unavailable"
@@ -90,5 +98,113 @@ grep -Fq '图1-国产化适配架构.png' "$ACCEPTANCE_DIR/合并稿.md" || fail
 [ -s "$DELIVERY_PDF" ] || fail "missing PDF delivery"
 unzip -tqq "$DELIVERY_DOCX" >/dev/null || fail "DOCX delivery is not a valid OOXML archive"
 file "$DELIVERY_PDF" | grep -Fq 'PDF document' || fail "PDF delivery is invalid"
+
+python3 - "$DIAGRAM_MD" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+
+def fail(message):
+    print(f"FAIL: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+path = Path(sys.argv[1])
+try:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"```json\n(.*?)\n```", text, re.S)
+    if match is None:
+        fail("native Excalidraw source is missing its JSON block")
+    scene = json.loads(match.group(1))
+    elements = scene["elements"]
+except (OSError, KeyError, TypeError, ValueError) as exc:
+    fail(f"native Excalidraw JSON is invalid: {exc}")
+
+rectangles = {
+    element.get("id"): element
+    for element in elements
+    if element.get("type") == "rectangle"
+}
+arrows = [element for element in elements if element.get("type") == "arrow"]
+if len(rectangles) != 4:
+    fail("native Excalidraw must contain exactly 4 rectangle elements")
+if len(arrows) != 3:
+    fail("native Excalidraw must contain exactly 3 arrow elements")
+
+for arrow in arrows:
+    start = arrow.get("startBinding")
+    end = arrow.get("endBinding")
+    if not isinstance(start, dict) or not isinstance(end, dict):
+        fail("every Excalidraw arrow must have startBinding and endBinding")
+    start_shape = rectangles.get(start.get("elementId"))
+    end_shape = rectangles.get(end.get("elementId"))
+    if start_shape is None or end_shape is None:
+        fail("every Excalidraw arrow binding must reference a rectangle endpoint")
+    arrow_id = arrow.get("id")
+    for endpoint in (start_shape, end_shape):
+        bound_ids = {
+            item.get("id")
+            for item in endpoint.get("boundElements", [])
+            if isinstance(item, dict)
+        }
+        if arrow_id not in bound_ids:
+            fail("Excalidraw arrow endpoints must list the arrow in boundElements")
+PY
+
+python3 - "$DELIVERY_DOCX" <<'PY'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+
+
+def fail(message):
+    print(f"FAIL: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+path = Path(sys.argv[1])
+try:
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        app_xml = archive.read("docProps/app.xml")
+except (OSError, KeyError, zipfile.BadZipFile) as exc:
+    fail(f"DOCX metadata is unreadable: {exc}")
+
+try:
+    root = ET.fromstring(app_xml)
+except ET.ParseError as exc:
+    fail(f"DOCX docProps/app.xml is invalid: {exc}")
+
+application = next(
+    (element.text or "" for element in root if element.tag.rsplit("}", 1)[-1] == "Application"),
+    "",
+)
+if "WPS Office" not in application:
+    fail("DOCX Application must contain WPS Office")
+if not any(name.startswith("word/media/") and not name.endswith("/") for name in names):
+    fail("DOCX delivery must contain at least one word/media item")
+PY
+
+verify_markitdown_terms() {
+  local label="$1"
+  local source="$2"
+  local output
+  output="$(markitdown "$source")" || fail "$label markitdown extraction failed"
+  for required_text in P01 P02 P03 PostgreSQL 达梦 '图 1 国产化适配架构'; do
+    grep -Fq "$required_text" <<<"$output" || fail "$label markitdown output is missing required text: $required_text"
+  done
+}
+
+verify_markitdown_terms DOCX "$DELIVERY_DOCX"
+
+pdf_metadata="$(LC_ALL=C pdfinfo "$DELIVERY_PDF")" || fail "PDF metadata is unreadable"
+grep -Eq '^Creator:[[:space:]]+.*WPS' <<<"$pdf_metadata" || fail "PDF Creator must contain WPS"
+grep -Eq '^Pages:[[:space:]]+3$' <<<"$pdf_metadata" || fail "PDF delivery must contain exactly 3 pages"
+grep -Eq '^Page size:[[:space:]]+595\.3 x 841\.9 pts \(A4\)$' <<<"$pdf_metadata" || fail "PDF delivery pages must be A4"
+
+verify_markitdown_terms PDF "$DELIVERY_PDF"
 
 echo "PASS: superwriter installation, gate contract, backup isolation, and acceptance artifacts are satisfied"
