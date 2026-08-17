@@ -11,6 +11,10 @@ SOURCE_GATES="$SOURCE_DIR/references/门禁清单.md"
 
 DEPENDENCIES=(grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt obsidian-excalidraw)
 HOSTS=("$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills")
+HOST_NAMES=(agents claude codex)
+BACKUP_ROOT="$HOME/.local/share/superwriter/backups"
+ACCEPTANCE_DIR="$SOURCE_DIR/验收/模拟客户A/模拟标段1"
+DELIVERY_DIR="$ACCEPTANCE_DIR/导出"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -53,7 +57,9 @@ grep -Fq '评分点总数抽查已纳入门 2 客户确认清单' "$SOURCE_GATES
 route_file="$HOME/.codex/AGENTS.md"
 grep -Fq '阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收' "$route_file" || fail "Codex route must mirror the stage and gate contract"
 
-for host in "${HOSTS[@]}"; do
+for index in "${!HOSTS[@]}"; do
+  host="${HOSTS[$index]}"
+  host_name="${HOST_NAMES[$index]}"
   [ -f "$host/superwriter/SKILL.md" ] || fail "missing superwriter at $host"
   for skill in "${DEPENDENCIES[@]}"; do
     [ -f "$host/$skill/SKILL.md" ] || fail "missing $skill at $host"
@@ -63,9 +69,26 @@ for host in "${HOSTS[@]}"; do
   [ "$(shasum -a 256 "$SOURCE_SKILL" | awk '{print $1}')" = "$(shasum -a 256 "$host/superwriter/SKILL.md" | awk '{print $1}')" ] || fail "superwriter SKILL.md mirror hash differs at $host"
   [ "$(shasum -a 256 "$SOURCE_MATRIX" | awk '{print $1}')" = "$(shasum -a 256 "$host/superwriter/references/应答矩阵模板.md" | awk '{print $1}')" ] || fail "matrix template mirror hash differs at $host"
   [ "$(shasum -a 256 "$SOURCE_GATES" | awk '{print $1}')" = "$(shasum -a 256 "$host/superwriter/references/门禁清单.md" | awk '{print $1}')" ] || fail "gate checklist mirror hash differs at $host"
+  [ ! -e "$host/WPSComposer.backup-20260817" ] || fail "discoverable WPSComposer backup remains at $host"
+  if [ -d "$BACKUP_ROOT" ]; then
+    [ -f "$BACKUP_ROOT/$host_name/WPSComposer.backup-20260817/SKILL.md" ] || fail "recoverable WPSComposer backup is missing for $host_name"
+  fi
 done
 
 agents_file="$HOME/.codex/AGENTS.md"
 [ "$(grep -c 'pipeline:superwriter' "$agents_file")" -eq 2 ] || fail "expected exactly one Codex routing block"
 
-echo "PASS: superwriter installation and gate contract are satisfied"
+DIAGRAM_MD="$ACCEPTANCE_DIR/配图/图1-国产化适配架构.excalidraw.md"
+DIAGRAM_PNG="$ACCEPTANCE_DIR/配图/图1-国产化适配架构.png"
+DELIVERY_DOCX="$DELIVERY_DIR/技术标-模拟标段1.docx"
+DELIVERY_PDF="$DELIVERY_DIR/技术标-模拟标段1.pdf"
+[ -s "$DIAGRAM_MD" ] || fail "missing native Excalidraw source"
+[ -s "$DIAGRAM_PNG" ] || fail "missing rendered architecture diagram"
+grep -Fq '图1-国产化适配架构.png' "$ACCEPTANCE_DIR/章节/03-数据平台架构.md" || fail "chapter does not reference the rendered diagram"
+grep -Fq '图1-国产化适配架构.png' "$ACCEPTANCE_DIR/合并稿.md" || fail "merged draft does not reference the rendered diagram"
+[ -s "$DELIVERY_DOCX" ] || fail "missing DOCX delivery"
+[ -s "$DELIVERY_PDF" ] || fail "missing PDF delivery"
+unzip -tqq "$DELIVERY_DOCX" >/dev/null || fail "DOCX delivery is not a valid OOXML archive"
+file "$DELIVERY_PDF" | grep -Fq 'PDF document' || fail "PDF delivery is invalid"
+
+echo "PASS: superwriter installation, gate contract, backup isolation, and acceptance artifacts are satisfied"

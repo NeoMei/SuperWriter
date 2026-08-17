@@ -1,0 +1,44 @@
+{
+  "title": "国产化适配架构",
+  "theme": "soft",
+  "direction": "TB",
+  "nodes": [
+    {
+      "id": "apps",
+      "label": "业务应用层",
+      "role": "client"
+    },
+    {
+      "id": "adapter",
+      "label": "国产化适配层\n复用率 90%",
+      "role": "service"
+    },
+    {
+      "id": "postgresql",
+      "label": "PostgreSQL",
+      "role": "store"
+    },
+    {
+      "id": "dameng",
+      "label": "达梦数据库",
+      "role": "store"
+    }
+  ],
+  "edges": [
+    {
+      "from": "apps",
+      "to": "adapter",
+      "label": "统一访问"
+    },
+    {
+      "from": "adapter",
+      "to": "postgresql",
+      "label": "双栈适配"
+    },
+    {
+      "from": "adapter",
+      "to": "dameng",
+      "label": "双栈适配"
+    }
+  ]
+}

@@ -122,6 +122,9 @@ Expected: 0 failed；可选 `pypdf` 缺失只能产生明确 skip。
 - Modify: `验收/验收报告.md`
 - Modify: `验收/模拟客户A/模拟标段1/流水线状态.md`
 - Modify: `验收/模拟客户A/模拟标段1/应答矩阵.md`
+- Modify: `验收/模拟客户A/模拟标段1/配图/*`
+- Modify: `验收/模拟客户A/模拟标段1/章节/03-数据平台架构.md`
+- Modify: `验收/模拟客户A/模拟标段1/合并稿.md`
 - Modify: `验收/模拟客户A/模拟标段1/导出/*`
 
 - [ ] **Step 1: 安装缺失依赖并移出可发现备份**
@@ -132,11 +135,15 @@ Expected: 0 failed；可选 `pypdf` 缺失只能产生明确 skip。
 
 把门 0 人工抽查改为门 2 合并确认；把“门 9 旁路”改为“导出验收 WPS 原生通过”。
 
-- [ ] **Step 3: 重放客户目录导出**
+- [ ] **Step 3: 重放阶段 6 可编辑配图**
+
+按 `obsidian-excalidraw` skill 从节点/边 spec 生成 Obsidian-native `.excalidraw.md`，渲染 PNG 并目视检查无截断/重叠/错连；章节和合并稿引用渲染产物。
+
+- [ ] **Step 4: 重放客户目录导出**
 
 从模拟标段目录调用安装后 WPSComposer 重新生成 DOCX/PDF，运行 `unzip -t`、`file`、`markitdown`并渲染 PDF 首页检查。
 
-- [ ] **Step 4: 环境验证**
+- [ ] **Step 5: 环境验证**
 
 Run: `bash scripts/verify.sh`
 
