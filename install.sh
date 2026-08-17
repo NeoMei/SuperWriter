@@ -6,7 +6,8 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 for d in "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"; do
   mkdir -p "$d/superwriter"
   cp "$SRC/SKILL.md" "$d/superwriter/SKILL.md"
-  cp "$SRC"/references/*.md "$d/superwriter/"
+  mkdir -p "$d/superwriter/references"
+  cp "$SRC"/references/*.md "$d/superwriter/references/"
 done
 
 if ! grep -q 'pipeline:superwriter' "$HOME/.codex/AGENTS.md" 2>/dev/null; then
