@@ -9,7 +9,6 @@ import os
 from pathlib import Path, PurePosixPath
 import posixpath
 import re
-import shutil
 import struct
 import subprocess
 import sys
@@ -23,11 +22,29 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
+
+
 def load_json(path: Path, label: str):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys)
     except (OSError, UnicodeError, ValueError) as exc:
         fail(f"{label} is invalid: {exc}")
+
+
+def require_keys(value: object, expected: set[str], label: str) -> None:
+    if not isinstance(value, dict) or set(value) != expected:
+        fail(f"{label} has unknown or missing keys")
+
+
+def valid_digest(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
 def project_path(root: Path, value: object, label: str) -> Path:
@@ -66,6 +83,41 @@ def normalized(value: str) -> str:
     return "".join(re.findall(r"[0-9A-Za-z\u3400-\u9fff]+", value)).casefold()
 
 
+def markdown_fingerprints(text: str):
+    headings, paragraphs, tables = [], [], []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("!["):
+            continue
+        value = normalized(stripped)
+        if len(value) < 4:
+            continue
+        if stripped.startswith("#"):
+            headings.append(value)
+        elif stripped.startswith("|") and not re.fullmatch(r"[|:\- ]+", stripped):
+            tables.append(value)
+        else:
+            paragraphs.append(value)
+    tokens = sorted(set(re.findall(r"[A-Za-z]+\d+|\d+(?:\.\d+)?%|[A-Z][A-Za-z0-9]{2,}", text)))
+    return {"headings": headings, "paragraphs": paragraphs, "tables": tables, "tokens": [normalized(item) for item in tokens]}
+
+
+def export_body_lines(text: str):
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("Page") or stripped == "目 录" or "base64" in stripped:
+            continue
+        if re.fullmatch(r"[|:\- .]+", stripped):
+            continue
+        # Generated TOC rows are permitted wrappers. Strip their trailing page
+        # number and compare the heading itself with the canonical source.
+        if re.search(r"[Pp]\d+", stripped):
+            stripped = re.sub(r"(?:\.{2,}|\s+)\d+\s*$", "", stripped)
+        value = normalized(stripped)
+        if len(value) >= 12:
+            yield value, raw.strip()
+
+
 def extracted_text(label: str, path: Path) -> str:
     result = subprocess.run(
         ["markitdown", str(path)], text=True, stdout=subprocess.PIPE,
@@ -97,15 +149,16 @@ def bmp_pixels(path: Path, label: str) -> bytes:
             raise ValueError
         offset = struct.unpack_from("<I", payload, 10)[0]
         dib_size, width, height, planes, depth, compression = struct.unpack_from("<IiiHHI", payload, 14)
-        if dib_size < 40 or width != 192 or abs(height) != 96 or planes != 1 or depth != 24 or compression != 0:
+        if dib_size < 40 or width != 192 or abs(height) != 96 or planes != 1 or (depth, compression) not in {(24, 0), (32, 3)}:
             raise ValueError
-        stride = ((width * 3 + 3) // 4) * 4
+        channels = depth // 8
+        stride = ((width * channels + 3) // 4) * 4
         rows = []
         for row_index in range(abs(height)):
-            row = payload[offset + row_index * stride:offset + row_index * stride + width * 3]
-            if len(row) != width * 3:
+            row = payload[offset + row_index * stride:offset + row_index * stride + width * channels]
+            if len(row) != width * channels:
                 raise ValueError
-            rows.append(bytes(channel for index in range(0, len(row), 3)
+            rows.append(bytes(channel for index in range(0, len(row), channels)
                               for channel in (row[index + 2], row[index + 1], row[index])))
         if height > 0:
             rows.reverse()
@@ -149,18 +202,73 @@ def excalidraw_scene(source: Path):
         fail(f"native Excalidraw JSON is invalid: {exc}")
 
 
+def validate_svg_source(svg: Path, expected_nodes, expected_edges, rectangles):
+    try:
+        root = ET.parse(svg).getroot()
+    except (OSError, ET.ParseError) as exc:
+        fail(f"SVG render source is invalid: {exc}")
+    namespace = root.tag.partition("}")[0].lstrip("{")
+    if root.tag.rsplit("}", 1)[-1] != "svg" or not namespace:
+        fail("SVG render source root is invalid")
+    groups = root.findall(f".//{{{namespace}}}g")
+    svg_nodes = {}
+    for group in groups:
+        node_id = group.get("data-node-id")
+        if not node_id:
+            continue
+        rect = group.find(f"{{{namespace}}}rect")
+        text = group.find(f"{{{namespace}}}text")
+        if rect is None or text is None:
+            fail(f"SVG node geometry/label is missing: {node_id}")
+        try:
+            box = tuple(float(rect.get(name)) for name in ("x", "y", "width", "height"))
+        except (TypeError, ValueError):
+            fail(f"SVG node geometry is invalid: {node_id}")
+        svg_nodes[node_id] = (box, "".join(text.itertext()))
+    if set(svg_nodes) != set(expected_nodes):
+        fail("Excalidraw and SVG node IDs differ")
+    for node_id, label in expected_nodes.items():
+        source = rectangles[node_id]
+        source_box = tuple(float(source[name]) for name in ("x", "y", "width", "height"))
+        svg_box, svg_label = svg_nodes[node_id]
+        if any(abs(left - right) > 0.01 for left, right in zip(source_box, svg_box)):
+            fail(f"Excalidraw and SVG node geometry differ: {node_id}")
+        if normalized(svg_label) != normalized(label):
+            fail(f"Excalidraw and SVG node labels differ: {node_id}")
+    svg_edges = []
+    for group in groups:
+        start, end = group.get("data-edge-from"), group.get("data-edge-to")
+        if not start and not end:
+            continue
+        text = group.find(f"{{{namespace}}}text")
+        if not start or not end or text is None:
+            fail("SVG directed topology/edge label is invalid")
+        svg_edges.append((start, end, "".join(text.itertext())))
+    if sorted(svg_edges) != sorted(expected_edges):
+        fail("Excalidraw and SVG directed topology/edge labels differ")
+
+
 def validate_figure(root: Path, item: object):
+    require_keys(item, {"source", "render_source", "render", "caption", "source_sha256", "render_source_sha256", "render_sha256", "nodes", "edges"}, "acceptance manifest figure")
     if not isinstance(item, dict):
         fail("acceptance manifest figure entry is invalid")
     source = project_path(root, item.get("source"), "figure source")
+    render_source = project_path(root, item.get("render_source"), "figure render source")
     render = project_path(root, item.get("render"), "figure render")
     require_file(source, "missing native Excalidraw source")
+    require_file(render_source, "missing SVG render source")
     require_file(render, "missing rendered architecture diagram")
     caption = item.get("caption")
     nodes = item.get("nodes")
     edges = item.get("edges")
     if not isinstance(caption, str) or not caption or not isinstance(nodes, list) or not isinstance(edges, list):
         fail("acceptance manifest figure caption/topology is invalid")
+    for node in nodes:
+        require_keys(node, {"id", "label"}, "acceptance manifest figure node")
+    for edge in edges:
+        require_keys(edge, {"from", "to", "label"}, "acceptance manifest figure edge")
+    if not all(valid_digest(item.get(name)) for name in ("source_sha256", "render_source_sha256", "render_sha256")):
+        fail("acceptance manifest figure digest is invalid")
 
     elements = excalidraw_scene(source)
     expected_nodes = {node.get("id"): node.get("label") for node in nodes if isinstance(node, dict)}
@@ -207,10 +315,15 @@ def validate_figure(root: Path, item: object):
                   if element.get("type") == "text" and element.get("containerId") == arrow.get("id")]
         actual_edges.append((start.get("elementId"), end.get("elementId"), labels[0] if len(labels) == 1 else None))
     expected_edges = [(edge.get("from"), edge.get("to"), edge.get("label")) for edge in edges if isinstance(edge, dict)]
+    if len(expected_edges) != len(edges) or any(not all(isinstance(value, str) and value for value in edge) for edge in expected_edges):
+        fail("acceptance manifest figure edges are invalid")
     if sorted(actual_edges) != sorted(expected_edges):
         fail("Excalidraw directed topology/edge labels differ from manifest")
+    validate_svg_source(render_source, expected_nodes, expected_edges, rectangles)
     if sha256(source) != item.get("source_sha256"):
         fail("Excalidraw source digest differs from acceptance manifest")
+    if sha256(render_source) != item.get("render_source_sha256"):
+        fail("SVG render source digest differs from acceptance manifest")
 
     render_payload = render.read_bytes()
     width, height = png_header(render_payload, "rendered architecture diagram")
@@ -220,22 +333,19 @@ def validate_figure(root: Path, item: object):
         pixels = normalized_pixels(render_payload, "rendered architecture diagram", Path(temporary), "render")
     if sha256(render) != item.get("render_sha256"):
         fail("rendered diagram digest differs from acceptance manifest")
-
-    renderer = item.get("renderer")
-    if renderer is not None:
-        if not isinstance(renderer, list) or not renderer or not all(isinstance(part, str) for part in renderer):
-            fail("acceptance manifest figure renderer is invalid")
-        if shutil.which(renderer[0]):
-            with tempfile.TemporaryDirectory(prefix="superwriter-renderer-") as temporary:
-                output = Path(temporary) / "rendered.png"
-                command = [part.replace("{source}", str(source)).replace("{output}", str(output)) for part in renderer]
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-                if result.returncode or not output.is_file():
-                    fail("configured Excalidraw renderer failed")
-                generated = output.read_bytes()
-                png_header(generated, "renderer output")
-                generated_pixels = normalized_pixels(generated, "renderer output", Path(temporary), "generated")
-                compare_pixels(pixels, generated_pixels, "Excalidraw renderer output differs from accepted PNG")
+    with tempfile.TemporaryDirectory(prefix="superwriter-svg-render-") as temporary:
+        directory = Path(temporary)
+        svg_png = directory / "svg.png"
+        result = subprocess.run(
+            ["sips", "-s", "format", "png", str(render_source), "--out", str(svg_png)],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+        )
+        if result.returncode or not svg_png.is_file():
+            fail("SVG render source cannot be rasterized by sips")
+        svg_payload = svg_png.read_bytes()
+        png_header(svg_payload, "SVG raster")
+        svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")
+    compare_pixels(svg_pixels, pixels, "SVG raster differs from accepted PNG")
     return source, render, caption, render_payload, width, height, pixels
 
 
@@ -247,6 +357,7 @@ def main() -> None:
     if not manifest_path.is_file():
         fail("acceptance manifest is missing: 验收清单.json")
     manifest = load_json(manifest_path, "acceptance manifest")
+    require_keys(manifest, {"version", "points", "required_terms", "pipeline", "chapters", "point_chapters", "figures", "outputs", "pdf"}, "acceptance manifest")
     if not isinstance(manifest, dict) or manifest.get("version") != 1:
         fail("acceptance manifest version is unsupported")
 
@@ -264,12 +375,26 @@ def main() -> None:
         fail("acceptance manifest required terms are invalid")
     if not all(isinstance(value, dict) for value in (pipeline, point_chapters, outputs, pdf_contract)) or not isinstance(chapters, list) or not isinstance(figures, list):
         fail("acceptance manifest structure is invalid")
+    require_keys(pipeline, {"status", "score_table", "matrix", "outline", "completed_stage", "human_gates", "machine_gates", "stage_evidence"}, "acceptance manifest pipeline")
+    require_keys(outputs, {"merged", "merged_sha256", "docx", "pdf"}, "acceptance manifest outputs")
+    require_keys(pdf_contract, {"min_pages", "max_pages", "page_size"}, "acceptance manifest pdf")
+    if len(terms) != len(set(terms)):
+        fail("acceptance manifest required terms must be unique")
+    if set(point_chapters) != set(points):
+        fail("acceptance manifest point_chapters keys must equal point IDs")
+    if not valid_digest(outputs.get("merged_sha256")):
+        fail("acceptance manifest merged digest is invalid")
 
     if pipeline.get("completed_stage") != 9 or pipeline.get("human_gates") != [2, 5, 8] or pipeline.get("machine_gates") != [0, 3, 6, 7]:
         fail("acceptance manifest pipeline/gate contract is invalid")
     evidence = pipeline.get("stage_evidence")
     if not isinstance(evidence, list) or [entry.get("stage") for entry in evidence if isinstance(entry, dict)] != list(range(10)):
         fail("acceptance manifest must declare stage 0 through 9 evidence")
+    for entry in evidence:
+        require_keys(entry, {"stage", "path"}, "acceptance manifest stage evidence")
+    evidence_paths = [entry["path"] for entry in evidence]
+    if len(evidence_paths) != len(set(evidence_paths)):
+        fail("acceptance manifest stage evidence paths must be unique")
     for entry in evidence:
         path = project_path(root, entry.get("path"), f"stage {entry.get('stage')} evidence")
         require_file(path, f"required pipeline evidence is missing for stage {entry.get('stage')}: {entry.get('path')}")
@@ -311,13 +436,21 @@ def main() -> None:
 
     outline = outline_path.read_text(encoding="utf-8")
     declared_chapters = {}
+    declared_chapter_paths = set()
     for chapter in chapters:
+        require_keys(chapter, {"number", "path", "points"}, "acceptance manifest chapter")
         if not isinstance(chapter, dict) or not isinstance(chapter.get("number"), str) or not isinstance(chapter.get("points"), list):
             fail("acceptance manifest chapter entry is invalid")
         path = project_path(root, chapter.get("path"), "chapter path")
         require_file(path, f"required chapter is missing: {chapter.get('path')}")
         number = chapter["number"]
+        if len(chapter["points"]) != len(set(chapter["points"])):
+            fail(f"acceptance manifest chapter points must be unique: {chapter.get('path')}")
+        relative_path = path.relative_to(root).as_posix()
+        if number in declared_chapters or relative_path in declared_chapter_paths:
+            fail("acceptance manifest chapter numbers and paths must be unique")
         declared_chapters[number] = path
+        declared_chapter_paths.add(relative_path)
         chapter_text = path.read_text(encoding="utf-8")
         if not re.search(rf"(?m)^#+\s*{re.escape(number)}\.", chapter_text):
             fail(f"chapter file heading does not match chapter number: {chapter.get('path')}")
@@ -333,6 +466,18 @@ def main() -> None:
     merged_path = project_path(root, outputs.get("merged"), "merged draft")
     docx_path = project_path(root, outputs.get("docx"), "DOCX output")
     pdf_path = project_path(root, outputs.get("pdf"), "PDF output")
+    canonical_merged = (root / "合并稿.md").resolve()
+    if outputs.get("merged") != "合并稿.md" or merged_path.resolve() != canonical_merged:
+        fail("outputs.merged must be the canonical project-root 合并稿.md")
+    if project_path(root, evidence[7].get("path"), "stage 7 evidence").resolve() != canonical_merged:
+        fail("stage 7 evidence must be the canonical project-root 合并稿.md")
+    delivery_root = (root / "导出").resolve()
+    if docx_path.parent.resolve() != delivery_root or docx_path.suffix.lower() != ".docx":
+        fail("DOCX output must be a .docx directly under 导出/")
+    if pdf_path.parent.resolve() != delivery_root or pdf_path.suffix.lower() != ".pdf":
+        fail("PDF output must be a .pdf directly under 导出/")
+    if project_path(root, evidence[9].get("path"), "stage 9 evidence").resolve() != docx_path.resolve():
+        fail("stage 9 evidence must be the declared DOCX output")
     require_file(merged_path, "missing merged draft")
     require_file(docx_path, "missing DOCX delivery")
     require_file(pdf_path, "missing PDF delivery")
@@ -343,6 +488,12 @@ def main() -> None:
         if placeholder.search(path.read_text(encoding="utf-8")):
             fail(f"unresolved placeholder remains in accepted prose: {path.relative_to(root).as_posix()}")
 
+    figure_paths = []
+    for figure in figures:
+        if isinstance(figure, dict):
+            figure_paths.extend(figure.get(name) for name in ("source", "render_source", "render"))
+    if len(figure_paths) != len(set(figure_paths)):
+        fail("acceptance manifest figure paths must be unique")
     validated_figures = [validate_figure(root, figure) for figure in figures]
     merged = merged_path.read_text(encoding="utf-8")
     for _, render, caption, *_ in validated_figures:
@@ -398,19 +549,23 @@ def main() -> None:
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
     extracted = (("DOCX", docx_text), ("PDF", pdf_text))
+    fingerprints = markdown_fingerprints(merged)
+    source_compact = normalized(merged)
     for label, text in extracted:
         for value in [*points, *terms, *(figure[2] for figure in validated_figures)]:
             if normalized(value) not in normalized(text):
                 fail(f"{label} markitdown output is missing required text: {value}")
     for label, text in extracted:
         compact = normalized(text)
-        for line in merged.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("!["):
-                continue
-            anchor = normalized(stripped)
-            if len(anchor) >= 4 and anchor not in compact:
-                fail(f"{label} content does not cover current merged draft: {stripped[:48]}")
+        for kind in ("headings", "paragraphs", "tables", "tokens"):
+            for fingerprint in fingerprints[kind]:
+                if fingerprint not in compact:
+                    fail(f"{label} content does not cover current merged draft {kind}: {fingerprint[:48]}")
+        for body, original in export_body_lines(text):
+            if "|" in original and any(heading in body for heading in fingerprints["headings"]):
+                continue  # WPS-generated table-of-contents row wrapper.
+            if body not in source_compact:
+                fail(f"{label} contains substantive body text absent from canonical merged draft: {original[:48]}")
 
     metadata = subprocess.run(["pdfinfo", str(pdf_path)], text=True, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, check=False)

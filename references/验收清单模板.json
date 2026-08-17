@@ -30,13 +30,14 @@
   "figures": [
     {
       "source": "配图/图1-示例.excalidraw.md",
+      "render_source": "配图/图1-示例.svg",
       "render": "配图/图1-示例.png",
       "caption": "图 1 示例",
       "source_sha256": "生成时填写",
+      "render_source_sha256": "生成时填写",
       "render_sha256": "生成时填写",
       "nodes": [{"id": "node-a", "label": "节点 A"}],
-      "edges": [],
-      "renderer": null
+      "edges": []
     }
   ],
   "outputs": {

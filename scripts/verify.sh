@@ -52,9 +52,15 @@ from pathlib import Path
 import json, re, sys
 def fail(message):
     print(f"FAIL: {message}", file=sys.stderr); raise SystemExit(1)
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result: raise ValueError(f"duplicate key: {key}")
+        result[key] = value
+    return result
 skill = Path(sys.argv[1]).read_text(encoding="utf-8")
 gates = Path(sys.argv[2]).read_text(encoding="utf-8")
-try: stage_contract = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
+try: stage_contract = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys)
 except (OSError, ValueError) as exc: fail(f"stage interaction contract is invalid: {exc}")
 stages = list(re.finditer(r"^\*\*阶段 (\d+) ([^*]+)\*\*", skill, re.M))
 if [int(item.group(1)) for item in stages] != list(range(10)):

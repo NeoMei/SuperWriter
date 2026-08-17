@@ -39,3 +39,13 @@
 ## Result
 
 All seven round-2 findings are closed by executable contracts and regression coverage.
+
+## Follow-up independent-review fixes
+
+The independent review at `round2-superwriter-fix-review.md` found two Important trust-binding gaps and one Minor schema gap. They were reproduced before implementation: deletion plus digest refresh, merged-path repointing, source geometry plus digest refresh, source+SVG changes with an old PNG, duplicate keys, unknown keys, and duplicate chapter declarations all false-greened.
+
+- Acceptance now fixes `outputs.merged` and stage-7 evidence to the project-root `合并稿.md`, confines DOCX/PDF directly to `导出/`, and fixes stage-9 evidence to the declared DOCX. Structured fingerprints are derived dynamically from the canonical draft (headings, paragraphs, table rows, and key tokens). Both extracted outputs must contain every source fingerprint, and every substantive export body line must occur in the source; only explicit cover/TOC wrappers are exempt.
+- Every accepted figure now requires a same-name structured SVG render source. Excalidraw and SVG node IDs, labels, exact geometry, directed topology, and edge labels are compared; SVG rendering through macOS `sips` is mandatory and fail-closed; normalized SVG raster pixels must match the accepted PNG before PNG↔DOCX comparison.
+- JSON parsing rejects duplicate keys. The acceptance manifest is a closed schema at every object level, digests must be lowercase SHA-256, and point/term/chapter/evidence/figure path uniqueness is enforced. The stage contract uses the same duplicate-key rejection and its existing exact-value comparison rejects unknown fields.
+
+The repository demo had a stale, text-only SVG that did not correspond to its Excalidraw/PNG. Correcting that original source-render inconsistency required regenerating only the diagram chain: the SVG was replaced by the structured canonical render, the PNG was produced from it with `sips`, and only `word/media/image1.png` was replaced in the demo DOCX. The PDF was then converted from that DOCX through the real WPS conversion backend. DOCX package validity, `WPS Office` application metadata, DOCX/PDF extracted正文, WPS PDF Creator, three A4 pages, SVG→PNG pixels, and PNG→DOCX pixels were revalidated; no bid prose or layout semantics were rewritten by a test bypass.

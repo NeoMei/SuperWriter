@@ -33,10 +33,12 @@
   "figures": [
     {
       "source": "配图/图1-国产化适配架构.excalidraw.md",
+      "render_source": "配图/图1-国产化适配架构.svg",
       "render": "配图/图1-国产化适配架构.png",
       "caption": "图 1 国产化适配架构",
       "source_sha256": "d08f885b64bf257faf865da19ed52f94ba6ee728e32fd3a6e70fc745a4befeee",
-      "render_sha256": "c04c11aa45e1b987f6b33f70894d4134caf879f868ef7bd62514a8aa8aa8cb97",
+      "render_source_sha256": "b7e6192ee2a8393bade4229149a1490468a7c8830287871f92f1cfff897fb97e",
+      "render_sha256": "2346db955aec665ee3f657b3af3bdffdc74e0f0ad47ed6ac4fe2eab1bc4d4155",
       "nodes": [
         {"id": "apps", "label": "业务应用层"},
         {"id": "adapter", "label": "国产化适配层\n复用率 90%"},
@@ -47,8 +49,7 @@
         {"from": "apps", "to": "adapter", "label": "统一访问"},
         {"from": "adapter", "to": "postgresql", "label": "双栈适配"},
         {"from": "adapter", "to": "dameng", "label": "双栈适配"}
-      ],
-      "renderer": null
+      ]
     }
   ],
   "outputs": {

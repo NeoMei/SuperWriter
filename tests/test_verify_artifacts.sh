@@ -19,6 +19,14 @@ fresh_fixture() {
   cp -R "$REPO_ROOT/references/." "$fixture/references/"
   cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/验收清单.json" \
     "$fixture/验收/模拟客户A/模拟标段1/验收清单.json"
+  cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.svg" \
+    "$fixture/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.svg"
+  cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" \
+    "$fixture/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png"
+  cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" \
+    "$fixture/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx"
+  cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.pdf" \
+    "$fixture/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.pdf"
 
   local test_home="$fixture-test-home"
   local agents_source="$fixture-agents-source"
@@ -183,6 +191,118 @@ PY
 expect_rejected stale-exports-with-digest "FAIL: DOCX content does not cover current merged draft" \
   "$stale_exports_with_digest" --acceptance-dir "$stale_exports_with_digest/验收/模拟客户A/模拟标段1"
 
+deleted_export_body="$(fresh_fixture deleted-export-body)"
+python3 - "$deleted_export_body/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1]); merged = root / "合并稿.md"; manifest_path = root / "验收清单.json"
+text = merged.read_text(encoding="utf-8")
+text, count = re.subn(r"\n## 4\..*?(?=\n## 5\.)", "\n", text, flags=re.S)
+assert count == 1
+merged.write_text(text, encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected deleted-export-body "FAIL: DOCX contains substantive body text absent from canonical merged draft" \
+  "$deleted_export_body" --acceptance-dir "$deleted_export_body/验收/模拟客户A/模拟标段1"
+
+repointed_merged="$(fresh_fixture repointed-merged)"
+python3 - "$repointed_merged/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1]); canonical = root / "合并稿.md"; stale = root / "旧合并稿.md"; manifest_path = root / "验收清单.json"
+stale.write_bytes(canonical.read_bytes())
+canonical.write_text("## 当前稿\n\n这是唯一当前交付正文。\n", encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["outputs"]["merged"] = "旧合并稿.md"
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(stale.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected repointed-merged "FAIL: outputs.merged must be the canonical project-root 合并稿.md" \
+  "$repointed_merged" --acceptance-dir "$repointed_merged/验收/模拟客户A/模拟标段1"
+
+figure_geometry_digest="$(fresh_fixture figure-geometry-digest)"
+python3 - "$figure_geometry_digest/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1]); source = root / "配图/图1-国产化适配架构.excalidraw.md"; manifest_path = root / "验收清单.json"
+text = source.read_text(encoding="utf-8"); match = re.search(r"```json\n(.*?)\n```", text, re.S); scene = json.loads(match.group(1))
+for item in scene["elements"]:
+    if item.get("id") in {"apps", "apps-label"}: item["x"] += 120
+payload = json.dumps(scene, ensure_ascii=False, separators=(",", ":"))
+source.write_text(text[:match.start(1)] + payload + text[match.end(1):], encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8")); figure = manifest["figures"][0]
+figure["source_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected figure-geometry-digest "FAIL: Excalidraw and SVG node geometry differ" \
+  "$figure_geometry_digest" --acceptance-dir "$figure_geometry_digest/验收/模拟客户A/模拟标段1"
+
+figure_source_svg_old_png="$(fresh_fixture figure-source-svg-old-png)"
+python3 - "$figure_source_svg_old_png/验收/模拟客户A/模拟标段1" <<'PY'
+import hashlib, html, json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1]); source = root / "配图/图1-国产化适配架构.excalidraw.md"; svg = root / "配图/图1-国产化适配架构.svg"; manifest_path = root / "验收清单.json"
+text = source.read_text(encoding="utf-8"); match = re.search(r"```json\n(.*?)\n```", text, re.S); scene = json.loads(match.group(1))
+for item in scene["elements"]:
+    if item.get("id") in {"apps", "apps-label"}: item["x"] += 120
+payload = json.dumps(scene, ensure_ascii=False, separators=(",", ":")); source.write_text(text[:match.start(1)] + payload + text[match.end(1):], encoding="utf-8")
+elements = scene["elements"]; by_id = {item["id"]: item for item in elements}; parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510">', '<rect width="1000" height="510" fill="white"/>']
+for node_id in ("apps", "adapter", "postgresql", "dameng"):
+    node = by_id[node_id]; label = next(item for item in elements if item.get("containerId") == node_id and item.get("type") == "text")
+    parts.append(f'<g data-node-id="{node_id}"><rect x="{node["x"]}" y="{node["y"]}" width="{node["width"]}" height="{node["height"]}" fill="{node["backgroundColor"]}" stroke="{node["strokeColor"]}"/><text x="{label["x"]}" y="{label["y"]}">{html.escape(label["text"])}</text></g>')
+for arrow in (item for item in elements if item.get("type") == "arrow"):
+    label = next(item for item in elements if item.get("containerId") == arrow["id"] and item.get("type") == "text")
+    parts.append(f'<g data-edge-from="{arrow["startBinding"]["elementId"]}" data-edge-to="{arrow["endBinding"]["elementId"]}"><line x1="{arrow["x"]}" y1="{arrow["y"]}" x2="{arrow["x"] + arrow["points"][-1][0]}" y2="{arrow["y"] + arrow["points"][-1][1]}" stroke="#555"/><text>{html.escape(label["text"])}</text></g>')
+parts.append('</svg>'); svg.write_text(''.join(parts), encoding="utf-8")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8")); figure = manifest["figures"][0]
+figure.pop("renderer", None); figure["render_source"] = "配图/图1-国产化适配架构.svg"; figure["source_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest(); figure["render_source_sha256"] = hashlib.sha256(svg.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected figure-source-svg-old-png "FAIL: SVG raster differs from accepted PNG" \
+  "$figure_source_svg_old_png" --acceptance-dir "$figure_source_svg_old_png/验收/模拟客户A/模拟标段1"
+
+duplicate_manifest_key="$(fresh_fixture duplicate-manifest-key)"
+python3 - "$duplicate_manifest_key/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1]); text = path.read_text(encoding="utf-8")
+path.write_text(text.replace('{\n  "version": 1,', '{\n  "version": 1,\n  "version": 1,', 1), encoding="utf-8")
+PY
+expect_rejected duplicate-manifest-key "FAIL: acceptance manifest is invalid: duplicate key: version" \
+  "$duplicate_manifest_key" --acceptance-dir "$duplicate_manifest_key/验收/模拟客户A/模拟标段1"
+
+unknown_manifest_key="$(fresh_fixture unknown-manifest-key)"
+python3 - "$unknown_manifest_key/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1]); data = json.loads(path.read_text(encoding="utf-8")); data["policy"] = "ignored-before"
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected unknown-manifest-key "FAIL: acceptance manifest has unknown or missing keys" \
+  "$unknown_manifest_key" --acceptance-dir "$unknown_manifest_key/验收/模拟客户A/模拟标段1"
+
+nullable_renderer="$(fresh_fixture nullable-renderer)"
+python3 - "$nullable_renderer/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1]); data = json.loads(path.read_text(encoding="utf-8")); data["figures"][0]["renderer"] = None
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected nullable-renderer "FAIL: acceptance manifest figure has unknown or missing keys" \
+  "$nullable_renderer" --acceptance-dir "$nullable_renderer/验收/模拟客户A/模拟标段1"
+
+duplicate_chapter="$(fresh_fixture duplicate-chapter)"
+python3 - "$duplicate_chapter/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1]); data = json.loads(path.read_text(encoding="utf-8")); data["chapters"].append(data["chapters"][0])
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected duplicate-chapter "FAIL: acceptance manifest chapter numbers and paths must be unique" \
+  "$duplicate_chapter" --acceptance-dir "$duplicate_chapter/验收/模拟客户A/模拟标段1"
+
 matrix_count="$(fresh_fixture matrix-count)"
 sed -i '' '/^| P03 |/d' "$matrix_count/验收/模拟客户A/模拟标段1/应答矩阵.md"
 expect_rejected matrix-count "FAIL: score-table count, matrix count, and manifest point IDs differ" \
@@ -319,6 +439,16 @@ path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 PY
 reinstall_fixture "$invalid_stage_contract"
 expect_rejected invalid-stage-contract "FAIL: stage interaction contract is invalid" "$invalid_stage_contract"
+
+duplicate_stage_key="$(fresh_fixture duplicate-stage-key)"
+python3 - "$duplicate_stage_key/references/阶段契约.json" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1]); text = path.read_text(encoding="utf-8")
+path.write_text(text.replace('{\n  "version": 1,', '{\n  "version": 1,\n  "version": 1,', 1), encoding="utf-8")
+PY
+reinstall_fixture "$duplicate_stage_key"
+expect_rejected duplicate-stage-key "FAIL: stage interaction contract is invalid: duplicate key: version" "$duplicate_stage_key"
 
 invalid_gate_metadata="$(fresh_fixture invalid-gate-metadata)"
 python3 - "$invalid_gate_metadata/references/门禁清单.md" <<'PY'
@@ -501,7 +631,7 @@ manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 manifest["figures"][0]["render_sha256"] = hashlib.sha256(payload).hexdigest()
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
-expect_accepted png-adam7 "$png_adam7" --acceptance-dir "$png_adam7/验收/模拟客户A/模拟标段1"
+expect_rejected png-adam7 "FAIL: SVG raster differs from accepted PNG" "$png_adam7" --acceptance-dir "$png_adam7/验收/模拟客户A/模拟标段1"
 
 docx_application="$(fresh_fixture docx-application)"
 python3 - "$docx_application/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.docx" <<'PY'

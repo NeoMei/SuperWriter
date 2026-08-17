@@ -41,7 +41,7 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
 **阶段 5 章节核查**：逐章对照矩阵核查覆盖度与响应策略写法。
 [门 5·interaction=human]：呈现缺口清单 → 用户补喂素材 → 补写 → 复核。
 
-**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改）；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
+**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改），并生成同名结构化 SVG render source，再由 macOS `sips` 栅格化为 PNG；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
 [门 6·interaction=machine]：一图一引用，编号连续，图文对应。
 
 **阶段 7 合并稿**：合并 `章节/*.md` → `合并稿.md`。
@@ -51,7 +51,7 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
 [门 8·interaction=human]：用户审定。
 
 **阶段 9 导出**：wpscomposer：`generate("合并稿.md", format="docx", preset="proposal")`，再 `format="pdf"`；产出入 `导出/`。
-[交付验收]：生成/更新项目内 `验收清单.json`，记录当前合并稿 SHA-256、评分点、正文必含词、图源/渲染摘要与拓扑、交付路径及页约束；检查 docx 与 pdf 均为当前合并稿导出、可打开且无乱码。这是交付验收，不是流程门。清单字段契约见 `references/验收清单模板.json`。
+[交付验收]：生成/更新项目内 `验收清单.json`，其中 `outputs.merged` 只能是项目根 `合并稿.md`；记录当前合并稿 SHA-256、评分点、章节、Excalidraw/SVG/PNG 摘要与拓扑、交付路径及页约束。检查 docx 与 pdf 均为当前合并稿导出、双向无新增/遗漏实质正文、可打开且无乱码。这是交付验收，不是流程门。清单字段契约见 `references/验收清单模板.json`。
 
 ## 各门核查细则
 

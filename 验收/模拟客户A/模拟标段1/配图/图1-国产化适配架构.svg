@@ -1,1 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200"><rect width="640" height="200" fill="#f8fafc"/><text x="20" y="40" font-size="18">业务应用层</text><text x="20" y="100" font-size="18">国产化适配层（复用率 90%）</text><text x="20" y="160" font-size="18">PostgreSQL / 达梦 双栈</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#555555"/></marker></defs>
+  <rect width="1000" height="510" fill="#ffffff"/>
+  <text x="60" y="58" font-family="Arial, PingFang SC, sans-serif" font-size="34" fill="#1e1e1e">国产化适配架构</text>
+  <g data-node-id="apps"><rect x="182" y="100" width="180" height="80" rx="12" fill="#e3f2fd" stroke="#1e88e5" stroke-width="3"/><text x="272" y="147" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="18" fill="#1e1e1e">业务应用层</text></g>
+  <g data-node-id="adapter"><rect x="182" y="250" width="180" height="80" rx="12" fill="#e0f2f1" stroke="#00897b" stroke-width="3"/><text x="272" y="282" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="18" fill="#1e1e1e">国产化适配层<tspan x="272" dy="24">复用率 90%</tspan></text></g>
+  <g data-node-id="postgresql"><rect x="60" y="400" width="180" height="80" rx="12" fill="#e8eaf6" stroke="#3949ab" stroke-width="3"/><text x="150" y="447" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#1e1e1e">PostgreSQL</text></g>
+  <g data-node-id="dameng"><rect x="304" y="400" width="180" height="80" rx="12" fill="#e8eaf6" stroke="#3949ab" stroke-width="3"/><text x="394" y="447" text-anchor="middle" font-family="Arial, PingFang SC, sans-serif" font-size="18" fill="#1e1e1e">达梦数据库</text></g>
+  <g data-edge-from="apps" data-edge-to="adapter"><line x1="272" y1="180" x2="272" y2="248" stroke="#555555" stroke-width="3" marker-end="url(#arrow)"/><text x="284" y="219" font-family="Arial, PingFang SC, sans-serif" font-size="13" fill="#555555">统一访问</text></g>
+  <g data-edge-from="adapter" data-edge-to="postgresql"><line x1="272" y1="330" x2="151" y2="399" stroke="#555555" stroke-width="3" marker-end="url(#arrow)"/><text x="170" y="363" font-family="Arial, PingFang SC, sans-serif" font-size="13" fill="#555555">双栈适配</text></g>
+  <g data-edge-from="adapter" data-edge-to="dameng"><line x1="272" y1="330" x2="393" y2="399" stroke="#555555" stroke-width="3" marker-end="url(#arrow)"/><text x="326" y="363" font-family="Arial, PingFang SC, sans-serif" font-size="13" fill="#555555">双栈适配</text></g>
+</svg>
