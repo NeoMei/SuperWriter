@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200"><rect width="640" height="200" fill="#f8fafc"/><text x="20" y="40" font-size="18">业务应用层</text><text x="20" y="100" font-size="18">国产化适配层（复用率 90%）</text><text x="20" y="160" font-size="18">PostgreSQL / 达梦 双栈</text></svg>
