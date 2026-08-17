@@ -78,6 +78,17 @@ new_fixture() {
   done
   printf '%s\n' '# obsidian-excalidraw' > "$OPENCODE_SOURCE/obsidian-excalidraw/SKILL.md"
   printf '%s\n' '# WPSComposer' > "$WPS_SOURCE/SKILL.md"
+  for runtime in \
+    scripts/__init__.py scripts/_colors.py scripts/artifact_transport.py \
+    scripts/document_model.py scripts/md_parser.py scripts/orchestrator.py \
+    scripts/pdf.py scripts/slide.py scripts/writer.py \
+    scripts/macos_probe/__init__.py scripts/macos_probe/runtime.py \
+    scripts/plugins/__init__.py scripts/plugins/excalidraw.py \
+    scripts/renderers/__init__.py scripts/renderers/sheet_renderer.py \
+    scripts/renderers/slide_renderer.py scripts/renderers/writer_renderer.py; do
+    mkdir -p "$WPS_SOURCE/$(dirname "$runtime")"
+    printf '# fixture: %s\n' "$runtime" > "$WPS_SOURCE/$runtime"
+  done
   AGENTS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$AGENTS_SOURCE")"
   OPENCODE_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$OPENCODE_SOURCE")"
   WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_SOURCE")"

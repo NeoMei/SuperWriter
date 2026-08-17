@@ -1,51 +1,52 @@
-# Task 2 完成报告：Skill 门禁与发现契约
+# Task 2 完成报告：project-aware、抗篡改验证器
 
-## 变更
+## 结果
 
-- `SKILL.md`：frontmatter 的 `description` 仅保留 `Use when...` 触发条件；将阶段 0 明确为启动预处理，阶段 1–9 明确为九个业务阶段；门 0、门 3 改为机器核对；评分点总数抽查并入门 2 客户确认；阶段 9 导出改为交付验收。
-- `references/应答矩阵模板.md`：门 0 改为机器生成/核对，评分点抽查移入门 2 客户确认清单。
-- `references/门禁清单.md`：固定七个流程门 0/2/3/5/6/7/8；门 0、门 3 标为机器；导出检查改为阶段 9 交付验收。
-- `install.sh`：Codex 路由文字同步阶段、门禁与交付验收契约。
-- `scripts/verify.sh`：静态验证 description、阶段编号、七门、人工停点、模板迁移和路由；同时验证三宿主的 skill 与两份模板 SHA-256 镜像一致。
+- `scripts/verify.sh` 无参数时只验证安装、静态契约、精确镜像和备份隔离；标书产物验证必须显式提供 `--acceptance-dir DIR`，不再回退到仓库 demo。
+- Superwriter 的 `SKILL.md` 与四份 reference 以精确路径、类型和 SHA-256 manifest 校验；六个依赖与 Excalidraw 比较完整源/安装树，额外陈旧文件也会失败。
+- 三宿主 WPSComposer 必须是指向指定源码的精确 symlink；验证器要求并逐宿主核对生成/渲染所需 runtime asset manifest 与哈希。
+- 门禁解析阶段 0–9、门 0/2/3/5/6/7/8 及人工元数据，只允许阶段/门 2、5、8 出现用户停等语义。
+- WPS 备份按名称模式发现，不依赖固定日期；技能发现根中的任意 WPSComposer 备份副本都会失败，隔离 backup root 一旦存在则要求 agents/claude/codex 三份可恢复布局完整。
+- PNG 验证签名、chunk 边界/顺序、CRC、IHDR、IDAT 解压尺寸和合理宽高。
+- DOCX 验证 WPS metadata，并从带 `图 1 国产化适配架构` descr 的具体 drawing，经 `r:embed` 与 relationship 找到对应 media；media 必须是结构有效、尺寸合理、与源 PNG 宽高比严格一致的 PNG。按主任务裁决允许 WPS 合法重采样，不要求源 PNG 与 DOCX media 字节相等。
 
-## RED
+## TDD 证据
 
-任务输入提供的独立压力审查基线确认旧文本在阶段 0–3 会三次停等用户：
+### RED
 
-1. 门 0 要求“请用户抽查确认主评分点数量”。
-2. 门 2 要求“等用户确认”。
-3. 门 3 写为“大纲审定”，被审查代理识别为再次人工停等。
-
-在任何 skill 文本修改前，先扩展 `scripts/verify.sh`，随后运行：
+生产验证器修改前，新增 static-only fixture 把 repo demo 移出默认位置，然后运行：
 
 ```text
+$ bash tests/test_verify_artifacts.sh
+FAIL: missing native Excalidraw source
+```
+
+这证明旧无参数验证仍隐式读取 repo demo。随后添加的逐类 mutation tests 同时固定五个 Superwriter 文件篡改、stale extra、WPS runtime 缺失、非授权停等、任意名字的 discoverable backup、缺 backup host、PNG 签名/CRC/尺寸，以及 DOCX 无关 media/错误 descr/换绑 relationship/错误比例/坏 PNG 的拒绝行为。
+
+### GREEN
+
+最终全套：
+
+```text
+$ bash -n install.sh scripts/verify.sh tests/test_install.sh tests/test_verify_artifacts.sh tests/fixtures/fake_markitdown.sh
+$ bash tests/test_install.sh
+PASS: install is path-safe, marker-safe, and transactional across all hosts and routes
+$ bash tests/test_verify_artifacts.sh
+PASS: verifier rejects malformed native acceptance artifacts with explicit diagnostics
 $ bash scripts/verify.sh
-FAIL: skill description must contain only a Use when trigger
+PASS: superwriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+$ bash scripts/verify.sh --acceptance-dir "$PWD/验收/模拟客户A/模拟标段1"
+PASS: superwriter static contracts and explicit acceptance artifacts at .../验收/模拟客户A/模拟标段1 are satisfied
+$ git diff --check
 ```
 
-该失败证明旧 description 含流程摘要而非纯触发条件；同一验证器已将上述人工停点与七门结构写成后续可重放的契约检查。
+## 文件范围与例外
 
-## GREEN
+- 修改：`scripts/verify.sh`、`tests/test_verify_artifacts.sh`。
+- 经主任务明确批准的最小例外：`tests/test_install.sh` 只补齐共享 WPS fixture 的 required runtime manifest 文件，未修改安装逻辑。
+- `tests/fixtures/fake_markitdown.sh` 无需修改。
+- 未修改 demo DOCX/PNG、`install.sh` 或计划文件。
 
-先运行 `bash install.sh` 同步此前的旧宿主镜像，随后按要求执行：
+## 已知范围外事项
 
-```text
-$ bash scripts/verify.sh && bash install.sh && bash scripts/verify.sh
-PASS: superwriter installation and gate contract are satisfied
-superwriter installed to 3 hosts.
-PASS: superwriter installation and gate contract are satisfied
-```
-
-附加检查 `bash -n scripts/verify.sh install.sh` 与 `git diff --check` 均通过。
-
-## 自查
-
-- 阶段编号精确为 0–9，且阶段 0 标为启动预处理、阶段 1–9 标为九个业务阶段。
-- 流程门精确为 0/2/3/5/6/7/8；阶段 9 为交付验收，不再作为门 9。
-- `SKILL.md` 的人工门标签精确为门 2、门 5、门 8；门 0 和门 3 均为机器核对。
-- 三宿主的 `SKILL.md`、应答矩阵模板与门禁清单已与源码哈希一致。
-- 未改动验收记录、WPSComposer 仓库或工作树中的既有用户改动。
-
-## Concerns
-
-无。
+真实环境直接执行默认 `bash install.sh` 会被 Task 1 安全前检拒绝，因为默认 dependency source 与 agents host target 是同一路径。最终真实同步使用临时只读 source snapshot 调用同一事务安装器后完成静态与显式验收；本任务未越界修改安装器。
