@@ -38,7 +38,7 @@
 ## 安装
 
 ```bash
-git clone https://github.com/NeoMei/superwriter.git
+git clone https://github.com/NeoMei/SuperWriter.git
 cd superwriter
 
 # 公共仓库克隆到其他路径时，显式指定 WPSComposer skill 源目录
