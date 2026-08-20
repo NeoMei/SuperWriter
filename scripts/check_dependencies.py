@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+try:
+    import tomllib
+except ImportError:  # Python 3.9-3.10 compatibility
+    tomllib = None  # type: ignore[assignment]
+
 
 EXPECTED_EXTERNAL = {
     "grilling": ("agents", "SUPERWRITER_AGENTS_SKILLS_ROOT"),
@@ -146,20 +151,46 @@ def parse_version(value: str) -> tuple[int, int, int]:
 
 def find_wps_repository_root(skill_dir: Path) -> Path | None:
     """Return the repository root only when known version metadata is present."""
+    skill_dir = skill_dir.resolve(strict=False)
     candidates = [skill_dir]
-    if skill_dir.parent.name == "skills":
+    if skill_dir.name == "WPSComposer" and skill_dir.parent.name == "skills":
         candidates.append(skill_dir.parent.parent)
-    candidates.extend([skill_dir.parent, skill_dir.parent.parent])
-    seen: set[Path] = set()
     for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
         if (candidate / ".codex-plugin" / "plugin.json").is_file() or (
             candidate / "pyproject.toml"
         ).is_file():
             return candidate
     return None
+
+
+def _read_project_version_fallback(text: str) -> str | None:
+    """Read a simple PEP 621 project.version table on Python versions without tomllib."""
+    in_project = False
+    saw_project = False
+    version: str | None = None
+    table_pattern = re.compile(r"^\[([A-Za-z0-9_.-]+)\]\s*(?:#.*)?$")
+    version_pattern = re.compile(r'''^version\s*=\s*(["'])([^"']+)\1\s*(?:#.*)?$''')
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            table = table_pattern.fullmatch(line)
+            if table is None:
+                return None
+            in_project = table.group(1) == "project"
+            if in_project:
+                if saw_project:
+                    return None
+                saw_project = True
+            continue
+        if not in_project or re.match(r"^version\s*=", line) is None:
+            continue
+        match = version_pattern.fullmatch(line)
+        if match is None or version is not None:
+            return None
+        version = match.group(2)
+    return version
 
 
 def read_wps_version(skill_dir: Path) -> str | None:
@@ -179,11 +210,22 @@ def read_wps_version(skill_dir: Path) -> str | None:
         return version if isinstance(version, str) else None
     pyproject = root / "pyproject.toml"
     try:
-        text = pyproject.read_text(encoding="utf-8")
+        payload = pyproject.read_bytes()
     except (OSError, UnicodeError):
         return None
-    match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']\s*$', text, re.MULTILINE)
-    return match.group(1) if match else None
+    if tomllib is not None:
+        try:
+            data = tomllib.loads(payload.decode("utf-8"))
+        except (UnicodeError, tomllib.TOMLDecodeError):
+            return None
+        project = data.get("project") if isinstance(data, dict) else None
+        version = project.get("version") if isinstance(project, dict) else None
+        return version if isinstance(version, str) else None
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError:
+        return None
+    return _read_project_version_fallback(text)
 
 
 def inspect_dependencies(
@@ -246,9 +288,10 @@ def format_failure(findings: list[str], manifest: dict) -> str:
         if not isinstance(item, dict):
             continue
         dependency_id = item.get("id", "unknown")
+        purpose = item.get("purpose", "Required SuperWriter capability")
         environment = item.get("environment", "source override")
         hint = item.get("install_hint", "Install from a trusted skill manager")
-        lines.append(f"- {dependency_id}: {hint}; override with {environment}")
+        lines.append(f"- {dependency_id}: {purpose}. {hint}; override with {environment}")
     lines.append("No host files were changed.")
     return "\n".join(lines)
 

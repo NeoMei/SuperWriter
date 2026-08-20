@@ -10,6 +10,33 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DependencyContractTest(unittest.TestCase):
+    def complete_sources(self, root: Path) -> tuple[Path, Path]:
+        manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
+        agents = root / "agents"
+        opencode = root / "opencode"
+        for item in manifest["dependencies"]:
+            if item["source_root"] not in {"agents", "opencode"}:
+                continue
+            source = agents if item["source_root"] == "agents" else opencode
+            skill_dir = source / item["id"]
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text(f"# {item['id']}\n", encoding="utf-8")
+        return agents, opencode
+
+    def run_checker(self, agents: Path, opencode: Path, wps: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [
+                "python3", str(ROOT / "scripts" / "check_dependencies.py"),
+                "--manifest", str(ROOT / "references" / "依赖清单.json"),
+                "--agents-root", str(agents),
+                "--opencode-root", str(opencode),
+                "--wps-source", str(wps),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
     def test_dependency_manifest_matches_release_contract(self):
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["schema_version"], 1)
@@ -68,9 +95,46 @@ class DependencyContractTest(unittest.TestCase):
             self.assertIn("SUPERWRITER_AGENTS_SKILLS_ROOT", result.stderr)
             self.assertIn("SUPERWRITER_OPENCODE_SKILLS_ROOT", result.stderr)
             self.assertIn("WPSCOMPOSER_SKILL_SOURCE", result.stderr)
+            manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
+            for dependency in manifest["dependencies"]:
+                self.assertIn(dependency["purpose"], result.stderr)
             self.assertIn("No host files were changed", result.stderr)
             after = sorted(path.relative_to(root) for path in root.rglob("*"))
             self.assertEqual(before, after)
+
+    def test_checker_reads_only_project_version_from_pyproject(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents, opencode = self.complete_sources(root)
+            repository = root / "WPSComposer"
+            wps = repository / "skills" / "WPSComposer"
+            (wps / "scripts" / "macos_probe").mkdir(parents=True)
+            (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
+            (repository / "pyproject.toml").write_text(
+                '[tool.fake]\nversion = "9.9.9"\n\n[project]\nversion = "0.7.1"\n',
+                encoding="utf-8",
+            )
+            result = self.run_checker(agents, opencode, wps)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("version 0.7.1", result.stderr)
+            self.assertIn("minimum 0.7.2", result.stderr)
+
+    def test_standalone_skill_ignores_unrelated_parent_pyproject(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents, opencode = self.complete_sources(root)
+            unrelated = root / "unrelated-project"
+            (unrelated / "pyproject.toml").parent.mkdir(parents=True)
+            (unrelated / "pyproject.toml").write_text(
+                '[project]\nname = "unrelated"\nversion = "0.1.0"\n', encoding="utf-8"
+            )
+            wps = unrelated / "vendor" / "WPSComposer"
+            (wps / "scripts" / "macos_probe").mkdir(parents=True)
+            (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
+            result = self.run_checker(agents, opencode, wps)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("version metadata is unavailable", result.stderr)
+            self.assertIn("capability contract accepted", result.stderr)
 
 
 if __name__ == "__main__":
