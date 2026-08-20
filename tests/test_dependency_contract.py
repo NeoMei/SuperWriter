@@ -351,6 +351,35 @@ class DependencyContractTest(unittest.TestCase):
                 self.assertIn("repository locator", result.stderr)
                 self.assertNotIn(locator, result.stderr)
 
+    def test_purpose_is_canonical_and_control_free(self):
+        mutations = (
+            "Domain support via example.com/group/repository",
+            "Maintain project terminology and domain context\nRUN injected-command",
+        )
+        for index, purpose in enumerate(mutations):
+            with self.subTest(purpose=purpose), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                agents, opencode = self.complete_sources(root)
+                source = root / f"SuperWriter-{index}"
+                references = source / "references"
+                references.mkdir(parents=True)
+                (source / "SKILL.md").write_bytes((ROOT / "SKILL.md").read_bytes())
+                manifest = json.loads(
+                    (ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8")
+                )
+                by_id = {item["id"]: item for item in manifest["dependencies"]}
+                by_id["domain-modeling"]["purpose"] = purpose
+                manifest_path = references / "依赖清单.json"
+                manifest_path.write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+                )
+                wps = root / "standalone-WPSComposer"
+                self.complete_wps_capability(wps)
+                result = self.run_checker(agents, opencode, wps, manifest_path)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("domain-modeling.purpose", result.stderr)
+                self.assertNotIn(purpose, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

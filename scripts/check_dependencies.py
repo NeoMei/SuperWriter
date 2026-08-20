@@ -28,7 +28,19 @@ EXPECTED_EXTERNAL = {
     "ai-image-to-ppt": ("agents", "SUPERWRITER_AGENTS_SKILLS_ROOT"),
     "obsidian-excalidraw": ("opencode", "SUPERWRITER_OPENCODE_SKILLS_ROOT"),
 }
-EXPECTED_IDS = {"WPSComposer", *EXPECTED_EXTERNAL}
+EXPECTED_ORDER = ("WPSComposer", *EXPECTED_EXTERNAL)
+EXPECTED_IDS = set(EXPECTED_ORDER)
+WPS_MINIMUM_VERSION = "0.7.2"
+EXPECTED_PURPOSES = {
+    "WPSComposer": "WPS native DOCX/PDF generation and layout",
+    "grilling": "Structured bid interview primitives",
+    "grill-me": "Interactive interview questioning",
+    "grill-with-docs": "Document-grounded interview questioning",
+    "to-spec": "Convert requirements into an executable specification",
+    "domain-modeling": "Maintain project terminology and domain context",
+    "ai-image-to-ppt": "Create presentation-style supporting illustrations",
+    "obsidian-excalidraw": "Create editable Excalidraw diagrams",
+}
 MANIFEST_KEYS = {"schema_version", "superwriter_version", "dependencies"}
 DEPENDENCY_KEYS = {
     "id",
@@ -125,10 +137,16 @@ def validate_manifest(data: dict) -> list[str]:
             findings.append(f"{dependency_id} keys do not match the dependency schema")
         if item.get("required") is not True:
             findings.append(f"{dependency_id}.required must be true")
-        if not isinstance(item.get("purpose"), str) or not item.get("purpose", "").strip():
+        purpose = item.get("purpose")
+        if not isinstance(purpose, str) or not purpose.strip():
             findings.append(f"{dependency_id}.purpose must be a non-empty string")
-        elif REPOSITORY_LOCATOR.search(item["purpose"]):
-            findings.append(f"{dependency_id}.purpose must not contain a repository locator")
+        else:
+            if any(ord(character) < 32 or ord(character) == 127 for character in purpose):
+                findings.append(f"{dependency_id}.purpose must not contain control characters")
+            if REPOSITORY_LOCATOR.search(purpose):
+                findings.append(f"{dependency_id}.purpose must not contain a repository locator")
+            if purpose != EXPECTED_PURPOSES[dependency_id]:
+                findings.append(f"{dependency_id}.purpose must exactly match the approved purpose")
         hint = item.get("install_hint")
         if not isinstance(hint, str) or not hint.strip():
             findings.append(f"{dependency_id}.install_hint must be a non-empty string")
@@ -318,14 +336,7 @@ def inspect_dependencies(
 ) -> tuple[list[str], list[str]]:
     findings: list[str] = []
     warnings: list[str] = []
-    dependencies = data.get("dependencies", [])
-    if not isinstance(dependencies, list):
-        return findings, warnings
-
-    for item in dependencies:
-        if not isinstance(item, dict) or item.get("id") not in EXPECTED_IDS:
-            continue
-        dependency_id = item["id"]
+    for dependency_id in EXPECTED_ORDER:
         if dependency_id == "WPSComposer":
             if not (wps_source / "SKILL.md").is_file():
                 findings.append(f"WPSComposer is missing SKILL.md at {wps_source}")
@@ -381,17 +392,18 @@ def inspect_dependencies(
             version = next(iter(versions))
             try:
                 detected = parse_version(version)
-                minimum = parse_version(item["minimum_version"])
-            except (KeyError, TypeError, ValueError) as exc:
+                minimum = parse_version(WPS_MINIMUM_VERSION)
+            except (TypeError, ValueError) as exc:
                 findings.append(f"WPSComposer version metadata is invalid: {exc}")
                 continue
             if detected < minimum:
                 findings.append(
-                    f"WPSComposer version {version} is below required minimum {item['minimum_version']}"
+                    f"WPSComposer version {version} is below required minimum {WPS_MINIMUM_VERSION}"
                 )
             continue
 
-        root = agents_root if item.get("source_root") == "agents" else opencode_root
+        source_root, _ = EXPECTED_EXTERNAL[dependency_id]
+        root = agents_root if source_root == "agents" else opencode_root
         skill_dir = root / dependency_id
         if not (skill_dir / "SKILL.md").is_file():
             findings.append(f"{dependency_id} is missing or incomplete at {skill_dir}: SKILL.md is required")
@@ -399,23 +411,14 @@ def inspect_dependencies(
 
 
 def format_failure(findings: list[str], manifest: dict) -> str:
+    # Keep the public interface stable, but never derive failure guidance from
+    # untrusted manifest strings or a possibly incomplete dependency array.
+    _ = manifest
     lines = ["SuperWriter dependency preflight failed:"]
     lines.extend(f"- {finding}" for finding in findings)
     lines.append("Installation guidance:")
-    for item in manifest.get("dependencies", []):
-        if not isinstance(item, dict):
-            continue
-        dependency_id = item.get("id")
-        if dependency_id not in EXPECTED_IDS:
-            continue
-        raw_purpose = item.get("purpose")
-        purpose = (
-            raw_purpose
-            if isinstance(raw_purpose, str)
-            and raw_purpose.strip()
-            and REPOSITORY_LOCATOR.search(raw_purpose) is None
-            else "Required SuperWriter capability"
-        )
+    for dependency_id in EXPECTED_ORDER:
+        purpose = EXPECTED_PURPOSES[dependency_id]
         if dependency_id == "WPSComposer":
             environment = "WPSCOMPOSER_SKILL_SOURCE"
             hint = WPS_INSTALL_HINT
@@ -441,21 +444,40 @@ def validate_superwriter_source_version(
         boundary = next(index for index, line in enumerate(lines[1:], 1) if line.strip() == "---")
     except StopIteration:
         return ["SuperWriter source version requires a closed YAML frontmatter block in SKILL.md"], None
-    version_entries: list[tuple[str, str]] = []
+    required_keys = {"name", "description", "version"}
+    entries: dict[str, str] = {}
+    schema_findings: list[str] = []
     for line in lines[1:boundary]:
-        match = re.fullmatch(
-            r'''(?P<key>version|'version'|"version")\s*:\s*(?P<value>.*?)\s*''', line
-        )
-        if match is not None:
-            version_entries.append((match.group("key"), match.group("value")))
-    if len(version_entries) != 1:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.fullmatch(r"([a-z][a-z0-9_-]*):[ \t]*(.*?)", line)
+        if match is None:
+            schema_findings.append(f"non-canonical frontmatter line: {line!r}")
+            continue
+        key, value = match.groups()
+        if key not in required_keys:
+            schema_findings.append(f"unexpected frontmatter key: {key}")
+            continue
+        if key in entries:
+            schema_findings.append(f"duplicate frontmatter key: {key}")
+            continue
+        if not value or ord(value[0]) in range(0, 32) or value[0] in "!&*?|>{[\"'":
+            schema_findings.append(f"frontmatter value for {key} must be a non-empty plain scalar")
+            continue
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            schema_findings.append(f"frontmatter value for {key} contains a control character")
+            continue
+        entries[key] = value
+    missing_keys = sorted(required_keys - set(entries))
+    if missing_keys:
+        schema_findings.append(f"missing frontmatter keys: {', '.join(missing_keys)}")
+    if schema_findings:
         return [
-            "SuperWriter source version semantic key must appear exactly once in SKILL.md "
-            f"frontmatter; found {len(version_entries)}"
+            "SuperWriter frontmatter schema invalid for SuperWriter source version: " + finding
+            for finding in schema_findings
         ], None
-    key, source_version = version_entries[0]
-    if key != "version":
-        return ["SuperWriter source version must use the canonical plain version key"], None
+    source_version = entries["version"]
     if re.fullmatch(r"\d+\.\d+\.\d+", source_version) is None:
         return ["SuperWriter source version must be an unquoted simple semantic-version scalar"], None
     manifest_version = manifest.get("superwriter_version")
@@ -511,13 +533,10 @@ def main() -> int:
         *(f"dependency manifest is invalid: {finding}" for finding in manifest_findings),
         *source_findings,
     ]
-    if isinstance(manifest.get("dependencies"), list):
-        runtime_findings, warnings = inspect_dependencies(
-            manifest, args.agents_root, args.opencode_root, args.wps_source
-        )
-        findings.extend(runtime_findings)
-    else:
-        warnings = []
+    runtime_findings, warnings = inspect_dependencies(
+        manifest, args.agents_root, args.opencode_root, args.wps_source
+    )
+    findings.extend(runtime_findings)
     if findings:
         print(format_failure(findings, manifest), file=sys.stderr)
         return 2

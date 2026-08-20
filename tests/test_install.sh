@@ -279,7 +279,8 @@ for capability_case in empty missing-generation missing-conversion; do
 done
 
 # The dependency manifest version must match exactly one SuperWriter frontmatter version.
-for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value; do
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value \
+  tag-key anchor-key explicit-key merge-key alias-key extra-key; do
   new_fixture "superwriter-version-$version_case"
   seed_existing_hosts
   version_source="$CASE_ROOT/SuperWriter"
@@ -309,6 +310,18 @@ elif case == "double-key-only":
     text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
 elif case == "quoted-value":
     text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
+elif case == "tag-key":
+    text = text.replace("version: 0.1.0\n", "!!str version: 0.1.0\n", 1)
+elif case == "anchor-key":
+    text = text.replace("version: 0.1.0\n", "&shadow version: 0.1.0\n", 1)
+elif case == "explicit-key":
+    text = text.replace("version: 0.1.0\n", "? version\n: 0.1.0\n", 1)
+elif case == "merge-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n<<: *defaults\n", 1)
+elif case == "alias-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n*version_alias: 0.1.0\n", 1)
+elif case == "extra-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nlicense: MIT\n", 1)
 else:
     raise AssertionError(case)
 path.write_text(text, encoding="utf-8")
@@ -326,7 +339,7 @@ PY
 done
 
 # Source/schema findings must not suppress aggregate runtime dependency findings.
-for aggregate_case in source-version schema; do
+for aggregate_case in source-version schema manifest-pruned; do
   new_fixture "aggregate-contract-$aggregate_case"
   seed_existing_hosts
   aggregate_source="$CASE_ROOT/SuperWriter"
@@ -343,7 +356,7 @@ text = path.read_text(encoding="utf-8")
 assert text.count("version: 0.1.0\n") == 1
 path.write_text(text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1), encoding="utf-8")
 PY
-  else
+  elif [ "$aggregate_case" = schema ]; then
     python3 -B - "$aggregate_source/references/依赖清单.json" <<'PY'
 import json
 from pathlib import Path
@@ -351,6 +364,16 @@ import sys
 path = Path(sys.argv[1])
 data = json.loads(path.read_text(encoding="utf-8"))
 data["schema_version"] = 2
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  else
+    python3 -B - "$aggregate_source/references/依赖清单.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+data["dependencies"] = [item for item in data["dependencies"] if item["id"] == "WPSComposer"]
 path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
   fi
@@ -493,6 +516,21 @@ assert_basic_install
 )
 
 # Path safety: exact and symlink/same-inode source-target overlap must fail before deletion.
+new_fixture source-contains-target
+seed_existing_hosts
+WPS_SOURCE="$TEST_HOME/.agents/skills"
+mkdir -p "$WPS_SOURCE/scripts/macos_probe"
+printf '%s\n' '# WPS source host root' > "$WPS_SOURCE/SKILL.md"
+printf '%s\n' '# generation' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+printf '%s\n' '# conversion' > "$WPS_SOURCE/scripts/macos_probe/conversion.py"
+before_state="$(snapshot_tree "$TEST_HOME")"
+expect_failure "WPS source contains managed targets" run_install
+after_state="$(snapshot_tree "$TEST_HOME")"
+[[ "$LAST_FAILURE_OUTPUT" == *"Unsafe source/target overlap"* ]] || \
+  fail "source-containing-target overlap did not report the path safety failure"
+[ "$before_state" = "$after_state" ] || \
+  fail "source-containing-target overlap changed a host root or AGENTS.md"
+
 new_fixture exact-source-target
 WPS_SOURCE="$TEST_HOME/.agents/skills/WPSComposer"
 mkdir -p "$WPS_SOURCE/scripts/macos_probe"

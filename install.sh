@@ -136,20 +136,31 @@ import sys
 source_count = int(sys.argv[1])
 sources = sys.argv[2:2 + source_count]
 targets = sys.argv[2 + source_count:]
+
+def contains(parent, child):
+    try:
+        return os.path.commonpath((parent, child)) == parent
+    except ValueError:
+        return False
+
 for source in sources:
+    canonical_source = os.path.realpath(source)
     for target in targets:
+        lexical_target = os.path.abspath(target)
+        if contains(canonical_source, lexical_target) or contains(lexical_target, canonical_source):
+            print(
+                f"Unsafe source/target overlap: source {source!r} and lexical target {target!r} contain one another",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         # Replaying an installer-owned leaf symlink is safe: unlinking it never
-        # removes its referent. Directory targets still get full inode/alias checks.
+        # removes its referent, but only after lexical overlap has been excluded.
         if os.path.islink(target):
             continue
         canonical_target = os.path.realpath(target)
-        try:
-            overlaps = os.path.commonpath((source, canonical_target)) == canonical_target
-        except ValueError:
-            overlaps = False
-        if overlaps:
+        if contains(canonical_source, canonical_target) or contains(canonical_target, canonical_source):
             print(
-                f"Unsafe source/target overlap: source {source!r} resolves inside target {target!r}",
+                f"Unsafe source/target overlap: source {source!r} and target {target!r} resolve inside one another",
                 file=sys.stderr,
             )
             raise SystemExit(1)

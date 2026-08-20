@@ -190,7 +190,8 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
-for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value; do
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value \
+  tag-key anchor-key explicit-key merge-key alias-key extra-key; do
   invalid_source_version="$(fresh_fixture "source-version-$version_case")"
   python3 -B - "$invalid_source_version/SKILL.md" "$version_case" <<'PY'
 from pathlib import Path
@@ -214,6 +215,18 @@ elif case == "double-key-only":
     text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
 elif case == "quoted-value":
     text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
+elif case == "tag-key":
+    text = text.replace("version: 0.1.0\n", "!!str version: 0.1.0\n", 1)
+elif case == "anchor-key":
+    text = text.replace("version: 0.1.0\n", "&shadow version: 0.1.0\n", 1)
+elif case == "explicit-key":
+    text = text.replace("version: 0.1.0\n", "? version\n: 0.1.0\n", 1)
+elif case == "merge-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n<<: *defaults\n", 1)
+elif case == "alias-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n*version_alias: 0.1.0\n", 1)
+elif case == "extra-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nlicense: MIT\n", 1)
 else:
     raise AssertionError(case)
 path.write_text(text, encoding="utf-8")
@@ -321,8 +334,7 @@ path.write_text(
     encoding="utf-8",
 )
 PY
-reinstall_fixture "$duplicate_skill_id"
-expect_rejected duplicate-skill-id "FAIL: internal skill id must remain superwriter" "$duplicate_skill_id"
+expect_rejected duplicate-skill-id "SuperWriter frontmatter schema" "$duplicate_skill_id"
 
 extended_frontmatter="$(fresh_fixture extended-frontmatter)"
 python3 -B - "$extended_frontmatter/SKILL.md" <<'PY'
@@ -336,8 +348,7 @@ path.write_text(
     encoding="utf-8",
 )
 PY
-reinstall_fixture "$extended_frontmatter"
-expect_accepted extended-frontmatter "$extended_frontmatter"
+expect_rejected extended-frontmatter "SuperWriter frontmatter schema" "$extended_frontmatter"
 
 # Acceptance is project-declared and must reject missing pipeline evidence,
 # stale exports, and editable/rendered diagram divergence.
