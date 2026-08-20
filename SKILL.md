@@ -3,7 +3,7 @@ name: superwriter
 description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.
 ---
 
-# superwriter —— 技术标代写流水线
+# SuperWriter —— 技术标代写流水线
 
 ## 启动：工作区与状态
 

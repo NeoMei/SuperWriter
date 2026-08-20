@@ -28,11 +28,23 @@ for command in awk grep python3 find; do require_command "$command"; done
 HOME_ROOT="$(canonical_path "$HOME")"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_SKILL="$SOURCE_DIR/SKILL.md"
+SOURCE_README="$SOURCE_DIR/README.md"
 SOURCE_GATES="$SOURCE_DIR/references/门禁清单.md"
 SOURCE_STAGES="$SOURCE_DIR/references/阶段契约.json"
 AGENTS_SKILLS_ROOT="$(canonical_path "${SUPERWRITER_AGENTS_SKILLS_ROOT:-$HOME_ROOT/.agents/skills}")"
 OPENCODE_SKILLS_ROOT="$(canonical_path "${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$HOME_ROOT/.opencode/skills}")"
-WPSCOMPOSER_SKILL_SOURCE="$(canonical_path "${WPSCOMPOSER_SKILL_SOURCE:-/Users/neomei/项目/WpsComposer/skills/WPSComposer}")"
+if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
+  WPSCOMPOSER_SKILL_SOURCE="$SOURCE_DIR/../WPSComposer/skills/WPSComposer"
+  for repository_name in WPSComposer WpsComposer; do
+    for repository in "$SOURCE_DIR/.."/*; do
+      if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+        WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+        break 2
+      fi
+    done
+  done
+fi
+WPSCOMPOSER_SKILL_SOURCE="$(canonical_path "$WPSCOMPOSER_SKILL_SOURCE")"
 DEPENDENCIES=(grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt)
 HOSTS=("$HOME_ROOT/.agents/skills" "$HOME_ROOT/.claude/skills" "$HOME_ROOT/.codex/skills")
 HOST_NAMES=(agents claude codex)
@@ -42,6 +54,11 @@ BACKUP_ROOT="$HOME_ROOT/.local/share/superwriter/backups"
 [ -f "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw/SKILL.md" ] || fail "Excalidraw skill source is unavailable"
 [ -f "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md" ] || fail "WPSComposer source is unavailable"
 [ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || fail "WPSComposer source is incomplete"
+[ "$(awk 'NR == 1 { print; exit }' "$SOURCE_README")" = "# SuperWriter" ] || fail "README project name must be SuperWriter"
+skill_name="$(awk '$0 == "---" { boundary++; next } boundary == 1 && /^name:[[:space:]]*/ { sub(/^name:[[:space:]]*/, ""); print }' "$SOURCE_SKILL")"
+[ "$skill_name" = superwriter ] || fail "internal skill id must remain superwriter"
+skill_title="$(awk '$0 == "---" { boundary++; next } boundary >= 2 && /^# / { print; exit }' "$SOURCE_SKILL")"
+[ "$skill_title" = "# SuperWriter —— 技术标代写流水线" ] || fail "skill display name must be SuperWriter"
 
 description="$(awk '/^description:/{print; exit}' "$SOURCE_SKILL")"
 case "$description" in "description: Use when "*) ;; *) fail "skill description must contain only a Use when trigger" ;; esac
@@ -230,7 +247,7 @@ wps_vendor = [
 expected_superwriter = {"references": ("dir", "")}
 for rel in superwriter_files:
     path = source / rel
-    if not path.is_file(): fail(f"Superwriter source manifest entry is missing: {rel}")
+    if not path.is_file(): fail(f"SuperWriter source manifest entry is missing: {rel}")
     expected_superwriter[rel] = ("file", hashlib.sha256(path.read_bytes()).hexdigest())
 for rel in wps_runtime:
     if not (wps / rel).is_file(): fail(f"required WPSComposer runtime asset is missing: {rel}")
@@ -283,7 +300,7 @@ for index in "${!HOSTS[@]}"; do
 done
 
 if [ -z "$ACCEPTANCE_DIR" ]; then
-  echo "PASS: superwriter static installation, exact manifests, gate contract, and backup isolation are satisfied"
+  echo "PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied"
   exit 0
 fi
 

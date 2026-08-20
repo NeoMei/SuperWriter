@@ -1,6 +1,8 @@
-# superwriter
+# SuperWriter
 
-面向技术标、应标文件和技术方案的多阶段写作 skill。它把招标文件解析、评分点覆盖、客户访谈、章节写作、配图、终审和 WPS 原生导出组织为一条可追踪、可验收的流水线。
+SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 skill。它把招标文件解析、评分点覆盖、客户访谈、章节写作、配图、终审和 WPS 原生导出组织为一条可追踪、可验收的流水线。
+
+> 对外项目名为 `SuperWriter`；为兼容 Agent Skills 发现、既有安装目录和路由，内部技能 ID 保持 `superwriter`。
 
 ## 核心契约
 
@@ -39,9 +41,9 @@
 
 ```bash
 git clone https://github.com/NeoMei/SuperWriter.git
-cd superwriter
+cd SuperWriter
 
-# 公共仓库克隆到其他路径时，显式指定 WPSComposer skill 源目录
+# WPSComposer 不在同级目录时，显式指定 skill 源目录
 WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
   bash install.sh
 ```
@@ -81,4 +83,4 @@ bash tests/test_verify_artifacts.sh
 
 ## 当前状态
 
-截至 2026-08-18，superwriter 已完成三轮全面代码审查、安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过。
+截至 2026-08-18，SuperWriter 已完成三轮全面代码审查、安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过。
