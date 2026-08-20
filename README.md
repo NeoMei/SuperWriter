@@ -116,10 +116,10 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ### v0.1.0 (2026-08-20)
 
-- 当前发布候选版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
+- 当前发布版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
 - 声明 WPSComposer `0.7.2` 最低版本和七个第三方 skill 依赖。
 - 增加机器可读依赖契约以及聚合、非变更式安装前预检契约。
 
 ## 当前状态
 
-截至 2026-08-20，当前 `0.1.0` 发布候选已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过；此处仅说明发布候选状态，不表示已经发布到 GitHub。
+截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。
