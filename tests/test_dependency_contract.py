@@ -102,12 +102,14 @@ class DependencyContractTest(unittest.TestCase):
             self.assertIn(dependency["id"], skill)
             self.assertIn(dependency["id"], readme)
 
-    def test_readme_describes_the_current_reviewed_release_candidate(self):
+    def test_readme_describes_the_published_0_1_0_release(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("截至 2026-08-20", readme)
-        self.assertIn("当前 `0.1.0` 发布候选已完成多轮独立审查", readme)
-        self.assertNotIn("- 发布 SuperWriter `0.1.0`", readme)
-        self.assertNotIn("0.1.0 已发布到 GitHub", readme)
+        self.assertIn("SuperWriter `0.1.0` 已发布到 GitHub", readme)
+        self.assertIn(
+            "https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0", readme
+        )
+        self.assertNotIn("不表示已经发布到 GitHub", readme)
 
     def test_readme_documents_a_portable_version_query(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
