@@ -47,12 +47,19 @@ AGENTS_SKILLS_ROOT="${SUPERWRITER_AGENTS_SKILLS_ROOT:-$RAW_HOME/.agents/skills}"
 OPENCODE_SKILLS_ROOT="${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$RAW_HOME/.opencode/skills}"
 if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
   WPSCOMPOSER_SKILL_SOURCE="$SRC/../WPSComposer/skills/WPSComposer"
-  for repository_name in WPSComposer WpsComposer; do
-    for repository in "$SRC/.."/*; do
-      if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
-        WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
-        break 2
-      fi
+  WPS_SEARCH_ROOTS=("$SRC/..")
+  SRC_PARENT="${SRC%/*}"
+  if [ "${SRC_PARENT##*/}" = .worktrees ]; then
+    WPS_SEARCH_ROOTS+=("$SRC/../../..")
+  fi
+  for search_root in "${WPS_SEARCH_ROOTS[@]}"; do
+    for repository_name in WPSComposer WpsComposer; do
+      for repository in "$search_root"/*; do
+        if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+          WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+          break 3
+        fi
+      done
     done
   done
 fi
@@ -70,19 +77,17 @@ require_file() {
 }
 
 require_file "$SRC/SKILL.md"
+python3 -B "$SRC/scripts/check_dependencies.py" \
+  --manifest "$SRC/references/依赖清单.json" \
+  --agents-root "$AGENTS_SKILLS_ROOT" \
+  --opencode-root "$OPENCODE_SKILLS_ROOT" \
+  --wps-source "$WPSCOMPOSER_SKILL_SOURCE"
 dependency_sources=()
 for skill in "${DEPENDENCIES[@]}"; do
   canonical_path_into source_skill "$AGENTS_SKILLS_ROOT/$skill"
-  require_file "$source_skill/SKILL.md"
   dependency_sources+=("$source_skill")
 done
 canonical_path_into EXCALIDRAW_SOURCE "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw"
-require_file "$EXCALIDRAW_SOURCE/SKILL.md"
-require_file "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md"
-[ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || {
-  echo "WPSComposer source is incomplete: $WPSCOMPOSER_SKILL_SOURCE" >&2
-  exit 1
-}
 
 # The default agents dependency source is itself the first managed host. Take
 # an immutable transaction snapshot before any target tree can be moved or

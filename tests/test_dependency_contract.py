@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -38,6 +40,37 @@ class DependencyContractTest(unittest.TestCase):
         for dependency in manifest["dependencies"]:
             self.assertIn(dependency["id"], skill)
             self.assertIn(dependency["id"], readme)
+
+    def test_checker_reports_every_missing_dependency_without_mutating_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents = root / "agents"
+            opencode = root / "opencode"
+            wps = root / "WPSComposer"
+            agents.mkdir()
+            opencode.mkdir()
+            before = sorted(path.relative_to(root) for path in root.rglob("*"))
+            result = subprocess.run(
+                [
+                    "python3", str(ROOT / "scripts" / "check_dependencies.py"),
+                    "--manifest", str(ROOT / "references" / "依赖清单.json"),
+                    "--agents-root", str(agents),
+                    "--opencode-root", str(opencode),
+                    "--wps-source", str(wps),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            for missing in ["grilling", "domain-modeling", "obsidian-excalidraw", "WPSComposer"]:
+                self.assertIn(missing, result.stderr)
+            self.assertIn("SUPERWRITER_AGENTS_SKILLS_ROOT", result.stderr)
+            self.assertIn("SUPERWRITER_OPENCODE_SKILLS_ROOT", result.stderr)
+            self.assertIn("WPSCOMPOSER_SKILL_SOURCE", result.stderr)
+            self.assertIn("No host files were changed", result.stderr)
+            after = sorted(path.relative_to(root) for path in root.rglob("*"))
+            self.assertEqual(before, after)
 
 
 if __name__ == "__main__":

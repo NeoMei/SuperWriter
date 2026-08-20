@@ -163,6 +163,7 @@ expect_failure() {
   set -e
   [ "$rc" -ne 0 ] || fail "$description: install unexpectedly succeeded"
   LAST_FAILURE_OUTPUT="$output"
+  LAST_FAILURE_RC="$rc"
 }
 
 # Baseline: complete external sources install to all hosts and remain replayable.
@@ -175,6 +176,43 @@ HOME="$TEST_HOME" \
   SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
   WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
   bash "$REPO_ROOT/scripts/verify.sh"
+
+# Dependency preflight must aggregate findings and leave all hosts/routes byte-identical.
+new_fixture aggregate-preflight
+seed_existing_hosts
+rm -rf "$AGENTS_SOURCE/grilling" "$AGENTS_SOURCE/domain-modeling" \
+  "$OPENCODE_SOURCE/obsidian-excalidraw" "$WPS_SOURCE"
+before_state="$(snapshot_tree "$TEST_HOME")"
+expect_failure "aggregate dependency preflight" run_install
+after_state="$(snapshot_tree "$TEST_HOME")"
+[ "$LAST_FAILURE_RC" -eq 2 ] || fail "dependency preflight must exit 2"
+for expected in grilling domain-modeling obsidian-excalidraw WPSComposer \
+  SUPERWRITER_AGENTS_SKILLS_ROOT SUPERWRITER_OPENCODE_SKILLS_ROOT WPSCOMPOSER_SKILL_SOURCE \
+  "No host files were changed"; do
+  [[ "$LAST_FAILURE_OUTPUT" == *"$expected"* ]] || \
+    fail "aggregate dependency preflight omitted: $expected"
+done
+[ "$before_state" = "$after_state" ] || \
+  fail "dependency preflight changed a host root or AGENTS.md"
+
+# Repository metadata enforces the WPSComposer floor; a standalone capable skill warns honestly.
+new_fixture wps-version-too-old
+mkdir -p "$WPS_REPO/.codex-plugin"
+printf '%s\n' '{"version":"0.7.1"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+expect_failure "WPSComposer below minimum" run_install
+[ "$LAST_FAILURE_RC" -eq 2 ] || fail "old WPSComposer must exit 2"
+[[ "$LAST_FAILURE_OUTPUT" == *"0.7.1"* && "$LAST_FAILURE_OUTPUT" == *"minimum 0.7.2"* ]] || \
+  fail "old WPSComposer diagnostic must name detected and minimum versions"
+
+new_fixture wps-version-minimum
+mkdir -p "$WPS_REPO/.codex-plugin"
+printf '%s\n' '{"version":"0.7.2"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+run_install >/dev/null
+
+new_fixture wps-standalone-capability
+standalone_output="$(run_install 2>&1)"
+[[ "$standalone_output" == *"WPSComposer version metadata is unavailable; capability contract accepted"* ]] || \
+  fail "standalone WPSComposer must emit the capability-contract warning"
 
 # Default agents/opencode sources live in managed host trees. Snapshotting them
 # before mutation must make a no-source-root-override replay safe.
@@ -191,6 +229,7 @@ new_fixture default-sibling-wps
 mkdir -p "$CASE_ROOT/SuperWriter/scripts"
 cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$CASE_ROOT/SuperWriter/scripts/check_dependencies.py"
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
 WPS_REPO="$CASE_ROOT/WPSComposer"
@@ -205,11 +244,33 @@ HOME="$TEST_HOME" \
   SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
   bash "$CASE_ROOT/SuperWriter/scripts/verify.sh"
 
+# A linked worktree must still discover WPSComposer beside the main repository.
+new_fixture worktree-sibling-wps
+worktree_root="$CASE_ROOT/SuperWriter/.worktrees/release"
+mkdir -p "$worktree_root/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$worktree_root/"
+cp "$REPO_ROOT/scripts/verify.sh" "$worktree_root/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$worktree_root/scripts/check_dependencies.py"
+cp -R "$REPO_ROOT/references" "$worktree_root/references"
+mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
+WPS_REPO="$CASE_ROOT/WPSComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$worktree_root/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$worktree_root/scripts/verify.sh"
+
 # Keep the historical local WpsComposer checkout spelling compatible.
 new_fixture legacy-sibling-wps
 mkdir -p "$CASE_ROOT/SuperWriter/scripts"
 cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$CASE_ROOT/SuperWriter/scripts/check_dependencies.py"
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WpsComposer"
 WPS_REPO="$CASE_ROOT/WpsComposer"

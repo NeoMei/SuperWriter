@@ -13,6 +13,7 @@ fresh_fixture() {
   mkdir -p "$fixture"
   git -C "$REPO_ROOT" archive HEAD | tar -x -C "$fixture"
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$fixture/scripts/check_dependencies.py"
   cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
   cp "$REPO_ROOT/README.md" "$fixture/README.md"
@@ -188,6 +189,35 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
+
+# The shared dependency checker must reject every release-contract drift.
+for manifest_case in missing-dependency duplicate-id wrong-source-root invented-third-party-url wrong-wps-minimum; do
+  invalid_manifest="$(fresh_fixture "manifest-$manifest_case")"
+  python3 -B - "$invalid_manifest/references/依赖清单.json" "$manifest_case" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8"))
+by_id = {item["id"]: item for item in data["dependencies"]}
+if case == "missing-dependency":
+    data["dependencies"] = [item for item in data["dependencies"] if item["id"] != "grill-me"]
+elif case == "duplicate-id":
+    data["dependencies"].append(dict(by_id["grilling"]))
+elif case == "wrong-source-root":
+    by_id["obsidian-excalidraw"]["source_root"] = "agents"
+elif case == "invented-third-party-url":
+    by_id["domain-modeling"]["install_hint"] = "https://github.com/example/invented"
+elif case == "wrong-wps-minimum":
+    by_id["WPSComposer"]["minimum_version"] = "0.7.1"
+else:
+    raise AssertionError(case)
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  expect_rejected "manifest-$manifest_case" "dependency manifest is invalid" "$invalid_manifest"
+done
 
 lowercase_readme="$(fresh_fixture lowercase-readme)"
 python3 -B - "$lowercase_readme/README.md" <<'PY'
@@ -662,7 +692,7 @@ rm -rf "$missing_dependency-agents-source/grill-me"
 for host in .agents .claude .codex; do
   rm -rf "$missing_dependency-test-home/$host/skills/grill-me"
 done
-expect_rejected missing-dependency "FAIL: managed skill source is missing: grill-me" "$missing_dependency"
+expect_rejected missing-dependency "grill-me is missing or incomplete" "$missing_dependency"
 
 # Stage interaction metadata is the sole execution contract. Prose cannot create
 # another pause, while a metadata mutation must be rejected.
