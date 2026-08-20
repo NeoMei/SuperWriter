@@ -150,26 +150,24 @@ def parse_version(value: str) -> tuple[int, int, int]:
 
 
 def find_wps_repository_root(skill_dir: Path) -> Path | None:
-    """Return the repository root only when known version metadata is present."""
+    """Return a metadata root only when it explicitly identifies wps-composer."""
     skill_dir = skill_dir.resolve(strict=False)
     candidates = [skill_dir]
     if skill_dir.name == "WPSComposer" and skill_dir.parent.name == "skills":
         candidates.append(skill_dir.parent.parent)
     for candidate in candidates:
-        if (candidate / ".codex-plugin" / "plugin.json").is_file() or (
-            candidate / "pyproject.toml"
-        ).is_file():
+        if any(item.get("name") == "wps-composer" for item in _read_wps_metadata(candidate)):
             return candidate
     return None
 
 
-def _read_project_version_fallback(text: str) -> str | None:
-    """Read a simple PEP 621 project.version table on Python versions without tomllib."""
+def _read_project_metadata_fallback(text: str) -> dict[str, str] | None:
+    """Read direct quoted name/version keys from a unique PEP 621 project table."""
     in_project = False
     saw_project = False
-    version: str | None = None
+    metadata: dict[str, str] = {}
     table_pattern = re.compile(r"^\[([A-Za-z0-9_.-]+)\]\s*(?:#.*)?$")
-    version_pattern = re.compile(r'''^version\s*=\s*(["'])([^"']+)\1\s*(?:#.*)?$''')
+    field_pattern = re.compile(r'''^(name|version)\s*=\s*(["'])([^"']+)\2\s*(?:#.*)?$''')
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -184,48 +182,81 @@ def _read_project_version_fallback(text: str) -> str | None:
                     return None
                 saw_project = True
             continue
-        if not in_project or re.match(r"^version\s*=", line) is None:
+        if not in_project or re.match(r"^(?:name|version)\s*=", line) is None:
             continue
-        match = version_pattern.fullmatch(line)
-        if match is None or version is not None:
+        match = field_pattern.fullmatch(line)
+        if match is None or match.group(1) in metadata:
             return None
-        version = match.group(2)
-    return version
+        metadata[match.group(1)] = match.group(3)
+    return metadata if saw_project else None
+
+
+def _read_plugin_metadata(root: Path) -> dict[str, str] | None:
+    plugin_manifest = root / ".codex-plugin" / "plugin.json"
+    if not plugin_manifest.is_file():
+        return None
+    try:
+        data = json.loads(
+            plugin_manifest.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ManifestError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        key: value
+        for key in ("name", "version")
+        if isinstance((value := data.get(key)), str)
+    }
+
+
+def _read_pyproject_metadata(root: Path) -> dict[str, str] | None:
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        payload = pyproject.read_bytes()
+    except OSError:
+        return {}
+    if tomllib is not None:
+        try:
+            data = tomllib.loads(payload.decode("utf-8"))
+        except (UnicodeError, tomllib.TOMLDecodeError):
+            return {}
+        project = data.get("project") if isinstance(data, dict) else None
+        if not isinstance(project, dict):
+            return {}
+        return {
+            key: value
+            for key in ("name", "version")
+            if isinstance((value := project.get(key)), str)
+        }
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError:
+        return {}
+    return _read_project_metadata_fallback(text) or {}
+
+
+def _read_wps_metadata(root: Path) -> list[dict[str, str]]:
+    return [
+        metadata
+        for metadata in (_read_plugin_metadata(root), _read_pyproject_metadata(root))
+        if metadata is not None
+    ]
 
 
 def read_wps_version(skill_dir: Path) -> str | None:
     root = find_wps_repository_root(skill_dir)
     if root is None:
         return None
-    plugin_manifest = root / ".codex-plugin" / "plugin.json"
-    if plugin_manifest.is_file():
-        try:
-            data = json.loads(
-                plugin_manifest.read_text(encoding="utf-8"),
-                object_pairs_hook=_reject_duplicate_keys,
-            )
-        except (OSError, UnicodeError, json.JSONDecodeError, ManifestError):
-            return None
-        version = data.get("version") if isinstance(data, dict) else None
-        return version if isinstance(version, str) else None
-    pyproject = root / "pyproject.toml"
-    try:
-        payload = pyproject.read_bytes()
-    except (OSError, UnicodeError):
-        return None
-    if tomllib is not None:
-        try:
-            data = tomllib.loads(payload.decode("utf-8"))
-        except (UnicodeError, tomllib.TOMLDecodeError):
-            return None
-        project = data.get("project") if isinstance(data, dict) else None
-        version = project.get("version") if isinstance(project, dict) else None
-        return version if isinstance(version, str) else None
-    try:
-        text = payload.decode("utf-8")
-    except UnicodeError:
-        return None
-    return _read_project_version_fallback(text)
+    versions = {
+        item["version"]
+        for item in _read_wps_metadata(root)
+        if item.get("name") == "wps-composer" and "version" in item
+    }
+    return next(iter(versions)) if len(versions) == 1 else None
 
 
 def inspect_dependencies(

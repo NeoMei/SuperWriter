@@ -127,7 +127,7 @@ class DependencyContractTest(unittest.TestCase):
             (wps / "scripts" / "macos_probe").mkdir(parents=True)
             (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
             (repository / "pyproject.toml").write_text(
-                '[tool.fake]\nversion = "9.9.9"\n\n[project]\nversion = "0.7.1"\n',
+                '[tool.fake]\nversion = "9.9.9"\n\n[project]\nname = "wps-composer"\nversion = "0.7.1"\n',
                 encoding="utf-8",
             )
             result = self.run_checker(agents, opencode, wps)
@@ -135,7 +135,7 @@ class DependencyContractTest(unittest.TestCase):
             self.assertIn("version 0.7.1", result.stderr)
             self.assertIn("minimum 0.7.2", result.stderr)
 
-    def test_standalone_skill_ignores_unrelated_parent_pyproject(self):
+    def test_exact_repo_shape_ignores_unrelated_parent_pyproject(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             agents, opencode = self.complete_sources(root)
@@ -144,13 +144,49 @@ class DependencyContractTest(unittest.TestCase):
             (unrelated / "pyproject.toml").write_text(
                 '[project]\nname = "unrelated"\nversion = "0.1.0"\n', encoding="utf-8"
             )
-            wps = unrelated / "vendor" / "WPSComposer"
+            wps = unrelated / "skills" / "WPSComposer"
             (wps / "scripts" / "macos_probe").mkdir(parents=True)
             (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
             result = self.run_checker(agents, opencode, wps)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("version metadata is unavailable", result.stderr)
             self.assertIn("capability contract accepted", result.stderr)
+
+    def test_exact_repo_shape_ignores_unrelated_parent_plugin(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents, opencode = self.complete_sources(root)
+            unrelated = root / "unrelated-plugin"
+            plugin = unrelated / ".codex-plugin" / "plugin.json"
+            plugin.parent.mkdir(parents=True)
+            plugin.write_text(
+                json.dumps({"name": "unrelated-plugin", "version": "0.1.0"}), encoding="utf-8"
+            )
+            wps = unrelated / "skills" / "WPSComposer"
+            (wps / "scripts" / "macos_probe").mkdir(parents=True)
+            (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
+            result = self.run_checker(agents, opencode, wps)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("version metadata is unavailable", result.stderr)
+            self.assertIn("capability contract accepted", result.stderr)
+
+    def test_valid_pyproject_survives_damaged_plugin_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents, opencode = self.complete_sources(root)
+            repository = root / "WPSComposer"
+            plugin = repository / ".codex-plugin" / "plugin.json"
+            plugin.parent.mkdir(parents=True)
+            plugin.write_text("{not-json\n", encoding="utf-8")
+            (repository / "pyproject.toml").write_text(
+                '[project]\nname = "wps-composer"\nversion = "0.7.2"\n', encoding="utf-8"
+            )
+            wps = repository / "skills" / "WPSComposer"
+            (wps / "scripts" / "macos_probe").mkdir(parents=True)
+            (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
+            result = self.run_checker(agents, opencode, wps)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("WPSComposer 0.7.2", result.stdout)
 
 
 if __name__ == "__main__":

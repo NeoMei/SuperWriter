@@ -198,7 +198,7 @@ done
 # Repository metadata enforces the WPSComposer floor; a standalone capable skill warns honestly.
 new_fixture wps-version-too-old
 mkdir -p "$WPS_REPO/.codex-plugin"
-printf '%s\n' '{"version":"0.7.1"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+printf '%s\n' '{"name":"wps-composer","version":"0.7.1"}' > "$WPS_REPO/.codex-plugin/plugin.json"
 expect_failure "WPSComposer below minimum" run_install
 [ "$LAST_FAILURE_RC" -eq 2 ] || fail "old WPSComposer must exit 2"
 [[ "$LAST_FAILURE_OUTPUT" == *"0.7.1"* && "$LAST_FAILURE_OUTPUT" == *"minimum 0.7.2"* ]] || \
@@ -206,7 +206,7 @@ expect_failure "WPSComposer below minimum" run_install
 
 new_fixture wps-version-minimum
 mkdir -p "$WPS_REPO/.codex-plugin"
-printf '%s\n' '{"version":"0.7.2"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+printf '%s\n' '{"name":"wps-composer","version":"0.7.2"}' > "$WPS_REPO/.codex-plugin/plugin.json"
 run_install >/dev/null
 
 new_fixture wps-standalone-capability
