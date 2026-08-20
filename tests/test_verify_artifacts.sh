@@ -190,7 +190,7 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
-for version_case in mismatch missing duplicate; do
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value; do
   invalid_source_version="$(fresh_fixture "source-version-$version_case")"
   python3 -B - "$invalid_source_version/SKILL.md" "$version_case" <<'PY'
 from pathlib import Path
@@ -206,6 +206,14 @@ elif case == "missing":
     text = text.replace("version: 0.1.0\n", "", 1)
 elif case == "duplicate":
     text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+elif case == "quoted-duplicate":
+    text = text.replace("version: 0.1.0\n", 'version: 0.1.0\n"version": 0.1.0\n', 1)
+elif case == "single-key-only":
+    text = text.replace("version: 0.1.0\n", "'version': 0.1.0\n", 1)
+elif case == "double-key-only":
+    text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
+elif case == "quoted-value":
+    text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
 else:
     raise AssertionError(case)
 path.write_text(text, encoding="utf-8")
@@ -215,7 +223,8 @@ done
 
 # The shared dependency checker must reject every release-contract drift.
 for manifest_case in missing-dependency duplicate-id wrong-source-root invented-third-party-url \
-  invented-gitlab-url invented-ssh-url invented-scp-locator wrong-wps-minimum; do
+  invented-gitlab-url invented-ssh-url invented-scp-locator invented-bare-host \
+  invented-www-host invented-gh-clone purpose-url unapproved-hint wrong-wps-minimum; do
   invalid_manifest="$(fresh_fixture "manifest-$manifest_case")"
   python3 -B - "$invalid_manifest/references/依赖清单.json" "$manifest_case" <<'PY'
 import json
@@ -240,6 +249,16 @@ elif case == "invented-ssh-url":
     by_id["domain-modeling"]["install_hint"] = "ssh://git@gitlab.com/example/invented.git"
 elif case == "invented-scp-locator":
     by_id["domain-modeling"]["install_hint"] = "git clone git@gitlab.com:example/invented.git"
+elif case == "invented-bare-host":
+    by_id["domain-modeling"]["install_hint"] = "github.com/example/invented"
+elif case == "invented-www-host":
+    by_id["domain-modeling"]["install_hint"] = "www.example.com/invented"
+elif case == "invented-gh-clone":
+    by_id["domain-modeling"]["install_hint"] = "gh repo clone example/invented"
+elif case == "purpose-url":
+    by_id["domain-modeling"]["purpose"] = "Domain support via //example.com/invented"
+elif case == "unapproved-hint":
+    by_id["domain-modeling"]["install_hint"] = "Use another trusted skill manager"
 elif case == "wrong-wps-minimum":
     by_id["WPSComposer"]["minimum_version"] = "0.7.1"
 else:

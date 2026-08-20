@@ -204,6 +204,47 @@ done
 [ "$before_state" = "$after_state" ] || \
   fail "dependency preflight changed a host root or AGENTS.md"
 
+# Manifest/source version association must never follow an external symlink.
+for adjacency_case in manifest-symlink references-symlink; do
+  new_fixture "manifest-adjacency-$adjacency_case"
+  seed_existing_hosts
+  version_source="$CASE_ROOT/SuperWriter"
+  external_source="$CASE_ROOT/external/SuperWriter"
+  mkdir -p "$version_source/scripts" "$external_source/references"
+  cp "$REPO_ROOT/install.sh" "$version_source/install.sh"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$version_source/scripts/check_dependencies.py"
+  cp "$REPO_ROOT/SKILL.md" "$external_source/SKILL.md"
+  cp -R "$REPO_ROOT/references/." "$external_source/references/"
+  cp "$REPO_ROOT/SKILL.md" "$version_source/SKILL.md"
+  python3 -B - "$version_source/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+path.write_text(text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1), encoding="utf-8")
+PY
+  if [ "$adjacency_case" = manifest-symlink ]; then
+    mkdir -p "$version_source/references"
+    cp -R "$REPO_ROOT/references/." "$version_source/references/"
+    rm "$version_source/references/依赖清单.json"
+    ln -s "$external_source/references/依赖清单.json" \
+      "$version_source/references/依赖清单.json"
+  else
+    ln -s "$external_source/references" "$version_source/references"
+  fi
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "dependency manifest adjacency $adjacency_case" run_install_from "$version_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "dependency manifest adjacency failure must exit 2"
+  [[ "$LAST_FAILURE_OUTPUT" == *"dependency manifest path"* ]] || \
+    fail "dependency manifest adjacency diagnostic missing: $adjacency_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "dependency manifest adjacency omitted no-mutation guarantee: $adjacency_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "dependency manifest adjacency changed a host root or AGENTS.md: $adjacency_case"
+done
+
 # WPSComposer capability preflight must require the stable macOS export entrypoints.
 for capability_case in empty missing-generation missing-conversion; do
   new_fixture "wps-capability-$capability_case"
@@ -238,7 +279,7 @@ for capability_case in empty missing-generation missing-conversion; do
 done
 
 # The dependency manifest version must match exactly one SuperWriter frontmatter version.
-for version_case in mismatch missing duplicate; do
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value; do
   new_fixture "superwriter-version-$version_case"
   seed_existing_hosts
   version_source="$CASE_ROOT/SuperWriter"
@@ -260,6 +301,14 @@ elif case == "missing":
     text = text.replace("version: 0.1.0\n", "", 1)
 elif case == "duplicate":
     text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+elif case == "quoted-duplicate":
+    text = text.replace("version: 0.1.0\n", 'version: 0.1.0\n"version": 0.1.0\n', 1)
+elif case == "single-key-only":
+    text = text.replace("version: 0.1.0\n", "'version': 0.1.0\n", 1)
+elif case == "double-key-only":
+    text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
+elif case == "quoted-value":
+    text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
 else:
     raise AssertionError(case)
 path.write_text(text, encoding="utf-8")
@@ -274,6 +323,64 @@ PY
     fail "SuperWriter source version failure omitted no-mutation guarantee: $version_case"
   [ "$before_state" = "$after_state" ] || \
     fail "SuperWriter source version failure changed a host root or AGENTS.md: $version_case"
+done
+
+# Source/schema findings must not suppress aggregate runtime dependency findings.
+for aggregate_case in source-version schema; do
+  new_fixture "aggregate-contract-$aggregate_case"
+  seed_existing_hosts
+  aggregate_source="$CASE_ROOT/SuperWriter"
+  mkdir -p "$aggregate_source/scripts"
+  cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$aggregate_source/"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$aggregate_source/scripts/check_dependencies.py"
+  cp -R "$REPO_ROOT/references" "$aggregate_source/references"
+  if [ "$aggregate_case" = source-version ]; then
+    python3 -B - "$aggregate_source/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+path.write_text(text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1), encoding="utf-8")
+PY
+  else
+    python3 -B - "$aggregate_source/references/依赖清单.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+data["schema_version"] = 2
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  fi
+  rm -rf "$AGENTS_SOURCE" "$OPENCODE_SOURCE" "$WPS_SOURCE"
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "aggregate contract and runtime findings $aggregate_case" \
+    run_install_from "$aggregate_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "aggregate contract/runtime failure must exit 2"
+  if [ "$aggregate_case" = source-version ]; then
+    [[ "$LAST_FAILURE_OUTPUT" == *"SuperWriter source version 9.9.9"* ]] || \
+      fail "aggregate output omitted source-version finding"
+  else
+    [[ "$LAST_FAILURE_OUTPUT" == *"dependency manifest is invalid"* ]] || \
+      fail "aggregate output omitted schema finding"
+  fi
+  for dependency in grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt \
+    obsidian-excalidraw; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"$dependency is missing or incomplete"* ]] || \
+      fail "aggregate output omitted runtime finding: $dependency ($aggregate_case)"
+  done
+  [[ "$LAST_FAILURE_OUTPUT" == *"WPSComposer is missing SKILL.md"* ]] || \
+    fail "aggregate output omitted WPSComposer runtime finding: $aggregate_case"
+  for expected in SUPERWRITER_AGENTS_SKILLS_ROOT SUPERWRITER_OPENCODE_SKILLS_ROOT \
+    WPSCOMPOSER_SKILL_SOURCE "No host files were changed"; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"$expected"* ]] || \
+      fail "aggregate output omitted guidance: $expected ($aggregate_case)"
+  done
+  [ "$before_state" = "$after_state" ] || \
+    fail "aggregate contract/runtime failure changed hosts or route: $aggregate_case"
 done
 
 # Repository metadata enforces the WPSComposer floor; a standalone capable skill warns honestly.

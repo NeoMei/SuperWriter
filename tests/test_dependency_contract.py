@@ -24,11 +24,16 @@ class DependencyContractTest(unittest.TestCase):
         return agents, opencode
 
     def run_checker(
-        self, agents: Path, opencode: Path, wps: Path, manifest: Path | None = None
+        self,
+        agents: Path,
+        opencode: Path,
+        wps: Path,
+        manifest: Path | None = None,
+        python_options: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
-                "python3", str(ROOT / "scripts" / "check_dependencies.py"),
+                "python3", *python_options, str(ROOT / "scripts" / "check_dependencies.py"),
                 "--manifest", str(manifest or ROOT / "references" / "依赖清单.json"),
                 "--agents-root", str(agents),
                 "--opencode-root", str(opencode),
@@ -154,10 +159,13 @@ class DependencyContractTest(unittest.TestCase):
             )
             wps = unrelated / "skills" / "WPSComposer"
             self.complete_wps_capability(wps)
-            result = self.run_checker(agents, opencode, wps)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("version metadata is unavailable", result.stderr)
-            self.assertIn("capability contract accepted", result.stderr)
+            for python_options in ((), ("-S",)):
+                result = self.run_checker(
+                    agents, opencode, wps, python_options=python_options
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("version metadata is unavailable", result.stderr)
+                self.assertIn("capability contract accepted", result.stderr)
 
     def test_exact_repo_shape_ignores_unrelated_parent_plugin(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -244,6 +252,104 @@ class DependencyContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
                 self.assertIn("domain-modeling.install_hint", result.stderr)
                 self.assertIn("repository URL or clone locator", result.stderr)
+                self.assertNotIn(locator, result.stderr)
+
+    def test_pep621_variants_cannot_bypass_wps_version_floor(self):
+        variants = {
+            "quoted-table-and-keys": (
+                '["project"]\n"name" = "wps-composer"\n"version" = "0.7.1"\n'
+            ),
+            "dotted-keys": (
+                'project.name = "wps-composer"\nproject.version = "0.7.1"\n'
+            ),
+            "inline-table": (
+                'project = { name = "wps-composer", version = "0.7.1" }\n'
+            ),
+            "malformed-inline-table": (
+                'project = { name = "wps-composer", version = "0.7.1"\n'
+            ),
+        }
+        for variant, pyproject in variants.items():
+            for python_options in ((), ("-S",)):
+                with self.subTest(variant=variant, python_options=python_options):
+                    with tempfile.TemporaryDirectory() as temporary:
+                        root = Path(temporary)
+                        agents, opencode = self.complete_sources(root)
+                        repository = root / "WPSComposer"
+                        repository.mkdir()
+                        (repository / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+                        wps = repository / "skills" / "WPSComposer"
+                        self.complete_wps_capability(wps)
+                        result = self.run_checker(
+                            agents, opencode, wps, python_options=python_options
+                        )
+                        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                        self.assertTrue(
+                            "below required minimum 0.7.2" in result.stderr
+                            or "pyproject metadata is unverifiable" in result.stderr,
+                            result.stderr,
+                        )
+
+    def test_third_party_hints_are_an_exact_allowlist(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            agents, opencode = self.complete_sources(root)
+            source = root / "SuperWriter"
+            references = source / "references"
+            references.mkdir(parents=True)
+            (source / "SKILL.md").write_bytes((ROOT / "SKILL.md").read_bytes())
+            manifest = json.loads(
+                (ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8")
+            )
+            by_id = {item["id"]: item for item in manifest["dependencies"]}
+            by_id["domain-modeling"]["install_hint"] = "Use another trusted skill manager"
+            manifest_path = references / "依赖清单.json"
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            wps = root / "standalone-WPSComposer"
+            self.complete_wps_capability(wps)
+            result = self.run_checker(agents, opencode, wps, manifest_path)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("domain-modeling.install_hint must be exactly", result.stderr)
+            self.assertNotIn("Use another trusted skill manager", result.stderr)
+
+    def test_purpose_rejects_every_repository_locator_form(self):
+        locators = (
+            "github.com/example/invented",
+            "gitlab.com/example/invented",
+            "www.example.com/invented",
+            "//example.com/invented",
+            "gh repo clone example/invented",
+            "glab repo clone example/invented",
+            "git clone example/invented",
+            "https://example.com/invented",
+            "git@example.com:group/invented.git",
+        )
+        for index, locator in enumerate(locators):
+            with self.subTest(locator=locator), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                agents, opencode = self.complete_sources(root)
+                source = root / f"SuperWriter-{index}"
+                references = source / "references"
+                references.mkdir(parents=True)
+                (source / "SKILL.md").write_bytes((ROOT / "SKILL.md").read_bytes())
+                manifest = json.loads(
+                    (ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8")
+                )
+                by_id = {item["id"]: item for item in manifest["dependencies"]}
+                by_id["domain-modeling"]["purpose"] = f"Domain support via {locator}"
+                manifest_path = references / "依赖清单.json"
+                manifest_path.write_text(
+                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+                )
+                wps = root / "standalone-WPSComposer"
+                self.complete_wps_capability(wps)
+                result = self.run_checker(agents, opencode, wps, manifest_path)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("domain-modeling.purpose", result.stderr)
+                self.assertIn("repository locator", result.stderr)
+                self.assertNotIn(locator, result.stderr)
 
 
 if __name__ == "__main__":

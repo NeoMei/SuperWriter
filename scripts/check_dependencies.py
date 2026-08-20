@@ -11,9 +11,12 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import tomllib
+    import tomllib as toml_parser
 except ImportError:  # Python 3.9-3.10 compatibility
-    tomllib = None  # type: ignore[assignment]
+    try:
+        import tomli as toml_parser  # type: ignore[no-redef]
+    except ImportError:
+        toml_parser = None  # type: ignore[assignment]
 
 
 EXPECTED_EXTERNAL = {
@@ -41,8 +44,14 @@ WPS_INSTALL_HINT = (
     "git clone https://github.com/NeoMei/WPSComposer.git, "
     "then set WPSCOMPOSER_SKILL_SOURCE"
 )
+THIRD_PARTY_INSTALL_HINTS = {
+    "agents": "Install from a trusted skill manager into the agents skill source root",
+    "opencode": "Install from a trusted skill manager into the OpenCode skill source root",
+}
 REPOSITORY_LOCATOR = re.compile(
-    r"[A-Za-z][A-Za-z0-9+.-]*://|\bgit\s+clone\b|\b[\w.+-]+@[\w.-]+:[^\s]+",
+    r"[A-Za-z][A-Za-z0-9+.-]*://|//[\w.-]+(?:/|\b)|\bwww\.[\w.-]+(?:/|\b)|"
+    r"\b(?:github|gitlab)\.com(?:/|\b)|\b(?:gh|glab)(?:\s+repo)?\s+clone\b|"
+    r"\bgit\s+clone\b|\b[\w.+-]+@[\w.-]+:[^\s]+",
     re.IGNORECASE,
 )
 
@@ -118,6 +127,8 @@ def validate_manifest(data: dict) -> list[str]:
             findings.append(f"{dependency_id}.required must be true")
         if not isinstance(item.get("purpose"), str) or not item.get("purpose", "").strip():
             findings.append(f"{dependency_id}.purpose must be a non-empty string")
+        elif REPOSITORY_LOCATOR.search(item["purpose"]):
+            findings.append(f"{dependency_id}.purpose must not contain a repository locator")
         hint = item.get("install_hint")
         if not isinstance(hint, str) or not hint.strip():
             findings.append(f"{dependency_id}.install_hint must be a non-empty string")
@@ -147,6 +158,11 @@ def validate_manifest(data: dict) -> list[str]:
         for key, value in expected.items():
             if item.get(key) != value:
                 findings.append(f"{dependency_id}.{key} must be {value}")
+        expected_hint = THIRD_PARTY_INSTALL_HINTS[source_root]
+        if hint != expected_hint:
+            findings.append(
+                f"{dependency_id}.install_hint must be exactly the approved {source_root} hint"
+            )
         if isinstance(hint, str) and REPOSITORY_LOCATOR.search(hint):
             findings.append(
                 f"{dependency_id}.install_hint must not contain a repository URL or clone locator"
@@ -161,11 +177,16 @@ def parse_version(value: str) -> tuple[int, int, int]:
     return tuple(int(part) for part in match.groups())  # type: ignore[return-value]
 
 
-def _find_wps_repository_roots(skill_dir: Path) -> list[Path]:
+def _wps_candidate_roots(skill_dir: Path) -> list[Path]:
     skill_dir = skill_dir.resolve(strict=False)
     candidates = [skill_dir]
     if skill_dir.name == "WPSComposer" and skill_dir.parent.name == "skills":
         candidates.append(skill_dir.parent.parent)
+    return candidates
+
+
+def _find_wps_repository_roots(skill_dir: Path) -> list[Path]:
+    candidates = _wps_candidate_roots(skill_dir)
     return [
         candidate
         for candidate in candidates
@@ -179,7 +200,9 @@ def find_wps_repository_root(skill_dir: Path) -> Path | None:
     return roots[0] if roots else None
 
 
-def _read_project_metadata_fallback(text: str) -> dict[str, str] | None:
+def _read_project_metadata_fallback(
+    text: str,
+) -> tuple[dict[str, str] | None, str | None]:
     """Read direct quoted name/version keys from a unique PEP 621 project table."""
     in_project = False
     saw_project = False
@@ -193,20 +216,30 @@ def _read_project_metadata_fallback(text: str) -> dict[str, str] | None:
         if line.startswith("["):
             table = table_pattern.fullmatch(line)
             if table is None:
-                return None
+                if "project" in line.lower():
+                    return None, "unsupported or ambiguous project table syntax"
+                in_project = False
+                continue
             in_project = table.group(1) == "project"
             if in_project:
                 if saw_project:
-                    return None
+                    return None, "duplicate project tables"
                 saw_project = True
             continue
-        if not in_project or re.match(r"^(?:name|version)\s*=", line) is None:
+        if re.match(r'''^(?:project|["']project["'])\s*(?:\.|=)''', line):
+            return None, "unsupported dotted key or inline project table syntax"
+        if not in_project:
+            continue
+        semantic_field = re.match(
+            r'''^(?:name|version|["']name["']|["']version["'])\s*=''', line
+        )
+        if semantic_field is None:
             continue
         match = field_pattern.fullmatch(line)
         if match is None or match.group(1) in metadata:
-            return None
+            return None, "unsupported, ambiguous, or duplicate project name/version syntax"
         metadata[match.group(1)] = match.group(3)
-    return metadata if saw_project else None
+    return (metadata if saw_project else None), None
 
 
 def _read_plugin_metadata(root: Path) -> dict[str, str] | None:
@@ -235,13 +268,15 @@ def _read_pyproject_metadata(root: Path) -> dict[str, str] | None:
         return None
     try:
         payload = pyproject.read_bytes()
-    except OSError:
-        return {}
-    if tomllib is not None:
+    except OSError as exc:
+        return {"__error__": f"cannot read pyproject.toml: {exc}"}
+    if toml_parser is not None:
         try:
-            data = tomllib.loads(payload.decode("utf-8"))
-        except (UnicodeError, tomllib.TOMLDecodeError):
-            return {}
+            data = toml_parser.loads(payload.decode("utf-8"))
+        except UnicodeError:
+            return {"__error__": "pyproject.toml is not valid UTF-8"}
+        except toml_parser.TOMLDecodeError as exc:
+            return {"__error__": f"complete TOML parser rejected syntax: {exc}"}
         project = data.get("project") if isinstance(data, dict) else None
         if not isinstance(project, dict):
             return {}
@@ -253,8 +288,11 @@ def _read_pyproject_metadata(root: Path) -> dict[str, str] | None:
     try:
         text = payload.decode("utf-8")
     except UnicodeError:
-        return {}
-    return _read_project_metadata_fallback(text) or {}
+        return {"__error__": "pyproject.toml is not valid UTF-8"}
+    metadata, error = _read_project_metadata_fallback(text)
+    if error is not None:
+        return {"__error__": error}
+    return metadata or {}
 
 
 def _read_wps_metadata(root: Path) -> list[dict[str, str]]:
@@ -307,6 +345,16 @@ def inspect_dependencies(
                     f"WPSComposer is incomplete at {wps_source}: missing runtime capability scripts/macos_probe"
                 )
             repository_roots = _find_wps_repository_roots(wps_source)
+            metadata_errors = [
+                (root, item["__error__"])
+                for root in _wps_candidate_roots(wps_source)
+                for item in _read_wps_metadata(root)
+                if "__error__" in item
+            ]
+            for root, error in metadata_errors:
+                findings.append(
+                    f"WPSComposer pyproject metadata is unverifiable at {root}: {error}"
+                )
             versions = {
                 item["version"]
                 for root in repository_roots
@@ -314,10 +362,11 @@ def inspect_dependencies(
                 if item.get("name") == "wps-composer" and "version" in item
             }
             if not repository_roots:
-                warnings.append(
-                    "WPSComposer version metadata is unavailable; capability contract accepted "
-                    "because SKILL.md and required scripts/macos_probe export entrypoints are present"
-                )
+                if not metadata_errors:
+                    warnings.append(
+                        "WPSComposer version metadata is unavailable; capability contract accepted "
+                        "because SKILL.md and required scripts/macos_probe export entrypoints are present"
+                    )
                 continue
             if len(versions) > 1:
                 findings.append(
@@ -356,10 +405,23 @@ def format_failure(findings: list[str], manifest: dict) -> str:
     for item in manifest.get("dependencies", []):
         if not isinstance(item, dict):
             continue
-        dependency_id = item.get("id", "unknown")
-        purpose = item.get("purpose", "Required SuperWriter capability")
-        environment = item.get("environment", "source override")
-        hint = item.get("install_hint", "Install from a trusted skill manager")
+        dependency_id = item.get("id")
+        if dependency_id not in EXPECTED_IDS:
+            continue
+        raw_purpose = item.get("purpose")
+        purpose = (
+            raw_purpose
+            if isinstance(raw_purpose, str)
+            and raw_purpose.strip()
+            and REPOSITORY_LOCATOR.search(raw_purpose) is None
+            else "Required SuperWriter capability"
+        )
+        if dependency_id == "WPSComposer":
+            environment = "WPSCOMPOSER_SKILL_SOURCE"
+            hint = WPS_INSTALL_HINT
+        else:
+            source_root, environment = EXPECTED_EXTERNAL[dependency_id]
+            hint = THIRD_PARTY_INSTALL_HINTS[source_root]
         lines.append(f"- {dependency_id}: {purpose}. {hint}; override with {environment}")
     lines.append("No host files were changed.")
     return "\n".join(lines)
@@ -368,7 +430,7 @@ def format_failure(findings: list[str], manifest: dict) -> str:
 def validate_superwriter_source_version(
     manifest_path: Path, manifest: dict
 ) -> tuple[list[str], str | None]:
-    skill_path = manifest_path.resolve(strict=False).parent.parent / "SKILL.md"
+    skill_path = manifest_path.absolute().parent.parent / "SKILL.md"
     try:
         lines = skill_path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as exc:
@@ -379,17 +441,23 @@ def validate_superwriter_source_version(
         boundary = next(index for index, line in enumerate(lines[1:], 1) if line.strip() == "---")
     except StopIteration:
         return ["SuperWriter source version requires a closed YAML frontmatter block in SKILL.md"], None
-    versions: list[str] = []
+    version_entries: list[tuple[str, str]] = []
     for line in lines[1:boundary]:
-        match = re.fullmatch(r"version\s*:\s*(.*?)\s*", line)
+        match = re.fullmatch(
+            r'''(?P<key>version|'version'|"version")\s*:\s*(?P<value>.*?)\s*''', line
+        )
         if match is not None:
-            versions.append(match.group(1))
-    if len(versions) != 1 or not versions[0]:
+            version_entries.append((match.group("key"), match.group("value")))
+    if len(version_entries) != 1:
         return [
-            "SuperWriter source version must appear exactly once in SKILL.md frontmatter; "
-            f"found {len(versions)}"
+            "SuperWriter source version semantic key must appear exactly once in SKILL.md "
+            f"frontmatter; found {len(version_entries)}"
         ], None
-    source_version = versions[0]
+    key, source_version = version_entries[0]
+    if key != "version":
+        return ["SuperWriter source version must use the canonical plain version key"], None
+    if re.fullmatch(r"\d+\.\d+\.\d+", source_version) is None:
+        return ["SuperWriter source version must be an unquoted simple semantic-version scalar"], None
     manifest_version = manifest.get("superwriter_version")
     if source_version != manifest_version:
         return [
@@ -397,6 +465,20 @@ def validate_superwriter_source_version(
             f"dependency manifest {manifest_version}"
         ], source_version
     return [], source_version
+
+
+def validate_manifest_path(manifest_path: Path) -> list[str]:
+    lexical_path = manifest_path.absolute()
+    findings: list[str] = []
+    if lexical_path.name != "依赖清单.json" or lexical_path.parent.name != "references":
+        findings.append(
+            "dependency manifest path must be the lexical source references/依赖清单.json"
+        )
+    if lexical_path.is_symlink():
+        findings.append("dependency manifest path must not be a symlink")
+    if lexical_path.parent.is_symlink():
+        findings.append("dependency manifest path must not use a symlinked references directory")
+    return findings
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -410,6 +492,13 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
+    manifest_path_findings = validate_manifest_path(args.manifest)
+    if manifest_path_findings:
+        print("SuperWriter dependency preflight failed:", file=sys.stderr)
+        for finding in manifest_path_findings:
+            print(f"- {finding}", file=sys.stderr)
+        print("No host files were changed.", file=sys.stderr)
+        return 2
     try:
         manifest = load_manifest(args.manifest)
     except ManifestError as exc:
@@ -422,7 +511,7 @@ def main() -> int:
         *(f"dependency manifest is invalid: {finding}" for finding in manifest_findings),
         *source_findings,
     ]
-    if not manifest_findings and not source_findings:
+    if isinstance(manifest.get("dependencies"), list):
         runtime_findings, warnings = inspect_dependencies(
             manifest, args.agents_root, args.opencode_root, args.wps_source
         )
