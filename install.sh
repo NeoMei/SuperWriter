@@ -77,6 +77,8 @@ require_file() {
 }
 
 require_file "$SRC/SKILL.md"
+require_file "$SRC/scripts/render_svg.py"
+require_file "$SRC/scripts/render_svg_macos.js"
 python3 -B "$SRC/scripts/check_dependencies.py" \
   --manifest "$SRC/references/依赖清单.json" \
   --agents-root "$AGENTS_SKILLS_ROOT" \
@@ -275,9 +277,11 @@ for index in "${!host_roots[@]}"; do
   fi
 
   rm -rf "$stage_new/superwriter"
-  mkdir -p "$stage_new/superwriter"
+  mkdir -p "$stage_new/superwriter/scripts"
   cp "$SRC/SKILL.md" "$stage_new/superwriter/SKILL.md"
   cp -R "$SRC/references" "$stage_new/superwriter/references"
+  cp "$SRC/scripts/render_svg.py" "$stage_new/superwriter/scripts/render_svg.py"
+  cp "$SRC/scripts/render_svg_macos.js" "$stage_new/superwriter/scripts/render_svg_macos.js"
 
   for dependency_index in "${!DEPENDENCIES[@]}"; do
     skill="${DEPENDENCIES[$dependency_index]}"

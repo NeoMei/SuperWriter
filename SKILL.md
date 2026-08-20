@@ -54,7 +54,7 @@ SuperWriter 版本为 `0.1.0`。完整安装要求 WPSComposer `0.7.2` 或更高
 **阶段 5 章节核查**：逐章对照矩阵核查覆盖度与响应策略写法。
 [门 5·interaction=human]：呈现缺口清单 → 用户补喂素材 → 补写 → 复核。
 
-**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改），并生成同名结构化 SVG render source，再由 macOS `sips` 栅格化为 PNG；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
+**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改），并生成同名结构化 SVG render source，再由 `scripts/render_svg.py` 通过 macOS 系统渲染链（`sips` → AppKit fallback）栅格化为 PNG；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
 [门 6·interaction=machine]：一图一引用，编号连续，图文对应。
 
 **阶段 7 合并稿**：合并 `章节/*.md` → `合并稿.md`。

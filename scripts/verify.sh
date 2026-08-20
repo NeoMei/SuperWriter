@@ -186,7 +186,7 @@ def manifest(root):
     return result
 source, agents, opencode, wps = map(Path, sys.argv[1:5]); hosts = list(map(Path, sys.argv[5:]))
 dependencies = ["grilling", "grill-me", "grill-with-docs", "to-spec", "domain-modeling", "ai-image-to-ppt"]
-superwriter_files = ["SKILL.md", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md", "references/阶段契约.json", "references/验收清单模板.json", "references/依赖清单.json"]
+superwriter_files = ["SKILL.md", "scripts/render_svg.py", "scripts/render_svg_macos.js", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md", "references/阶段契约.json", "references/验收清单模板.json", "references/依赖清单.json"]
 
 def module_path(module):
     stem = wps.joinpath(*module.split("."))
@@ -253,7 +253,7 @@ wps_vendor = [
     "node_modules/wpsjs/src/lib/res/etDemo.xlsx", "node_modules/wpsjs/src/lib/res/wppDemo.pptx",
     "node_modules/wpsjs/src/lib/res/wpsDemo.docx",
 ]
-expected_superwriter = {"references": ("dir", "")}
+expected_superwriter = {"references": ("dir", ""), "scripts": ("dir", "")}
 for rel in superwriter_files:
     path = source / rel
     if not path.is_file(): fail(f"SuperWriter source manifest entry is missing: {rel}")
@@ -315,5 +315,5 @@ fi
 
 [ -d "$ACCEPTANCE_DIR" ] || fail "acceptance directory does not exist: $ACCEPTANCE_DIR"
 ACCEPTANCE_DIR="$(cd "$ACCEPTANCE_DIR" && pwd)"
-for command in markitdown pdfinfo file unzip sips; do require_command "$command"; done
+for command in markitdown pdfinfo file unzip sips osascript; do require_command "$command"; done
 python3 -B "$SOURCE_DIR/scripts/verify_acceptance.py" "$ACCEPTANCE_DIR"

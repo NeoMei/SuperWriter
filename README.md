@@ -30,10 +30,12 @@ SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 s
 
 项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、Excalidraw 可见几何与 SVG/PNG/DOCX 图像链，以及输出格式和页数约束。
 
+SVG 栅格化统一调用 `scripts/render_svg.py`：先尝试 macOS `sips`，当系统版本无法解码 SVG 时自动回退到 `osascript -l JavaScript` 驱动的 AppKit。两条路径均为 macOS 系统能力，不需要 PyMuPDF、浏览器或其他第三方渲染器。
+
 ## 依赖
 
 - Python 3
-- `markitdown`、`pdfinfo`、`file`、`unzip`、macOS `sips`
+- `markitdown`、`pdfinfo`、`file`、`unzip`，以及 macOS 系统的 `sips`、`osascript`/AppKit
 - WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
 - 已安装的第三方 skills：`grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
@@ -114,10 +116,10 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ### v0.1.0 (2026-08-20)
 
-- 发布 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
+- 当前发布候选版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
 - 声明 WPSComposer `0.7.2` 最低版本和七个第三方 skill 依赖。
 - 增加机器可读依赖契约以及聚合、非变更式安装前预检契约。
 
 ## 当前状态
 
-截至 2026-08-18，SuperWriter 已完成三轮全面代码审查、安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过。
+截至 2026-08-20，当前 `0.1.0` 发布候选已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过；此处仅说明发布候选状态，不表示已经发布到 GitHub。

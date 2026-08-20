@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,14 @@ EXPECTED_EXTERNAL = {
 EXPECTED_ORDER = ("WPSComposer", *EXPECTED_EXTERNAL)
 EXPECTED_IDS = set(EXPECTED_ORDER)
 WPS_MINIMUM_VERSION = "0.7.2"
+SUPERWRITER_VERSION = "0.1.0"
+SUPERWRITER_FRONTMATTER = (
+    "---",
+    "name: superwriter",
+    "description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.",
+    f"version: {SUPERWRITER_VERSION}",
+    "---",
+)
 EXPECTED_PURPOSES = {
     "WPSComposer": "WPS native DOCX/PDF generation and layout",
     "grilling": "Structured bid interview primitives",
@@ -76,7 +86,7 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise ManifestError(f"duplicate JSON key: {key}")
+            raise ManifestError("duplicate JSON key")
         result[key] = value
     return result
 
@@ -86,7 +96,7 @@ def load_manifest(path: Path) -> dict:
         data = json.loads(
             path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_keys
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, ManifestError) as exc:
+    except (OSError, RuntimeError, UnicodeError, json.JSONDecodeError, ManifestError) as exc:
         raise ManifestError(str(exc)) from exc
     if not isinstance(data, dict):
         raise ManifestError("top level must be an object")
@@ -120,15 +130,19 @@ def validate_manifest(data: dict) -> list[str]:
         ids.append(dependency_id)
         items.setdefault(dependency_id, item)
 
-    duplicates = sorted({dependency_id for dependency_id in ids if ids.count(dependency_id) > 1})
+    duplicates = {dependency_id for dependency_id in ids if ids.count(dependency_id) > 1}
     if duplicates:
-        findings.append(f"dependency IDs must be unique; duplicates: {', '.join(duplicates)}")
-    missing = sorted(EXPECTED_IDS - set(ids))
-    extra = sorted(set(ids) - EXPECTED_IDS)
+        findings.append(
+            f"duplicate dependency IDs are present ({len(duplicates)} unique duplicate IDs)"
+        )
+    missing = EXPECTED_IDS - set(ids)
+    extra = set(ids) - EXPECTED_IDS
     if missing:
-        findings.append(f"required dependency IDs are missing: {', '.join(missing)}")
+        findings.append(
+            f"required dependency IDs are missing ({len(missing)} of {len(EXPECTED_IDS)})"
+        )
     if extra:
-        findings.append(f"unknown dependency IDs are present: {', '.join(extra)}")
+        findings.append(f"unknown dependency IDs are present ({len(extra)} unique IDs)")
 
     for dependency_id in sorted(EXPECTED_IDS & set(items)):
         item = items[dependency_id]
@@ -331,86 +345,307 @@ def read_wps_version(skill_dir: Path) -> str | None:
     return next(iter(versions)) if len(versions) == 1 else None
 
 
+def _is_within(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
+def _local_module_file(skill_dir: Path, module: tuple[str, ...]) -> tuple[Path, bool] | None:
+    """Resolve one lexical local module without allowing a symlink escape."""
+    lexical = skill_dir.joinpath(*module)
+    candidates = ((lexical.with_suffix(".py"), False), (lexical / "__init__.py", True))
+    try:
+        resolved_root = skill_dir.resolve(strict=True)
+    except OSError:
+        return None
+    for candidate, is_package in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        if _is_within(resolved, resolved_root):
+            return candidate, is_package
+    return None
+
+
+def _parse_python_module(path: Path) -> ast.Module | None:
+    try:
+        source = path.read_bytes().decode("utf-8")
+        return ast.parse(source, filename="<WPSComposer module>")
+    except (OSError, UnicodeError, SyntaxError, ValueError):
+        return None
+
+
+def _validate_wps_entrypoint_closure(
+    skill_dir: Path, entry_module: tuple[str, ...], entrypoint: str
+) -> bool:
+    """Statically validate an export and every declared local relative import."""
+    pending = [entry_module]
+    visited: set[tuple[str, ...]] = set()
+    while pending:
+        module = pending.pop()
+        if module in visited:
+            continue
+        visited.add(module)
+        resolved = _local_module_file(skill_dir, module)
+        if resolved is None:
+            return False
+        path, is_package = resolved
+        tree = _parse_python_module(path)
+        if tree is None:
+            return False
+        if module == entry_module and not any(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == entrypoint
+            for node in tree.body
+        ):
+            return False
+
+        package = module if is_package else module[:-1]
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or node.level == 0:
+                continue
+            if node.level > len(package):
+                return False
+            base = package[: len(package) - node.level + 1]
+            if node.module:
+                targets = [base + tuple(node.module.split("."))]
+            else:
+                if any(alias.name == "*" for alias in node.names):
+                    return False
+                targets = [base + tuple(alias.name.split(".")) for alias in node.names]
+            for target in targets:
+                if not target or _local_module_file(skill_dir, target) is None:
+                    return False
+                pending.append(target)
+    return True
+
+
+def _safe_path_text(path: Path) -> str:
+    """Return one printable line without reproducing path control characters."""
+    return "".join(character if character.isprintable() else "?" for character in str(path))
+
+
+def _expected_path(
+    dependency_id: str, agents_root: Path, opencode_root: Path, wps_source: Path
+) -> Path:
+    if dependency_id == "WPSComposer":
+        return wps_source
+    source_root, _ = EXPECTED_EXTERNAL[dependency_id]
+    root = agents_root if source_root == "agents" else opencode_root
+    return root / dependency_id
+
+
+def _runtime_finding(
+    dependency_id: str,
+    detail: str,
+    agents_root: Path,
+    opencode_root: Path,
+    wps_source: Path,
+) -> str:
+    environment = (
+        "WPSCOMPOSER_SKILL_SOURCE"
+        if dependency_id == "WPSComposer"
+        else EXPECTED_EXTERNAL[dependency_id][1]
+    )
+    return (
+        f"{detail}; dependency: {dependency_id}; purpose: "
+        f"{EXPECTED_PURPOSES[dependency_id]}; expected path: "
+        f"{_safe_path_text(_expected_path(dependency_id, agents_root, opencode_root, wps_source))}; "
+        f"override: {environment}"
+    )
+
+
+def _inspectable_source_root(root: Path) -> Path | None:
+    """Return a readable directory root, ``None`` when absent, or raise safely."""
+    try:
+        root.lstat()
+    except FileNotFoundError:
+        return None
+    resolved = root.resolve(strict=True)
+    if not resolved.is_dir():
+        raise OSError("dependency source root is not a directory")
+    iterator = resolved.iterdir()
+    try:
+        next(iterator, None)
+    finally:
+        iterator.close()
+    return resolved
+
+
+def _inspect_one_dependency(
+    dependency_id: str, agents_root: Path, opencode_root: Path, wps_source: Path
+) -> tuple[list[str], list[str]]:
+    findings: list[str] = []
+    warnings: list[str] = []
+    if dependency_id == "WPSComposer":
+        inspected_wps = _inspectable_source_root(wps_source)
+        if inspected_wps is None or not (inspected_wps / "SKILL.md").is_file():
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "WPSComposer is missing SKILL.md",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+            return findings, warnings
+        required_capabilities = (
+            (
+                ("scripts", "macos_probe", "generation"),
+                "scripts/macos_probe/generation.py",
+                "generate_macos",
+            ),
+            (
+                ("scripts", "macos_probe", "conversion"),
+                "scripts/macos_probe/conversion.py",
+                "convert_macos",
+            ),
+        )
+        for module, label, entrypoint in required_capabilities:
+            if not _validate_wps_entrypoint_closure(inspected_wps, module, entrypoint):
+                findings.append(
+                    _runtime_finding(
+                        dependency_id,
+                        "WPSComposer runtime capability contract is invalid: "
+                        f"{label} must be UTF-8 Python with top-level {entrypoint} "
+                        "and a complete local relative-import closure",
+                        agents_root,
+                        opencode_root,
+                        wps_source,
+                    )
+                )
+        repository_roots = _find_wps_repository_roots(inspected_wps)
+        metadata_errors = [
+            item["__error__"]
+            for root in _wps_candidate_roots(inspected_wps)
+            for item in _read_wps_metadata(root)
+            if "__error__" in item
+        ]
+        if metadata_errors:
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "WPSComposer pyproject metadata is unverifiable",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+        versions = {
+            item["version"]
+            for root in repository_roots
+            for item in _read_wps_metadata(root)
+            if item.get("name") == "wps-composer" and "version" in item
+        }
+        if not repository_roots:
+            if not metadata_errors:
+                warnings.append(
+                    "WPSComposer version metadata is unavailable; capability contract accepted "
+                    "because SKILL.md and required scripts/macos_probe export entrypoints are present"
+                )
+            return findings, warnings
+        if len(versions) > 1:
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "conflicting WPSComposer versions are declared by proven repository metadata",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+            return findings, warnings
+        if not versions:
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "WPSComposer repository metadata has no valid version",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+            return findings, warnings
+        version = next(iter(versions))
+        try:
+            detected = parse_version(version)
+            minimum = parse_version(WPS_MINIMUM_VERSION)
+        except (TypeError, ValueError):
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "WPSComposer version metadata is invalid",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+            return findings, warnings
+        if detected < minimum:
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    f"WPSComposer version is below required minimum {WPS_MINIMUM_VERSION}",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
+                )
+            )
+        return findings, warnings
+
+    source_root, _ = EXPECTED_EXTERNAL[dependency_id]
+    root = agents_root if source_root == "agents" else opencode_root
+    inspected_root = _inspectable_source_root(root)
+    skill_dir = (inspected_root if inspected_root is not None else root) / dependency_id
+    if inspected_root is None or not (skill_dir / "SKILL.md").is_file():
+        findings.append(
+            _runtime_finding(
+                dependency_id,
+                f"{dependency_id} is missing or incomplete: SKILL.md is required",
+                agents_root,
+                opencode_root,
+                wps_source,
+            )
+        )
+    return findings, warnings
+
+
 def inspect_dependencies(
     data: dict, agents_root: Path, opencode_root: Path, wps_source: Path
 ) -> tuple[list[str], list[str]]:
     findings: list[str] = []
     warnings: list[str] = []
     for dependency_id in EXPECTED_ORDER:
-        if dependency_id == "WPSComposer":
-            if not (wps_source / "SKILL.md").is_file():
-                findings.append(f"WPSComposer is missing SKILL.md at {wps_source}")
-                continue
-            required_capabilities = (
-                "scripts/macos_probe/generation.py",
-                "scripts/macos_probe/conversion.py",
+        try:
+            dependency_findings, dependency_warnings = _inspect_one_dependency(
+                dependency_id, agents_root, opencode_root, wps_source
             )
-            for capability in required_capabilities:
-                if not (wps_source / capability).is_file():
-                    findings.append(
-                        f"WPSComposer is incomplete at {wps_source}: "
-                        f"missing runtime capability {capability}"
-                    )
-            if not (wps_source / "scripts" / "macos_probe").is_dir():
-                findings.append(
-                    f"WPSComposer is incomplete at {wps_source}: missing runtime capability scripts/macos_probe"
+        except (OSError, RuntimeError):
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    f"{dependency_id} source cannot be inspected",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
                 )
-            repository_roots = _find_wps_repository_roots(wps_source)
-            metadata_errors = [
-                (root, item["__error__"])
-                for root in _wps_candidate_roots(wps_source)
-                for item in _read_wps_metadata(root)
-                if "__error__" in item
-            ]
-            for root, error in metadata_errors:
-                findings.append(
-                    f"WPSComposer pyproject metadata is unverifiable at {root}: {error}"
-                )
-            versions = {
-                item["version"]
-                for root in repository_roots
-                for item in _read_wps_metadata(root)
-                if item.get("name") == "wps-composer" and "version" in item
-            }
-            if not repository_roots:
-                if not metadata_errors:
-                    warnings.append(
-                        "WPSComposer version metadata is unavailable; capability contract accepted "
-                        "because SKILL.md and required scripts/macos_probe export entrypoints are present"
-                    )
-                continue
-            if len(versions) > 1:
-                findings.append(
-                    "conflicting WPSComposer versions are declared by proven repository metadata: "
-                    + ", ".join(sorted(versions))
-                )
-                continue
-            if not versions:
-                roots = ", ".join(str(root) for root in repository_roots)
-                findings.append(f"WPSComposer repository metadata at {roots} has no valid version")
-                continue
-            version = next(iter(versions))
-            try:
-                detected = parse_version(version)
-                minimum = parse_version(WPS_MINIMUM_VERSION)
-            except (TypeError, ValueError) as exc:
-                findings.append(f"WPSComposer version metadata is invalid: {exc}")
-                continue
-            if detected < minimum:
-                findings.append(
-                    f"WPSComposer version {version} is below required minimum {WPS_MINIMUM_VERSION}"
-                )
+            )
             continue
-
-        source_root, _ = EXPECTED_EXTERNAL[dependency_id]
-        root = agents_root if source_root == "agents" else opencode_root
-        skill_dir = root / dependency_id
-        if not (skill_dir / "SKILL.md").is_file():
-            findings.append(f"{dependency_id} is missing or incomplete at {skill_dir}: SKILL.md is required")
+        findings.extend(dependency_findings)
+        warnings.extend(dependency_warnings)
     return findings, warnings
 
 
-def format_failure(findings: list[str], manifest: dict) -> str:
+def format_failure(
+    findings: list[str],
+    manifest: dict,
+    agents_root: Path,
+    opencode_root: Path,
+    wps_source: Path,
+) -> str:
     # Keep the public interface stable, but never derive failure guidance from
     # untrusted manifest strings or a possibly incomplete dependency array.
     _ = manifest
@@ -425,7 +660,23 @@ def format_failure(findings: list[str], manifest: dict) -> str:
         else:
             source_root, environment = EXPECTED_EXTERNAL[dependency_id]
             hint = THIRD_PARTY_INSTALL_HINTS[source_root]
-        lines.append(f"- {dependency_id}: {purpose}. {hint}; override with {environment}")
+        expected_path = _safe_path_text(
+            _expected_path(dependency_id, agents_root, opencode_root, wps_source)
+        )
+        lines.append(
+            f"- {dependency_id}: {purpose}. expected path: {expected_path}; "
+            f"override with {environment}; {hint}"
+        )
+    install_values = (
+        ("WPSCOMPOSER_SKILL_SOURCE", wps_source),
+        ("SUPERWRITER_AGENTS_SKILLS_ROOT", agents_root),
+        ("SUPERWRITER_OPENCODE_SKILLS_ROOT", opencode_root),
+    )
+    install_command = " ".join(
+        f"{environment}={shlex.quote(_safe_path_text(path))}"
+        for environment, path in install_values
+    )
+    lines.append(f"Install command: {install_command} bash install.sh")
     lines.append("No host files were changed.")
     return "\n".join(lines)
 
@@ -433,74 +684,35 @@ def format_failure(findings: list[str], manifest: dict) -> str:
 def validate_superwriter_source_version(
     manifest_path: Path, manifest: dict
 ) -> tuple[list[str], str | None]:
-    skill_path = manifest_path.absolute().parent.parent / "SKILL.md"
     try:
+        skill_path = manifest_path.absolute().parent.parent / "SKILL.md"
         lines = skill_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError) as exc:
-        return [f"SuperWriter source version cannot be read from {skill_path}: {exc}"], None
-    if not lines or lines[0].strip() != "---":
-        return ["SuperWriter source version requires a YAML frontmatter block in SKILL.md"], None
-    try:
-        boundary = next(index for index, line in enumerate(lines[1:], 1) if line.strip() == "---")
-    except StopIteration:
-        return ["SuperWriter source version requires a closed YAML frontmatter block in SKILL.md"], None
-    required_keys = {"name", "description", "version"}
-    entries: dict[str, str] = {}
-    schema_findings: list[str] = []
-    for line in lines[1:boundary]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        match = re.fullmatch(r"([a-z][a-z0-9_-]*):[ \t]*(.*?)", line)
-        if match is None:
-            schema_findings.append(f"non-canonical frontmatter line: {line!r}")
-            continue
-        key, value = match.groups()
-        if key not in required_keys:
-            schema_findings.append(f"unexpected frontmatter key: {key}")
-            continue
-        if key in entries:
-            schema_findings.append(f"duplicate frontmatter key: {key}")
-            continue
-        if not value or ord(value[0]) in range(0, 32) or value[0] in "!&*?|>{[\"'":
-            schema_findings.append(f"frontmatter value for {key} must be a non-empty plain scalar")
-            continue
-        if any(ord(character) < 32 or ord(character) == 127 for character in value):
-            schema_findings.append(f"frontmatter value for {key} contains a control character")
-            continue
-        entries[key] = value
-    missing_keys = sorted(required_keys - set(entries))
-    if missing_keys:
-        schema_findings.append(f"missing frontmatter keys: {', '.join(missing_keys)}")
-    if schema_findings:
-        return [
-            "SuperWriter frontmatter schema invalid for SuperWriter source version: " + finding
-            for finding in schema_findings
-        ], None
-    source_version = entries["version"]
-    if re.fullmatch(r"\d+\.\d+\.\d+", source_version) is None:
-        return ["SuperWriter source version must be an unquoted simple semantic-version scalar"], None
+    except (OSError, RuntimeError, UnicodeError):
+        return ["SuperWriter source version/frontmatter contract is invalid"], None
+    if tuple(lines[: len(SUPERWRITER_FRONTMATTER)]) != SUPERWRITER_FRONTMATTER:
+        return ["SuperWriter source version/frontmatter contract is invalid"], None
+    source_version = SUPERWRITER_VERSION
     manifest_version = manifest.get("superwriter_version")
     if source_version != manifest_version:
-        return [
-            f"SuperWriter source version {source_version} does not match "
-            f"dependency manifest {manifest_version}"
-        ], source_version
+        return ["SuperWriter source version/frontmatter contract is invalid"], source_version
     return [], source_version
 
 
 def validate_manifest_path(manifest_path: Path) -> list[str]:
-    lexical_path = manifest_path.absolute()
-    findings: list[str] = []
-    if lexical_path.name != "依赖清单.json" or lexical_path.parent.name != "references":
-        findings.append(
-            "dependency manifest path must be the lexical source references/依赖清单.json"
-        )
-    if lexical_path.is_symlink():
-        findings.append("dependency manifest path must not be a symlink")
-    if lexical_path.parent.is_symlink():
-        findings.append("dependency manifest path must not use a symlinked references directory")
-    return findings
+    try:
+        lexical_path = manifest_path.absolute()
+        findings: list[str] = []
+        if lexical_path.name != "依赖清单.json" or lexical_path.parent.name != "references":
+            findings.append(
+                "dependency manifest path must be the lexical source references/依赖清单.json"
+            )
+        if lexical_path.is_symlink():
+            findings.append("dependency manifest path must not be a symlink")
+        if lexical_path.parent.is_symlink():
+            findings.append("dependency manifest path must not use a symlinked references directory")
+        return findings
+    except (OSError, RuntimeError):
+        return ["dependency manifest path cannot be inspected"]
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -512,24 +724,20 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = _parser().parse_args()
-    manifest_path_findings = validate_manifest_path(args.manifest)
-    if manifest_path_findings:
-        print("SuperWriter dependency preflight failed:", file=sys.stderr)
-        for finding in manifest_path_findings:
-            print(f"- {finding}", file=sys.stderr)
-        print("No host files were changed.", file=sys.stderr)
-        return 2
-    try:
-        manifest = load_manifest(args.manifest)
-    except ManifestError as exc:
-        print(f"SuperWriter dependency manifest is invalid: {exc}", file=sys.stderr)
-        print("No host files were changed.", file=sys.stderr)
-        return 2
-    manifest_findings = validate_manifest(manifest)
+def _run_preflight(args: argparse.Namespace) -> int:
+    findings = validate_manifest_path(args.manifest)
+    manifest: dict = {"superwriter_version": SUPERWRITER_VERSION}
+    manifest_loaded = False
+    if not findings:
+        try:
+            manifest = load_manifest(args.manifest)
+            manifest_loaded = True
+        except ManifestError:
+            findings.append("dependency manifest JSON is invalid or unavailable")
+    manifest_findings = validate_manifest(manifest) if manifest_loaded else []
     source_findings, source_version = validate_superwriter_source_version(args.manifest, manifest)
     findings = [
+        *findings,
         *(f"dependency manifest is invalid: {finding}" for finding in manifest_findings),
         *source_findings,
     ]
@@ -538,7 +746,12 @@ def main() -> int:
     )
     findings.extend(runtime_findings)
     if findings:
-        print(format_failure(findings, manifest), file=sys.stderr)
+        print(
+            format_failure(
+                findings, manifest, args.agents_root, args.opencode_root, args.wps_source
+            ),
+            file=sys.stderr,
+        )
         return 2
     for warning in warnings:
         print(f"WARNING: {warning}", file=sys.stderr)
@@ -549,6 +762,42 @@ def main() -> int:
         f"WPSComposer {version}; external skills: {external}"
     )
     return 0
+
+
+def _all_sources_uninspectable(
+    agents_root: Path, opencode_root: Path, wps_source: Path
+) -> list[str]:
+    return [
+        _runtime_finding(
+            dependency_id,
+            f"{dependency_id} source cannot be inspected",
+            agents_root,
+            opencode_root,
+            wps_source,
+        )
+        for dependency_id in EXPECTED_ORDER
+    ]
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    try:
+        return _run_preflight(args)
+    except (OSError, RuntimeError):
+        findings = _all_sources_uninspectable(
+            args.agents_root, args.opencode_root, args.wps_source
+        )
+        print(
+            format_failure(
+                findings,
+                {"superwriter_version": SUPERWRITER_VERSION},
+                args.agents_root,
+                args.opencode_root,
+                args.wps_source,
+            ),
+            file=sys.stderr,
+        )
+        return 2
 
 
 if __name__ == "__main__":
