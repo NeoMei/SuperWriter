@@ -68,6 +68,22 @@ class DependencyContractTest(unittest.TestCase):
             self.assertIn(dependency["id"], skill)
             self.assertIn(dependency["id"], readme)
 
+    def test_readme_documents_a_portable_version_query(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("查询当前 SuperWriter 版本", readme)
+        self.assertIn(
+            "awk '$0 == \"---\" { boundary++; next } boundary == 1 && "
+            "/^version:[[:space:]]*/ { sub(/^version:[[:space:]]*/, \"\"); "
+            "print; exit }' \"./SKILL.md\"",
+            readme,
+        )
+        for installed_skill in [
+            "$HOME/.agents/skills/superwriter/SKILL.md",
+            "$HOME/.claude/skills/superwriter/SKILL.md",
+            "$HOME/.codex/skills/superwriter/SKILL.md",
+        ]:
+            self.assertIn(installed_skill, readme)
+
     def test_checker_reports_every_missing_dependency_without_mutating_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

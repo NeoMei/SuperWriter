@@ -94,6 +94,20 @@ bash tests/test_install.sh
 bash tests/test_verify_artifacts.sh
 ```
 
+### 查询当前 SuperWriter 版本
+
+以下只读命令会查询当前仓库 `SKILL.md` frontmatter 中的 `version`，不依赖 GNU 专用参数，也不修改文件：
+
+```bash
+awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ { sub(/^version:[[:space:]]*/, ""); print; exit }' "./SKILL.md"
+```
+
+查询已安装的 skill 时，将命令末尾的 `"./SKILL.md"` 替换为相应宿主路径：
+
+- `"$HOME/.agents/skills/superwriter/SKILL.md"`
+- `"$HOME/.claude/skills/superwriter/SKILL.md"`
+- `"$HOME/.codex/skills/superwriter/SKILL.md"`
+
 示例验收材料和报告位于 `验收/`。完整阶段定义见 [SKILL.md](SKILL.md)，模板与机器契约位于 `references/`。
 
 ## 版本记录
