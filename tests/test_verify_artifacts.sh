@@ -190,8 +190,32 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
+for version_case in mismatch missing duplicate; do
+  invalid_source_version="$(fresh_fixture "source-version-$version_case")"
+  python3 -B - "$invalid_source_version/SKILL.md" "$version_case" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+if case == "mismatch":
+    text = text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1)
+elif case == "missing":
+    text = text.replace("version: 0.1.0\n", "", 1)
+elif case == "duplicate":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+else:
+    raise AssertionError(case)
+path.write_text(text, encoding="utf-8")
+PY
+  expect_rejected "source-version-$version_case" "SuperWriter source version" "$invalid_source_version"
+done
+
 # The shared dependency checker must reject every release-contract drift.
-for manifest_case in missing-dependency duplicate-id wrong-source-root invented-third-party-url wrong-wps-minimum; do
+for manifest_case in missing-dependency duplicate-id wrong-source-root invented-third-party-url \
+  invented-gitlab-url invented-ssh-url invented-scp-locator wrong-wps-minimum; do
   invalid_manifest="$(fresh_fixture "manifest-$manifest_case")"
   python3 -B - "$invalid_manifest/references/依赖清单.json" "$manifest_case" <<'PY'
 import json
@@ -210,6 +234,12 @@ elif case == "wrong-source-root":
     by_id["obsidian-excalidraw"]["source_root"] = "agents"
 elif case == "invented-third-party-url":
     by_id["domain-modeling"]["install_hint"] = "https://github.com/example/invented"
+elif case == "invented-gitlab-url":
+    by_id["domain-modeling"]["install_hint"] = "https://gitlab.com/example/invented.git"
+elif case == "invented-ssh-url":
+    by_id["domain-modeling"]["install_hint"] = "ssh://git@gitlab.com/example/invented.git"
+elif case == "invented-scp-locator":
+    by_id["domain-modeling"]["install_hint"] = "git clone git@gitlab.com:example/invented.git"
 elif case == "wrong-wps-minimum":
     by_id["WPSComposer"]["minimum_version"] = "0.7.1"
 else:

@@ -127,6 +127,15 @@ run_install() {
     bash "$REPO_ROOT/install.sh"
 }
 
+run_install_from() {
+  local source_root="$1"
+  HOME="$TEST_HOME" \
+    SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+    SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+    WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
+    bash "$source_root/install.sh"
+}
+
 assert_basic_install() {
   local host skills_root skill
   for host in "${HOSTS[@]}"; do
@@ -194,6 +203,78 @@ for expected in grilling domain-modeling obsidian-excalidraw WPSComposer \
 done
 [ "$before_state" = "$after_state" ] || \
   fail "dependency preflight changed a host root or AGENTS.md"
+
+# WPSComposer capability preflight must require the stable macOS export entrypoints.
+for capability_case in empty missing-generation missing-conversion; do
+  new_fixture "wps-capability-$capability_case"
+  seed_existing_hosts
+  case "$capability_case" in
+    empty)
+      rm -rf "$WPS_SOURCE/scripts/macos_probe"
+      mkdir -p "$WPS_SOURCE/scripts/macos_probe"
+      expected_capabilities=(generation.py conversion.py)
+      ;;
+    missing-generation)
+      rm "$WPS_SOURCE/scripts/macos_probe/generation.py"
+      expected_capabilities=(generation.py)
+      ;;
+    missing-conversion)
+      rm "$WPS_SOURCE/scripts/macos_probe/conversion.py"
+      expected_capabilities=(conversion.py)
+      ;;
+  esac
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "WPSComposer capability $capability_case" run_install
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "WPSComposer capability failure must exit 2: $capability_case"
+  for capability in "${expected_capabilities[@]}"; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"scripts/macos_probe/$capability"* ]] || \
+      fail "WPSComposer capability failure omitted $capability: $capability_case"
+  done
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "WPSComposer capability failure omitted no-mutation guarantee: $capability_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "WPSComposer capability failure changed a host root or AGENTS.md: $capability_case"
+done
+
+# The dependency manifest version must match exactly one SuperWriter frontmatter version.
+for version_case in mismatch missing duplicate; do
+  new_fixture "superwriter-version-$version_case"
+  seed_existing_hosts
+  version_source="$CASE_ROOT/SuperWriter"
+  mkdir -p "$version_source/scripts"
+  cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$version_source/"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$version_source/scripts/check_dependencies.py"
+  cp -R "$REPO_ROOT/references" "$version_source/references"
+  python3 -B - "$version_source/SKILL.md" "$version_case" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+if case == "mismatch":
+    text = text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1)
+elif case == "missing":
+    text = text.replace("version: 0.1.0\n", "", 1)
+elif case == "duplicate":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+else:
+    raise AssertionError(case)
+path.write_text(text, encoding="utf-8")
+PY
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "SuperWriter source version $version_case" run_install_from "$version_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "SuperWriter source version failure must exit 2: $version_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"SuperWriter source version"* ]] || \
+    fail "SuperWriter source version diagnostic missing: $version_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "SuperWriter source version failure omitted no-mutation guarantee: $version_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "SuperWriter source version failure changed a host root or AGENTS.md: $version_case"
+done
 
 # Repository metadata enforces the WPSComposer floor; a standalone capable skill warns honestly.
 new_fixture wps-version-too-old
