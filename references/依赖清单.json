@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "superwriter_version": "0.1.0",
+  "dependencies": [
+    {
+      "id": "WPSComposer",
+      "kind": "first-party-runtime",
+      "required": true,
+      "purpose": "WPS native DOCX/PDF generation and layout",
+      "source_root": "wps",
+      "environment": "WPSCOMPOSER_SKILL_SOURCE",
+      "minimum_version": "0.7.2",
+      "install_hint": "git clone https://github.com/NeoMei/WPSComposer.git, then set WPSCOMPOSER_SKILL_SOURCE"
+    },
+    {
+      "id": "grilling",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Structured bid interview primitives",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "grill-me",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Interactive interview questioning",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "grill-with-docs",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Document-grounded interview questioning",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "to-spec",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Convert requirements into an executable specification",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "domain-modeling",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Maintain project terminology and domain context",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "ai-image-to-ppt",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Create presentation-style supporting illustrations",
+      "source_root": "agents",
+      "environment": "SUPERWRITER_AGENTS_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the agents skill source root"
+    },
+    {
+      "id": "obsidian-excalidraw",
+      "kind": "third-party-skill",
+      "required": true,
+      "purpose": "Create editable Excalidraw diagrams",
+      "source_root": "opencode",
+      "environment": "SUPERWRITER_OPENCODE_SKILLS_ROOT",
+      "install_hint": "Install from a trusted skill manager into the OpenCode skill source root"
+    }
+  ]
+}

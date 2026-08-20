@@ -34,8 +34,21 @@ SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 s
 
 - Python 3
 - `markitdown`、`pdfinfo`、`file`、`unzip`、macOS `sips`
-- WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer)
-- 已安装的依赖 skills：`grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
+- WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
+- 已安装的第三方 skills：`grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
+
+| 依赖 | 所有权 | 默认源目录 | 覆盖变量 | 安装指引 |
+| --- | --- | --- | --- | --- |
+| WPSComposer | SuperWriter 第一方运行时 | 同级 `WPSComposer/skills/WPSComposer` 或 `WpsComposer/skills/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE` | 安装官方 WPSComposer `0.7.2` 或更高版本 |
+| `grilling` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `grill-me` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `grill-with-docs` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `to-spec` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `domain-modeling` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `ai-image-to-ppt` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+| `obsidian-excalidraw` | 第三方 skill | `~/.opencode/skills` | `SUPERWRITER_OPENCODE_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+
+第三方 skill 不属于 SuperWriter 发布物，不随本仓库内置或发布；请从你信任的 skill 管理器安装。机器可读的完整契约见 [`references/依赖清单.json`](references/%E4%BE%9D%E8%B5%96%E6%B8%85%E5%8D%95.json)。
 
 ## 安装
 
@@ -55,6 +68,8 @@ WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
 - `~/.codex/skills`
 
 同时写入 Codex `AGENTS.md` 路由块并镜像依赖 skills。安装前会拒绝危险 HOME、源目标重叠、宿主路径冲突和不完整的 WPSComposer runtime；中途失败会回滚已经提交的宿主。
+
+安装器会在创建、备份或修改任何宿主路径前执行依赖预检。多个依赖同时缺失时，它会一次聚合报告所有缺失项、默认源目录及覆盖变量，然后在不修改三个宿主目录和 `AGENTS.md` 的情况下退出。它不会静默下载第三方依赖。
 
 如果依赖 skills 不在默认位置，可用以下变量指定其来源：
 
@@ -80,6 +95,14 @@ bash tests/test_verify_artifacts.sh
 ```
 
 示例验收材料和报告位于 `验收/`。完整阶段定义见 [SKILL.md](SKILL.md)，模板与机器契约位于 `references/`。
+
+## 版本记录
+
+### v0.1.0 (2026-08-20)
+
+- 发布 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
+- 声明 WPSComposer `0.7.2` 最低版本和七个第三方 skill 依赖。
+- 增加机器可读依赖契约以及聚合、非变更式安装前预检契约。
 
 ## 当前状态
 
