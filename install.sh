@@ -1,5 +1,5 @@
 #!/bin/bash
-# superwriter 幂等安装：三宿主技能镜像 + Codex AGENTS.md 路由块 + 依赖技能镜像
+# SuperWriter 幂等安装：三宿主技能镜像 + Codex AGENTS.md 路由块 + 依赖技能镜像
 set -euo pipefail
 
 die() {
@@ -45,7 +45,24 @@ canonical_path_into HOME_ROOT "$RAW_HOME"
 canonical_path_into SRC "$(dirname "$0")"
 AGENTS_SKILLS_ROOT="${SUPERWRITER_AGENTS_SKILLS_ROOT:-$RAW_HOME/.agents/skills}"
 OPENCODE_SKILLS_ROOT="${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$RAW_HOME/.opencode/skills}"
-WPSCOMPOSER_SKILL_SOURCE="${WPSCOMPOSER_SKILL_SOURCE:-/Users/neomei/项目/WpsComposer/skills/WPSComposer}"
+if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
+  WPSCOMPOSER_SKILL_SOURCE="$SRC/../WPSComposer/skills/WPSComposer"
+  WPS_SEARCH_ROOTS=("$SRC/..")
+  SRC_PARENT="${SRC%/*}"
+  if [ "${SRC_PARENT##*/}" = .worktrees ]; then
+    WPS_SEARCH_ROOTS+=("$SRC/../../..")
+  fi
+  for search_root in "${WPS_SEARCH_ROOTS[@]}"; do
+    for repository_name in WPSComposer WpsComposer; do
+      for repository in "$search_root"/*; do
+        if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+          WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+          break 3
+        fi
+      done
+    done
+  done
+fi
 canonical_path_into AGENTS_SKILLS_ROOT "$AGENTS_SKILLS_ROOT"
 canonical_path_into OPENCODE_SKILLS_ROOT "$OPENCODE_SKILLS_ROOT"
 canonical_path_into WPSCOMPOSER_SKILL_SOURCE "$WPSCOMPOSER_SKILL_SOURCE"
@@ -60,19 +77,19 @@ require_file() {
 }
 
 require_file "$SRC/SKILL.md"
+require_file "$SRC/scripts/render_svg.py"
+require_file "$SRC/scripts/render_svg_macos.js"
+python3 -B "$SRC/scripts/check_dependencies.py" \
+  --manifest "$SRC/references/依赖清单.json" \
+  --agents-root "$AGENTS_SKILLS_ROOT" \
+  --opencode-root "$OPENCODE_SKILLS_ROOT" \
+  --wps-source "$WPSCOMPOSER_SKILL_SOURCE"
 dependency_sources=()
 for skill in "${DEPENDENCIES[@]}"; do
   canonical_path_into source_skill "$AGENTS_SKILLS_ROOT/$skill"
-  require_file "$source_skill/SKILL.md"
   dependency_sources+=("$source_skill")
 done
 canonical_path_into EXCALIDRAW_SOURCE "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw"
-require_file "$EXCALIDRAW_SOURCE/SKILL.md"
-require_file "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md"
-[ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || {
-  echo "WPSComposer source is incomplete: $WPSCOMPOSER_SKILL_SOURCE" >&2
-  exit 1
-}
 
 # The default agents dependency source is itself the first managed host. Take
 # an immutable transaction snapshot before any target tree can be moved or
@@ -121,20 +138,31 @@ import sys
 source_count = int(sys.argv[1])
 sources = sys.argv[2:2 + source_count]
 targets = sys.argv[2 + source_count:]
+
+def contains(parent, child):
+    try:
+        return os.path.commonpath((parent, child)) == parent
+    except ValueError:
+        return False
+
 for source in sources:
+    canonical_source = os.path.realpath(source)
     for target in targets:
+        lexical_target = os.path.abspath(target)
+        if contains(canonical_source, lexical_target) or contains(lexical_target, canonical_source):
+            print(
+                f"Unsafe source/target overlap: source {source!r} and lexical target {target!r} contain one another",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         # Replaying an installer-owned leaf symlink is safe: unlinking it never
-        # removes its referent. Directory targets still get full inode/alias checks.
+        # removes its referent, but only after lexical overlap has been excluded.
         if os.path.islink(target):
             continue
         canonical_target = os.path.realpath(target)
-        try:
-            overlaps = os.path.commonpath((source, canonical_target)) == canonical_target
-        except ValueError:
-            overlaps = False
-        if overlaps:
+        if contains(canonical_source, canonical_target) or contains(canonical_target, canonical_source):
             print(
-                f"Unsafe source/target overlap: source {source!r} resolves inside target {target!r}",
+                f"Unsafe source/target overlap: source {source!r} and target {target!r} resolve inside one another",
                 file=sys.stderr,
             )
             raise SystemExit(1)
@@ -249,9 +277,11 @@ for index in "${!host_roots[@]}"; do
   fi
 
   rm -rf "$stage_new/superwriter"
-  mkdir -p "$stage_new/superwriter"
+  mkdir -p "$stage_new/superwriter/scripts"
   cp "$SRC/SKILL.md" "$stage_new/superwriter/SKILL.md"
   cp -R "$SRC/references" "$stage_new/superwriter/references"
+  cp "$SRC/scripts/render_svg.py" "$stage_new/superwriter/scripts/render_svg.py"
+  cp "$SRC/scripts/render_svg_macos.js" "$stage_new/superwriter/scripts/render_svg_macos.js"
 
   for dependency_index in "${!DEPENDENCIES[@]}"; do
     skill="${DEPENDENCIES[$dependency_index]}"
@@ -291,9 +321,9 @@ fi
 cat >> "$route_stage" <<'BLOCK'
 
 <!-- pipeline:superwriter:start -->
-# superwriter 路由
+# SuperWriter 路由
 
-- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 superwriter 阶段 0（先读/建流水线状态.md）
+- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 SuperWriter 阶段 0（先读/建流水线状态.md）
 - 预授权技能（视为已获指令可直接调用）：markitdown、grilling、grill-me、grill-with-docs、to-spec、domain-modeling、obsidian-excalidraw、ai-image-to-ppt、WPSComposer、superwriter 自身
 - 阶段推进规则：阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用
@@ -374,4 +404,4 @@ if ! mv "$route_stage" "$agents_file"; then
 fi
 route_committed=1
 
-echo "superwriter installed to 3 hosts."
+echo "SuperWriter installed to 3 hosts."

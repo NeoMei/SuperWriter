@@ -1,9 +1,22 @@
 ---
 name: superwriter
 description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.
+version: 0.1.0
 ---
 
-# superwriter —— 技术标代写流水线
+# SuperWriter —— 技术标代写流水线
+
+## 安装依赖
+
+SuperWriter 版本为 `0.1.0`。完整安装要求 WPSComposer `0.7.2` 或更高版本，并要求以下七个第三方 skill：`grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`。第三方 skill 必须由用户通过可信的 skill 管理器安装；SuperWriter 不发布、不内置、不静默下载它们。
+
+| 依赖 | 默认源目录 | 覆盖变量 |
+| --- | --- | --- |
+| WPSComposer | SuperWriter 同级 `WPSComposer/skills/WPSComposer` 或 `WpsComposer/skills/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE` |
+| `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt` | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` |
+| `obsidian-excalidraw` | `~/.opencode/skills` | `SUPERWRITER_OPENCODE_SKILLS_ROOT` |
+
+安装器在创建目录、备份、移动、链接或写入任何宿主文件之前执行依赖预检。如果同时缺失多个依赖，预检会在一次报告中聚合列出全部缺失项、对应源目录和覆盖变量，然后退出；此失败路径不修改 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills` 或 `AGENTS.md`。机器可读契约见 `references/依赖清单.json`。
 
 ## 启动：工作区与状态
 
@@ -41,7 +54,7 @@ description: Use when the user mentions 标书, 投标, 应标, 招标文件, �
 **阶段 5 章节核查**：逐章对照矩阵核查覆盖度与响应策略写法。
 [门 5·interaction=human]：呈现缺口清单 → 用户补喂素材 → 补写 → 复核。
 
-**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改），并生成同名结构化 SVG render source，再由 macOS `sips` 栅格化为 PNG；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
+**阶段 6 配图**：流程图/架构图用 obsidian-excalidraw（矢量可改），并生成同名结构化 SVG render source，再由 `scripts/render_svg.py` 通过 macOS 系统渲染链（`sips` → AppKit fallback）栅格化为 PNG；展示性插图用 ai-image-to-ppt 生成。产出入 `配图/`。
 [门 6·interaction=machine]：一图一引用，编号连续，图文对应。
 
 **阶段 7 合并稿**：合并 `章节/*.md` → `合并稿.md`。

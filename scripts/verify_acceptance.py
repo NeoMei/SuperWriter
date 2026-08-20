@@ -18,6 +18,8 @@ import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
 
+from render_svg import RenderSvgError, render_svg
+
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
@@ -551,12 +553,10 @@ def validate_figure(root: Path, item: object):
     with tempfile.TemporaryDirectory(prefix="superwriter-svg-render-") as temporary:
         directory = Path(temporary)
         svg_png = directory / "svg.png"
-        result = subprocess.run(
-            ["sips", "-s", "format", "png", str(render_source), "--out", str(svg_png)],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
-        )
-        if result.returncode or not svg_png.is_file():
-            fail("SVG render source cannot be rasterized by sips")
+        try:
+            render_svg(render_source, svg_png)
+        except RenderSvgError as exc:
+            fail(str(exc))
         svg_payload = svg_png.read_bytes()
         png_header(svg_payload, "SVG raster")
         svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")

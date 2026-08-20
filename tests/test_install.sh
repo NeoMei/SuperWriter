@@ -101,7 +101,11 @@ new_fixture() {
   done
   printf '%s\n' 'from . import design_presets' 'from .macos_probe import generation' > "$WPS_SOURCE/scripts/orchestrator.py"
   printf '%s\n' 'from .. import reference_styles, heading_numbering, math_render' > "$WPS_SOURCE/scripts/renderers/writer_renderer.py"
-  printf '%s\n' 'from .. import artifact_transport, generation_plan' 'from . import bridge, models, runtime, templates' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+  printf '%s\n' 'from .. import artifact_transport, generation_plan' \
+    'from . import bridge, models, runtime, templates' '' \
+    'def generate_macos():' '    pass' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+  printf '%s\n' 'def convert_macos():' '    pass' > \
+    "$WPS_SOURCE/scripts/macos_probe/conversion.py"
   for vendor in \
     addin/bridge-client.js addin/index.html addin/manifest.xml \
     addin/presentation.js addin/ribbon.xml addin/spreadsheet.js addin/writer.js \
@@ -127,11 +131,22 @@ run_install() {
     bash "$REPO_ROOT/install.sh"
 }
 
+run_install_from() {
+  local source_root="$1"
+  HOME="$TEST_HOME" \
+    SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+    SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+    WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
+    bash "$source_root/install.sh"
+}
+
 assert_basic_install() {
   local host skills_root skill
   for host in "${HOSTS[@]}"; do
     skills_root="$TEST_HOME/$host/skills"
     assert_file "$skills_root/superwriter/SKILL.md"
+    assert_file "$skills_root/superwriter/scripts/render_svg.py"
+    assert_file "$skills_root/superwriter/scripts/render_svg_macos.js"
     for skill in "${DEPENDENCIES[@]}" obsidian-excalidraw; do
       assert_file "$skills_root/$skill/SKILL.md"
     done
@@ -143,6 +158,12 @@ assert_basic_install() {
     fail "expected one exact Codex routing start marker"
   [ "$(grep -Fxc '<!-- pipeline:superwriter:end -->' "$agents_file")" -eq 1 ] || \
     fail "expected one exact Codex routing end marker"
+  grep -Fxq '# SuperWriter 路由' "$agents_file" || \
+    fail "expected the public project name in the SuperWriter route heading"
+  grep -Fq '自动进入 SuperWriter 阶段 0' "$agents_file" || \
+    fail "expected the public project name in the SuperWriter route instructions"
+  grep -Fq 'WPSComposer、superwriter 自身' "$agents_file" || \
+    fail "expected the SuperWriter route to preserve the lowercase internal skill id"
   grep -q 'keep-this-line' "$agents_file" || fail "expected existing Codex instructions to remain"
   ! grep -q 'stale routing block' "$agents_file" || fail "expected stale routing block to be replaced"
 }
@@ -157,6 +178,7 @@ expect_failure() {
   set -e
   [ "$rc" -ne 0 ] || fail "$description: install unexpectedly succeeded"
   LAST_FAILURE_OUTPUT="$output"
+  LAST_FAILURE_RC="$rc"
 }
 
 # Baseline: complete external sources install to all hosts and remain replayable.
@@ -170,6 +192,348 @@ HOME="$TEST_HOME" \
   WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
   bash "$REPO_ROOT/scripts/verify.sh"
 
+# Dependency preflight must aggregate findings and leave all hosts/routes byte-identical.
+new_fixture aggregate-preflight
+seed_existing_hosts
+rm -rf "$AGENTS_SOURCE/grilling" "$AGENTS_SOURCE/domain-modeling" \
+  "$OPENCODE_SOURCE/obsidian-excalidraw" "$WPS_SOURCE"
+before_state="$(snapshot_tree "$TEST_HOME")"
+expect_failure "aggregate dependency preflight" run_install
+after_state="$(snapshot_tree "$TEST_HOME")"
+[ "$LAST_FAILURE_RC" -eq 2 ] || fail "dependency preflight must exit 2"
+for expected in grilling domain-modeling obsidian-excalidraw WPSComposer \
+  SUPERWRITER_AGENTS_SKILLS_ROOT SUPERWRITER_OPENCODE_SKILLS_ROOT WPSCOMPOSER_SKILL_SOURCE \
+  "No host files were changed"; do
+  [[ "$LAST_FAILURE_OUTPUT" == *"$expected"* ]] || \
+    fail "aggregate dependency preflight omitted: $expected"
+done
+for expected_path in "$WPS_SOURCE" "$AGENTS_SOURCE/grilling" \
+  "$AGENTS_SOURCE/grill-me" "$AGENTS_SOURCE/grill-with-docs" \
+  "$AGENTS_SOURCE/to-spec" "$AGENTS_SOURCE/domain-modeling" \
+  "$AGENTS_SOURCE/ai-image-to-ppt" "$OPENCODE_SOURCE/obsidian-excalidraw"; do
+  [[ "$LAST_FAILURE_OUTPUT" == *"expected path: $expected_path"* ]] || \
+    fail "aggregate dependency preflight omitted expected path: $expected_path"
+done
+for purpose in \
+  "WPS native DOCX/PDF generation and layout" \
+  "Structured bid interview primitives" \
+  "Interactive interview questioning" \
+  "Document-grounded interview questioning" \
+  "Convert requirements into an executable specification" \
+  "Maintain project terminology and domain context" \
+  "Create presentation-style supporting illustrations" \
+  "Create editable Excalidraw diagrams"; do
+  [[ "$LAST_FAILURE_OUTPUT" == *"$purpose"* ]] || \
+    fail "aggregate dependency preflight omitted canonical purpose: $purpose"
+done
+expected_install_command="WPSCOMPOSER_SKILL_SOURCE=$WPS_SOURCE SUPERWRITER_AGENTS_SKILLS_ROOT=$AGENTS_SOURCE SUPERWRITER_OPENCODE_SKILLS_ROOT=$OPENCODE_SOURCE bash install.sh"
+[[ "$LAST_FAILURE_OUTPUT" == *"$expected_install_command"* ]] || \
+  fail "aggregate dependency preflight omitted copyable install command"
+[ "$before_state" = "$after_state" ] || \
+  fail "dependency preflight changed a host root or AGENTS.md"
+
+# Broken/looped dependency roots must aggregate safely before any host mutation.
+new_fixture uninspectable-dependency-roots
+seed_existing_hosts
+rm -rf "$AGENTS_SOURCE" "$OPENCODE_SOURCE" "$WPS_SOURCE"
+ln -s "$(basename "$AGENTS_SOURCE")" "$AGENTS_SOURCE"
+ln -s "opencode-peer" "$OPENCODE_SOURCE"
+ln -s "$(basename "$OPENCODE_SOURCE")" "$CASE_ROOT/opencode-peer"
+ln -s "$(basename "$WPS_SOURCE")" "$WPS_SOURCE"
+before_state="$(snapshot_tree "$TEST_HOME")"
+expect_failure "uninspectable dependency roots" run_install
+after_state="$(snapshot_tree "$TEST_HOME")"
+[ "$LAST_FAILURE_RC" -eq 2 ] || fail "uninspectable dependency roots must exit 2"
+source_probe_count="$(grep -o 'source cannot be inspected' <<<"$LAST_FAILURE_OUTPUT" | wc -l | tr -d ' ')"
+[ "$source_probe_count" -eq 8 ] || \
+  fail "uninspectable dependency roots did not aggregate eight fixed findings"
+for expected in WPSComposer grilling grill-me grill-with-docs to-spec domain-modeling \
+  ai-image-to-ppt obsidian-excalidraw WPSCOMPOSER_SKILL_SOURCE \
+  SUPERWRITER_AGENTS_SKILLS_ROOT SUPERWRITER_OPENCODE_SKILLS_ROOT \
+  "bash install.sh" "No host files were changed"; do
+  [[ "$LAST_FAILURE_OUTPUT" == *"$expected"* ]] || \
+    fail "uninspectable dependency report omitted: $expected"
+done
+for unsafe in Traceback "Permission denied" "Too many levels" Errno; do
+  [[ "$LAST_FAILURE_OUTPUT" != *"$unsafe"* ]] || \
+    fail "uninspectable dependency report leaked unsafe diagnostic: $unsafe"
+done
+[ "$before_state" = "$after_state" ] || \
+  fail "uninspectable dependency roots changed a host root or AGENTS.md"
+
+# Manifest/source version association must never follow an external symlink.
+for adjacency_case in manifest-symlink references-symlink; do
+  new_fixture "manifest-adjacency-$adjacency_case"
+  seed_existing_hosts
+  version_source="$CASE_ROOT/SuperWriter"
+  external_source="$CASE_ROOT/external/SuperWriter"
+  mkdir -p "$version_source/scripts" "$external_source/references"
+  cp "$REPO_ROOT/install.sh" "$version_source/install.sh"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+    "$REPO_ROOT/scripts/render_svg_macos.js" "$version_source/scripts/"
+  cp "$REPO_ROOT/SKILL.md" "$external_source/SKILL.md"
+  cp -R "$REPO_ROOT/references/." "$external_source/references/"
+  cp "$REPO_ROOT/SKILL.md" "$version_source/SKILL.md"
+  python3 -B - "$version_source/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+path.write_text(text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1), encoding="utf-8")
+PY
+  if [ "$adjacency_case" = manifest-symlink ]; then
+    mkdir -p "$version_source/references"
+    cp -R "$REPO_ROOT/references/." "$version_source/references/"
+    rm "$version_source/references/依赖清单.json"
+    ln -s "$external_source/references/依赖清单.json" \
+      "$version_source/references/依赖清单.json"
+  else
+    ln -s "$external_source/references" "$version_source/references"
+  fi
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "dependency manifest adjacency $adjacency_case" run_install_from "$version_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "dependency manifest adjacency failure must exit 2"
+  [[ "$LAST_FAILURE_OUTPUT" == *"dependency manifest path"* ]] || \
+    fail "dependency manifest adjacency diagnostic missing: $adjacency_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "dependency manifest adjacency omitted no-mutation guarantee: $adjacency_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "dependency manifest adjacency changed a host root or AGENTS.md: $adjacency_case"
+done
+
+# WPSComposer capability preflight must require the stable macOS export entrypoints.
+for capability_case in empty missing-generation missing-conversion empty-stub syntax-error \
+  missing-entrypoint missing-relative-module; do
+  new_fixture "wps-capability-$capability_case"
+  seed_existing_hosts
+  case "$capability_case" in
+    empty)
+      rm -rf "$WPS_SOURCE/scripts/macos_probe"
+      mkdir -p "$WPS_SOURCE/scripts/macos_probe"
+      expected_capabilities=(generation.py conversion.py)
+      ;;
+    missing-generation)
+      rm "$WPS_SOURCE/scripts/macos_probe/generation.py"
+      expected_capabilities=(generation.py)
+      ;;
+    missing-conversion)
+      rm "$WPS_SOURCE/scripts/macos_probe/conversion.py"
+      expected_capabilities=(conversion.py)
+      ;;
+    empty-stub)
+      printf '%s\n' '# empty stub' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+      expected_capabilities=(generation.py)
+      ;;
+    syntax-error)
+      printf '%s\n' 'def convert_macos(:' '    pass' > \
+        "$WPS_SOURCE/scripts/macos_probe/conversion.py"
+      expected_capabilities=(conversion.py)
+      ;;
+    missing-entrypoint)
+      printf '%s\n' 'def generate_other():' '    pass' > \
+        "$WPS_SOURCE/scripts/macos_probe/generation.py"
+      expected_capabilities=(generation.py)
+      ;;
+    missing-relative-module)
+      printf '%s\n' 'from .missing_runtime import helper' '' \
+        'def generate_macos():' '    pass' > \
+        "$WPS_SOURCE/scripts/macos_probe/generation.py"
+      expected_capabilities=(generation.py)
+      ;;
+  esac
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "WPSComposer capability $capability_case" run_install
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "WPSComposer capability failure must exit 2: $capability_case"
+  for capability in "${expected_capabilities[@]}"; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"scripts/macos_probe/$capability"* ]] || \
+      fail "WPSComposer capability failure omitted $capability: $capability_case"
+  done
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "WPSComposer capability failure omitted no-mutation guarantee: $capability_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "WPSComposer capability failure changed a host root or AGENTS.md: $capability_case"
+done
+
+# The dependency manifest version must match exactly one SuperWriter frontmatter version.
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value \
+  tag-key anchor-key explicit-key merge-key alias-key extra-key opening-space closing-space \
+  fake-closing name-comment name-at empty-description reordered; do
+  new_fixture "superwriter-version-$version_case"
+  seed_existing_hosts
+  version_source="$CASE_ROOT/SuperWriter"
+  mkdir -p "$version_source/scripts"
+  cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$version_source/"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+    "$REPO_ROOT/scripts/render_svg_macos.js" "$version_source/scripts/"
+  cp -R "$REPO_ROOT/references" "$version_source/references"
+  python3 -B - "$version_source/SKILL.md" "$version_case" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+if case == "mismatch":
+    text = text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1)
+elif case == "missing":
+    text = text.replace("version: 0.1.0\n", "", 1)
+elif case == "duplicate":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+elif case == "quoted-duplicate":
+    text = text.replace("version: 0.1.0\n", 'version: 0.1.0\n"version": 0.1.0\n', 1)
+elif case == "single-key-only":
+    text = text.replace("version: 0.1.0\n", "'version': 0.1.0\n", 1)
+elif case == "double-key-only":
+    text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
+elif case == "quoted-value":
+    text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
+elif case == "tag-key":
+    text = text.replace("version: 0.1.0\n", "!!str version: 0.1.0\n", 1)
+elif case == "anchor-key":
+    text = text.replace("version: 0.1.0\n", "&shadow version: 0.1.0\n", 1)
+elif case == "explicit-key":
+    text = text.replace("version: 0.1.0\n", "? version\n: 0.1.0\n", 1)
+elif case == "merge-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n<<: *defaults\n", 1)
+elif case == "alias-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n*version_alias: 0.1.0\n", 1)
+elif case == "extra-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nlicense: MIT\n", 1)
+elif case == "opening-space":
+    text = text.replace("---\n", " ---\n", 1)
+elif case == "closing-space":
+    text = text.replace("\n---\n\n# SuperWriter", "\n ---\n\n# SuperWriter", 1)
+elif case == "fake-closing":
+    text = text.replace("\n---\n\n# SuperWriter", "\n# ---\n\n# SuperWriter", 1)
+elif case == "name-comment":
+    text = text.replace("name: superwriter\n", "name: superwriter # comment\n", 1)
+elif case == "name-at":
+    text = text.replace("name: superwriter\n", "name: superwriter@\n", 1)
+elif case == "empty-description":
+    description = next(line for line in text.splitlines() if line.startswith("description: "))
+    text = text.replace(description + "\n", "description:\n", 1)
+elif case == "reordered":
+    name = "name: superwriter\n"
+    description = next(line for line in text.splitlines() if line.startswith("description: ")) + "\n"
+    text = text.replace(name + description, description + name, 1)
+else:
+    raise AssertionError(case)
+path.write_text(text, encoding="utf-8")
+PY
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "SuperWriter source version $version_case" run_install_from "$version_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "SuperWriter source version failure must exit 2: $version_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"SuperWriter source version"* ]] || \
+    fail "SuperWriter source version diagnostic missing: $version_case"
+  [[ "$LAST_FAILURE_OUTPUT" == *"No host files were changed"* ]] || \
+    fail "SuperWriter source version failure omitted no-mutation guarantee: $version_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "SuperWriter source version failure changed a host root or AGENTS.md: $version_case"
+done
+
+# Source/schema findings must not suppress aggregate runtime dependency findings.
+for aggregate_case in source-version schema manifest-pruned; do
+  new_fixture "aggregate-contract-$aggregate_case"
+  seed_existing_hosts
+  aggregate_source="$CASE_ROOT/SuperWriter"
+  mkdir -p "$aggregate_source/scripts"
+  cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$aggregate_source/"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+    "$REPO_ROOT/scripts/render_svg_macos.js" "$aggregate_source/scripts/"
+  cp -R "$REPO_ROOT/references" "$aggregate_source/references"
+  if [ "$aggregate_case" = source-version ]; then
+    python3 -B - "$aggregate_source/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+path.write_text(text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1), encoding="utf-8")
+PY
+  elif [ "$aggregate_case" = schema ]; then
+    python3 -B - "$aggregate_source/references/依赖清单.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+data["schema_version"] = 2
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  else
+    python3 -B - "$aggregate_source/references/依赖清单.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+data["dependencies"] = [item for item in data["dependencies"] if item["id"] == "WPSComposer"]
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  fi
+  rm -rf "$AGENTS_SOURCE" "$OPENCODE_SOURCE" "$WPS_SOURCE"
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "aggregate contract and runtime findings $aggregate_case" \
+    run_install_from "$aggregate_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [ "$LAST_FAILURE_RC" -eq 2 ] || fail "aggregate contract/runtime failure must exit 2"
+  if [ "$aggregate_case" = source-version ]; then
+    [[ "$LAST_FAILURE_OUTPUT" == *"SuperWriter source version/frontmatter contract is invalid"* ]] || \
+      fail "aggregate output omitted source-version finding"
+  else
+    [[ "$LAST_FAILURE_OUTPUT" == *"dependency manifest is invalid"* ]] || \
+      fail "aggregate output omitted schema finding"
+  fi
+  for dependency in grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt \
+    obsidian-excalidraw; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"$dependency is missing or incomplete"* ]] || \
+      fail "aggregate output omitted runtime finding: $dependency ($aggregate_case)"
+  done
+  [[ "$LAST_FAILURE_OUTPUT" == *"WPSComposer is missing SKILL.md"* ]] || \
+    fail "aggregate output omitted WPSComposer runtime finding: $aggregate_case"
+  for expected in SUPERWRITER_AGENTS_SKILLS_ROOT SUPERWRITER_OPENCODE_SKILLS_ROOT \
+    WPSCOMPOSER_SKILL_SOURCE "No host files were changed"; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"$expected"* ]] || \
+      fail "aggregate output omitted guidance: $expected ($aggregate_case)"
+  done
+  for expected_path in "$WPS_SOURCE" "$AGENTS_SOURCE/grilling" \
+    "$OPENCODE_SOURCE/obsidian-excalidraw"; do
+    [[ "$LAST_FAILURE_OUTPUT" == *"expected path: $expected_path"* ]] || \
+      fail "aggregate output omitted expected path: $expected_path ($aggregate_case)"
+  done
+  expected_install_command="WPSCOMPOSER_SKILL_SOURCE=$WPS_SOURCE SUPERWRITER_AGENTS_SKILLS_ROOT=$AGENTS_SOURCE SUPERWRITER_OPENCODE_SKILLS_ROOT=$OPENCODE_SOURCE bash install.sh"
+  [[ "$LAST_FAILURE_OUTPUT" == *"$expected_install_command"* ]] || \
+    fail "aggregate output omitted copyable install command: $aggregate_case"
+  [ "$before_state" = "$after_state" ] || \
+    fail "aggregate contract/runtime failure changed hosts or route: $aggregate_case"
+done
+
+# Repository metadata enforces the WPSComposer floor; a standalone capable skill warns honestly.
+new_fixture wps-version-too-old
+mkdir -p "$WPS_REPO/.codex-plugin"
+printf '%s\n' '{"name":"wps-composer","version":"0.7.1"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+expect_failure "WPSComposer below minimum" run_install
+[ "$LAST_FAILURE_RC" -eq 2 ] || fail "old WPSComposer must exit 2"
+[[ "$LAST_FAILURE_OUTPUT" == *"minimum 0.7.2"* ]] || \
+  fail "old WPSComposer diagnostic must name the minimum version"
+[[ "$LAST_FAILURE_OUTPUT" != *"0.7.1"* ]] || \
+  fail "old WPSComposer diagnostic must not echo an untrusted detected version"
+
+new_fixture wps-version-minimum
+mkdir -p "$WPS_REPO/.codex-plugin"
+printf '%s\n' '{"name":"wps-composer","version":"0.7.2"}' > "$WPS_REPO/.codex-plugin/plugin.json"
+run_install >/dev/null
+
+new_fixture wps-standalone-capability
+standalone_output="$(run_install 2>&1)"
+[[ "$standalone_output" == *"WPSComposer version metadata is unavailable; capability contract accepted"* ]] || \
+  fail "standalone WPSComposer must emit the capability-contract warning"
+
 # Default agents/opencode sources live in managed host trees. Snapshotting them
 # before mutation must make a no-source-root-override replay safe.
 new_fixture default-managed-sources
@@ -179,6 +543,70 @@ cp -R "$OPENCODE_SOURCE/." "$TEST_HOME/.opencode/skills/"
 HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
 HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
 assert_basic_install
+
+# Without an override, the canonical sibling WPSComposer checkout is the portable default.
+new_fixture default-sibling-wps
+mkdir -p "$CASE_ROOT/SuperWriter/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
+cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+  "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
+mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
+WPS_REPO="$CASE_ROOT/WPSComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+
+# A linked worktree must still discover WPSComposer beside the main repository.
+new_fixture worktree-sibling-wps
+worktree_root="$CASE_ROOT/SuperWriter/.worktrees/release"
+mkdir -p "$worktree_root/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$worktree_root/"
+cp "$REPO_ROOT/scripts/verify.sh" "$worktree_root/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+  "$REPO_ROOT/scripts/render_svg_macos.js" "$worktree_root/scripts/"
+cp -R "$REPO_ROOT/references" "$worktree_root/references"
+mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
+WPS_REPO="$CASE_ROOT/WPSComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$worktree_root/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$worktree_root/scripts/verify.sh"
+
+# Keep the historical local WpsComposer checkout spelling compatible.
+new_fixture legacy-sibling-wps
+mkdir -p "$CASE_ROOT/SuperWriter/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
+cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+  "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
+mv "$WPS_REPO" "$CASE_ROOT/WpsComposer"
+WPS_REPO="$CASE_ROOT/WpsComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/scripts/verify.sh"
 
 # Path safety: a relative WPS source must be canonicalized before it is linked.
 new_fixture relative-wps
@@ -200,6 +628,21 @@ assert_basic_install
 )
 
 # Path safety: exact and symlink/same-inode source-target overlap must fail before deletion.
+new_fixture source-contains-target
+seed_existing_hosts
+WPS_SOURCE="$TEST_HOME/.agents/skills"
+mkdir -p "$WPS_SOURCE/scripts/macos_probe"
+printf '%s\n' '# WPS source host root' > "$WPS_SOURCE/SKILL.md"
+printf '%s\n' 'def generate_macos():' '    pass' > "$WPS_SOURCE/scripts/macos_probe/generation.py"
+printf '%s\n' 'def convert_macos():' '    pass' > "$WPS_SOURCE/scripts/macos_probe/conversion.py"
+before_state="$(snapshot_tree "$TEST_HOME")"
+expect_failure "WPS source contains managed targets" run_install
+after_state="$(snapshot_tree "$TEST_HOME")"
+[[ "$LAST_FAILURE_OUTPUT" == *"Unsafe source/target overlap"* ]] || \
+  fail "source-containing-target overlap did not report the path safety failure"
+[ "$before_state" = "$after_state" ] || \
+  fail "source-containing-target overlap changed a host root or AGENTS.md"
+
 new_fixture exact-source-target
 WPS_SOURCE="$TEST_HOME/.agents/skills/WPSComposer"
 mkdir -p "$WPS_SOURCE/scripts/macos_probe"
