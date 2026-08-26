@@ -1,0 +1,23 @@
+{
+  "include": [
+    "**/*.py",
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.json",
+    "**/*.md",
+    "**/*.html",
+    "**/*.css",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.sh"
+  ],
+  "exclude": [
+    ".git",
+    ".codegraph",
+    "__pycache__",
+    "*.pyc",
+    ".DS_Store"
+  ]
+}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# superwriter 幂等安装：三宿主技能镜像 + Codex AGENTS.md 路由块 + 依赖技能镜像
+# SuperWriter 幂等安装：三宿主技能镜像 + Codex AGENTS.md 路由块 + 依赖技能镜像
 set -euo pipefail
 
 die() {
@@ -45,7 +45,17 @@ canonical_path_into HOME_ROOT "$RAW_HOME"
 canonical_path_into SRC "$(dirname "$0")"
 AGENTS_SKILLS_ROOT="${SUPERWRITER_AGENTS_SKILLS_ROOT:-$RAW_HOME/.agents/skills}"
 OPENCODE_SKILLS_ROOT="${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$RAW_HOME/.opencode/skills}"
-WPSCOMPOSER_SKILL_SOURCE="${WPSCOMPOSER_SKILL_SOURCE:-/Users/neomei/项目/WpsComposer/skills/WPSComposer}"
+if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
+  WPSCOMPOSER_SKILL_SOURCE="$SRC/../WPSComposer/skills/WPSComposer"
+  for repository_name in WPSComposer WpsComposer; do
+    for repository in "$SRC/.."/*; do
+      if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+        WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+        break 2
+      fi
+    done
+  done
+fi
 canonical_path_into AGENTS_SKILLS_ROOT "$AGENTS_SKILLS_ROOT"
 canonical_path_into OPENCODE_SKILLS_ROOT "$OPENCODE_SKILLS_ROOT"
 canonical_path_into WPSCOMPOSER_SKILL_SOURCE "$WPSCOMPOSER_SKILL_SOURCE"
@@ -291,9 +301,9 @@ fi
 cat >> "$route_stage" <<'BLOCK'
 
 <!-- pipeline:superwriter:start -->
-# superwriter 路由
+# SuperWriter 路由
 
-- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 superwriter 阶段 0（先读/建流水线状态.md）
+- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 SuperWriter 阶段 0（先读/建流水线状态.md）
 - 预授权技能（视为已获指令可直接调用）：markitdown、grilling、grill-me、grill-with-docs、to-spec、domain-modeling、obsidian-excalidraw、ai-image-to-ppt、WPSComposer、superwriter 自身
 - 阶段推进规则：阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用
@@ -374,4 +384,4 @@ if ! mv "$route_stage" "$agents_file"; then
 fi
 route_committed=1
 
-echo "superwriter installed to 3 hosts."
+echo "SuperWriter installed to 3 hosts."

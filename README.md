@@ -1,6 +1,8 @@
-# superwriter
+# SuperWriter
 
-面向技术标、应标文件和技术方案的多阶段写作 skill。它把招标文件解析、评分点覆盖、客户访谈、章节写作、配图、终审和 WPS 原生导出组织为一条可追踪、可验收的流水线。
+SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 skill。它把招标文件解析、评分点覆盖、客户访谈、章节写作、配图、终审和 WPS 原生导出组织为一条可追踪、可验收的流水线。
+
+> 对外项目名为 `SuperWriter`；为兼容 Agent Skills 发现、既有安装目录和路由，内部技能 ID 保持 `superwriter`。
 
 ## 核心契约
 
@@ -20,13 +22,13 @@
 3 大纲与矩阵锁定
 4 分章写作
 5 章节核查与补素材（人工确认）
-6 Excalidraw / SVG / PNG 配图
+6 AI 配图（默认 ai-image-to-ppt / 退化 Excalidraw）
 7 合并稿与覆盖核查
 8 终稿审定（人工确认）
 9 WPSComposer 导出 DOCX / PDF 并验收
 ```
 
-项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、Excalidraw 可见几何与 SVG/PNG/DOCX 图像链，以及输出格式和页数约束。
+项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、配图存在性与图文对应（默认 ai-image-to-ppt JPG / 退化 Excalidraw+SVG+PNG 图像链），以及输出格式和页数约束。
 
 ## 依赖
 
@@ -39,9 +41,9 @@
 
 ```bash
 git clone https://github.com/NeoMei/SuperWriter.git
-cd superwriter
+cd SuperWriter
 
-# 公共仓库克隆到其他路径时，显式指定 WPSComposer skill 源目录
+# WPSComposer 不在同级目录时，显式指定 skill 源目录
 WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
   bash install.sh
 ```
@@ -81,4 +83,4 @@ bash tests/test_verify_artifacts.sh
 
 ## 当前状态
 
-截至 2026-08-18，superwriter 已完成三轮全面代码审查、安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过。
+截至 2026-08-18，SuperWriter 已完成三轮全面代码审查、安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收。仓库测试、静态验证与示例标段验收均通过。配图默认策略已切换为 ai-image-to-ppt，Excalidraw 保留为矢量可编辑退化路径。

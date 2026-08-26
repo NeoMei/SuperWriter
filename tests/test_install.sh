@@ -143,6 +143,12 @@ assert_basic_install() {
     fail "expected one exact Codex routing start marker"
   [ "$(grep -Fxc '<!-- pipeline:superwriter:end -->' "$agents_file")" -eq 1 ] || \
     fail "expected one exact Codex routing end marker"
+  grep -Fxq '# SuperWriter 路由' "$agents_file" || \
+    fail "expected the public project name in the SuperWriter route heading"
+  grep -Fq '自动进入 SuperWriter 阶段 0' "$agents_file" || \
+    fail "expected the public project name in the SuperWriter route instructions"
+  grep -Fq 'WPSComposer、superwriter 自身' "$agents_file" || \
+    fail "expected the SuperWriter route to preserve the lowercase internal skill id"
   grep -q 'keep-this-line' "$agents_file" || fail "expected existing Codex instructions to remain"
   ! grep -q 'stale routing block' "$agents_file" || fail "expected stale routing block to be replaced"
 }
@@ -179,6 +185,44 @@ cp -R "$OPENCODE_SOURCE/." "$TEST_HOME/.opencode/skills/"
 HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
 HOME="$TEST_HOME" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
 assert_basic_install
+
+# Without an override, the canonical sibling WPSComposer checkout is the portable default.
+new_fixture default-sibling-wps
+mkdir -p "$CASE_ROOT/SuperWriter/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
+cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
+mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
+WPS_REPO="$CASE_ROOT/WPSComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+
+# Keep the historical local WpsComposer checkout spelling compatible.
+new_fixture legacy-sibling-wps
+mkdir -p "$CASE_ROOT/SuperWriter/scripts"
+cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
+cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
+cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
+mv "$WPS_REPO" "$CASE_ROOT/WpsComposer"
+WPS_REPO="$CASE_ROOT/WpsComposer"
+WPS_SOURCE="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$WPS_REPO/skills/WPSComposer")"
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/install.sh"
+assert_basic_install
+HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  bash "$CASE_ROOT/SuperWriter/scripts/verify.sh"
 
 # Path safety: a relative WPS source must be canonicalized before it is linked.
 new_fixture relative-wps

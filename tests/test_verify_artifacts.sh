@@ -15,6 +15,7 @@ fresh_fixture() {
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
   cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
+  cp "$REPO_ROOT/README.md" "$fixture/README.md"
   cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
   cp -R "$REPO_ROOT/references/." "$fixture/references/"
   cp "$REPO_ROOT/验收/模拟客户A/模拟标段1/验收清单.json" \
@@ -187,6 +188,77 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
+
+lowercase_readme="$(fresh_fixture lowercase-readme)"
+python3 -B - "$lowercase_readme/README.md" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(text.replace("# SuperWriter\n", "# superwriter\n", 1), encoding="utf-8")
+PY
+expect_rejected lowercase-readme "FAIL: README project name must be SuperWriter" "$lowercase_readme"
+
+lowercase_skill_title="$(fresh_fixture lowercase-skill-title)"
+python3 -B - "$lowercase_skill_title/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(
+    text.replace(
+        "# SuperWriter —— 技术标代写流水线\n",
+        "# superwriter —— 技术标代写流水线\n",
+        1,
+    ),
+    encoding="utf-8",
+)
+PY
+expect_rejected lowercase-skill-title "FAIL: skill display name must be SuperWriter" "$lowercase_skill_title"
+
+capitalized_skill_id="$(fresh_fixture capitalized-skill-id)"
+python3 -B - "$capitalized_skill_id/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(text.replace("name: superwriter\n", "name: SuperWriter\n", 1), encoding="utf-8")
+PY
+reinstall_fixture "$capitalized_skill_id"
+expect_rejected capitalized-skill-id "FAIL: internal skill id must remain superwriter" "$capitalized_skill_id"
+
+duplicate_skill_id="$(fresh_fixture duplicate-skill-id)"
+python3 -B - "$duplicate_skill_id/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(
+    text.replace("name: superwriter\n", "name: superwriter\nname: SuperWriter\n", 1),
+    encoding="utf-8",
+)
+PY
+reinstall_fixture "$duplicate_skill_id"
+expect_rejected duplicate-skill-id "FAIL: internal skill id must remain superwriter" "$duplicate_skill_id"
+
+extended_frontmatter="$(fresh_fixture extended-frontmatter)"
+python3 -B - "$extended_frontmatter/SKILL.md" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+path.write_text(
+    text.replace("description: Use when", "license: MIT\ndescription: Use when", 1),
+    encoding="utf-8",
+)
+PY
+reinstall_fixture "$extended_frontmatter"
+expect_accepted extended-frontmatter "$extended_frontmatter"
 
 # Acceptance is project-declared and must reject missing pipeline evidence,
 # stale exports, and editable/rendered diagram divergence.
@@ -552,7 +624,7 @@ verify_fixture "$static_only" >/dev/null
 expect_rejected implicit-demo "FAIL: acceptance verification requires --acceptance-dir DIR" \
   "$static_only" "$static_only/验收-not-discoverable/模拟客户A/模拟标段1"
 
-# Every installed Superwriter source file participates in the exact manifest.
+# Every installed SuperWriter source file participates in the exact manifest.
 superwriter_files=(
   SKILL.md
   references/响应策略表.md

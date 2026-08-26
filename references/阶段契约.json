@@ -1,15 +1,15 @@
 {
   "version": 1,
   "stages": [
-    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0},
+    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0, "interactive_feedback": true},
     {"stage": 1, "interaction": "machine", "action": "continue", "gate": null},
-    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2},
-    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3},
-    {"stage": 4, "interaction": "machine", "action": "continue", "gate": null},
-    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5},
-    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6},
-    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7},
-    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8},
-    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery"}
+    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2, "interactive_feedback": true},
+    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3, "interactive_feedback": true},
+    {"stage": 4, "interaction": "machine", "action": "continue", "gate": null, "interactive_feedback": true},
+    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5, "interactive_feedback": true},
+    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6, "interactive_feedback": true},
+    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7, "interactive_feedback": true},
+    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8, "interactive_feedback": true},
+    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery", "interactive_feedback": true}
   ]
 }
