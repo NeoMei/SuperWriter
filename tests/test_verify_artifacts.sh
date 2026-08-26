@@ -5,6 +5,8 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
+python3 "$REPO_ROOT/tests/test_render_svg.py"
+
 failures=0
 
 fresh_fixture() {
@@ -13,7 +15,10 @@ fresh_fixture() {
   mkdir -p "$fixture"
   git -C "$REPO_ROOT" archive HEAD | tar -x -C "$fixture"
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$fixture/scripts/check_dependencies.py"
   cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
+  cp "$REPO_ROOT/scripts/render_svg.py" "$fixture/scripts/render_svg.py"
+  cp "$REPO_ROOT/scripts/render_svg_macos.js" "$fixture/scripts/render_svg_macos.js"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
   cp "$REPO_ROOT/README.md" "$fixture/README.md"
   cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
@@ -72,8 +77,11 @@ fresh_fixture() {
   printf '%s\n' 'from .. import reference_styles, heading_numbering, math_render' > \
     "$wps_source/scripts/renderers/writer_renderer.py"
   printf '%s\n' 'from .. import artifact_transport, generation_plan' \
-    'from . import bridge, models, runtime, templates' > \
+    'from . import bridge, models, runtime, templates' '' \
+    'def generate_macos():' '    pass' > \
     "$wps_source/scripts/macos_probe/generation.py"
+  printf '%s\n' 'def convert_macos():' '    pass' > \
+    "$wps_source/scripts/macos_probe/conversion.py"
   for vendor in \
     addin/bridge-client.js addin/index.html addin/manifest.xml \
     addin/presentation.js addin/ribbon.xml addin/spreadsheet.js addin/writer.js \
@@ -161,7 +169,7 @@ refresh_svg_delivery() {
   local png="$root/配图/图1-国产化适配架构.png"
   local docx="$root/导出/技术标-模拟标段1.docx"
   local manifest="$root/验收清单.json"
-  sips -s format png "$svg" --out "$png" >/dev/null
+  python3 "$REPO_ROOT/scripts/render_svg.py" "$svg" "$png" >/dev/null
   python3 - "$svg" "$png" "$docx" "$manifest" <<'PY'
 import hashlib
 import json
@@ -188,6 +196,139 @@ PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
+
+# Acceptance must fall back to AppKit when the system sips cannot decode SVG,
+# while continuing to use the real sips for PNG normalization.
+fallback_bin="$TEST_ROOT/fallback-bin"
+mkdir -p "$fallback_bin"
+printf '%s\n' '#!/bin/sh' \
+  'for argument in "$@"; do case "$argument" in *.svg) exit 13 ;; esac; done' \
+  'exec /usr/bin/sips "$@"' > "$fallback_bin/sips"
+chmod +x "$fallback_bin/sips"
+fallback_fixture="$(fresh_fixture appkit-fallback)"
+PATH="$fallback_bin:$PATH" expect_accepted appkit-fallback "$fallback_fixture" \
+  --acceptance-dir "$fallback_fixture/验收/模拟客户A/模拟标段1"
+
+both_fail_bin="$TEST_ROOT/both-fail-bin"
+mkdir -p "$both_fail_bin"
+cp "$fallback_bin/sips" "$both_fail_bin/sips"
+printf '%s\n' '#!/bin/sh' 'exit 17' > "$both_fail_bin/osascript"
+chmod +x "$both_fail_bin/sips" "$both_fail_bin/osascript"
+both_fail_fixture="$(fresh_fixture system-render-both-fail)"
+PATH="$both_fail_bin:$PATH" expect_rejected system-render-both-fail \
+  "FAIL: SVG system rendering failed: sips and AppKit fallback both failed" \
+  "$both_fail_fixture" \
+  --acceptance-dir "$both_fail_fixture/验收/模拟客户A/模拟标段1"
+
+for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value \
+  tag-key anchor-key explicit-key merge-key alias-key extra-key opening-space closing-space \
+  fake-closing name-comment name-at empty-description reordered; do
+  invalid_source_version="$(fresh_fixture "source-version-$version_case")"
+  python3 -B - "$invalid_source_version/SKILL.md" "$version_case" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+text = path.read_text(encoding="utf-8")
+assert text.count("version: 0.1.0\n") == 1
+if case == "mismatch":
+    text = text.replace("version: 0.1.0\n", "version: 9.9.9\n", 1)
+elif case == "missing":
+    text = text.replace("version: 0.1.0\n", "", 1)
+elif case == "duplicate":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nversion: 0.1.0\n", 1)
+elif case == "quoted-duplicate":
+    text = text.replace("version: 0.1.0\n", 'version: 0.1.0\n"version": 0.1.0\n', 1)
+elif case == "single-key-only":
+    text = text.replace("version: 0.1.0\n", "'version': 0.1.0\n", 1)
+elif case == "double-key-only":
+    text = text.replace("version: 0.1.0\n", '"version": 0.1.0\n', 1)
+elif case == "quoted-value":
+    text = text.replace("version: 0.1.0\n", 'version: "0.1.0"\n', 1)
+elif case == "tag-key":
+    text = text.replace("version: 0.1.0\n", "!!str version: 0.1.0\n", 1)
+elif case == "anchor-key":
+    text = text.replace("version: 0.1.0\n", "&shadow version: 0.1.0\n", 1)
+elif case == "explicit-key":
+    text = text.replace("version: 0.1.0\n", "? version\n: 0.1.0\n", 1)
+elif case == "merge-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n<<: *defaults\n", 1)
+elif case == "alias-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\n*version_alias: 0.1.0\n", 1)
+elif case == "extra-key":
+    text = text.replace("version: 0.1.0\n", "version: 0.1.0\nlicense: MIT\n", 1)
+elif case == "opening-space":
+    text = text.replace("---\n", " ---\n", 1)
+elif case == "closing-space":
+    text = text.replace("\n---\n\n# SuperWriter", "\n ---\n\n# SuperWriter", 1)
+elif case == "fake-closing":
+    text = text.replace("\n---\n\n# SuperWriter", "\n# ---\n\n# SuperWriter", 1)
+elif case == "name-comment":
+    text = text.replace("name: superwriter\n", "name: superwriter # comment\n", 1)
+elif case == "name-at":
+    text = text.replace("name: superwriter\n", "name: superwriter@\n", 1)
+elif case == "empty-description":
+    description = next(line for line in text.splitlines() if line.startswith("description: "))
+    text = text.replace(description + "\n", "description:\n", 1)
+elif case == "reordered":
+    name = "name: superwriter\n"
+    description = next(line for line in text.splitlines() if line.startswith("description: ")) + "\n"
+    text = text.replace(name + description, description + name, 1)
+else:
+    raise AssertionError(case)
+path.write_text(text, encoding="utf-8")
+PY
+  expect_rejected "source-version-$version_case" "SuperWriter source version" "$invalid_source_version"
+done
+
+# The shared dependency checker must reject every release-contract drift.
+for manifest_case in missing-dependency duplicate-id wrong-source-root invented-third-party-url \
+  invented-gitlab-url invented-ssh-url invented-scp-locator invented-bare-host \
+  invented-www-host invented-gh-clone purpose-url unapproved-hint wrong-wps-minimum; do
+  invalid_manifest="$(fresh_fixture "manifest-$manifest_case")"
+  python3 -B - "$invalid_manifest/references/依赖清单.json" "$manifest_case" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+case = sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8"))
+by_id = {item["id"]: item for item in data["dependencies"]}
+if case == "missing-dependency":
+    data["dependencies"] = [item for item in data["dependencies"] if item["id"] != "grill-me"]
+elif case == "duplicate-id":
+    data["dependencies"].append(dict(by_id["grilling"]))
+elif case == "wrong-source-root":
+    by_id["obsidian-excalidraw"]["source_root"] = "agents"
+elif case == "invented-third-party-url":
+    by_id["domain-modeling"]["install_hint"] = "https://github.com/example/invented"
+elif case == "invented-gitlab-url":
+    by_id["domain-modeling"]["install_hint"] = "https://gitlab.com/example/invented.git"
+elif case == "invented-ssh-url":
+    by_id["domain-modeling"]["install_hint"] = "ssh://git@gitlab.com/example/invented.git"
+elif case == "invented-scp-locator":
+    by_id["domain-modeling"]["install_hint"] = "git clone git@gitlab.com:example/invented.git"
+elif case == "invented-bare-host":
+    by_id["domain-modeling"]["install_hint"] = "github.com/example/invented"
+elif case == "invented-www-host":
+    by_id["domain-modeling"]["install_hint"] = "www.example.com/invented"
+elif case == "invented-gh-clone":
+    by_id["domain-modeling"]["install_hint"] = "gh repo clone example/invented"
+elif case == "purpose-url":
+    by_id["domain-modeling"]["purpose"] = "Domain support via //example.com/invented"
+elif case == "unapproved-hint":
+    by_id["domain-modeling"]["install_hint"] = "Use another trusted skill manager"
+elif case == "wrong-wps-minimum":
+    by_id["WPSComposer"]["minimum_version"] = "0.7.1"
+else:
+    raise AssertionError(case)
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  expect_rejected "manifest-$manifest_case" "dependency manifest is invalid" "$invalid_manifest"
+done
+
 
 lowercase_readme="$(fresh_fixture lowercase-readme)"
 python3 -B - "$lowercase_readme/README.md" <<'PY'
@@ -227,8 +368,9 @@ path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 path.write_text(text.replace("name: superwriter\n", "name: SuperWriter\n", 1), encoding="utf-8")
 PY
-reinstall_fixture "$capitalized_skill_id"
-expect_rejected capitalized-skill-id "FAIL: internal skill id must remain superwriter" "$capitalized_skill_id"
+expect_rejected capitalized-skill-id \
+  "SuperWriter source version/frontmatter contract is invalid" "$capitalized_skill_id"
+
 
 duplicate_skill_id="$(fresh_fixture duplicate-skill-id)"
 python3 -B - "$duplicate_skill_id/SKILL.md" <<'PY'
@@ -242,8 +384,9 @@ path.write_text(
     encoding="utf-8",
 )
 PY
-reinstall_fixture "$duplicate_skill_id"
-expect_rejected duplicate-skill-id "FAIL: internal skill id must remain superwriter" "$duplicate_skill_id"
+expect_rejected duplicate-skill-id \
+  "SuperWriter source version/frontmatter contract is invalid" "$duplicate_skill_id"
+
 
 extended_frontmatter="$(fresh_fixture extended-frontmatter)"
 python3 -B - "$extended_frontmatter/SKILL.md" <<'PY'
@@ -257,8 +400,9 @@ path.write_text(
     encoding="utf-8",
 )
 PY
-reinstall_fixture "$extended_frontmatter"
-expect_accepted extended-frontmatter "$extended_frontmatter"
+expect_rejected extended-frontmatter \
+  "SuperWriter source version/frontmatter contract is invalid" "$extended_frontmatter"
+
 
 # Acceptance is project-declared and must reject missing pipeline evidence,
 # stale exports, and editable/rendered diagram divergence.
@@ -627,6 +771,8 @@ expect_rejected implicit-demo "FAIL: acceptance verification requires --acceptan
 # Every installed SuperWriter source file participates in the exact manifest.
 superwriter_files=(
   SKILL.md
+  scripts/render_svg.py
+  scripts/render_svg_macos.js
   references/响应策略表.md
   references/应答矩阵模板.md
   references/素材打标规范.md
@@ -662,7 +808,7 @@ rm -rf "$missing_dependency-agents-source/grill-me"
 for host in .agents .claude .codex; do
   rm -rf "$missing_dependency-test-home/$host/skills/grill-me"
 done
-expect_rejected missing-dependency "FAIL: managed skill source is missing: grill-me" "$missing_dependency"
+expect_rejected missing-dependency "grill-me is missing or incomplete" "$missing_dependency"
 
 # Stage interaction metadata is the sole execution contract. Prose cannot create
 # another pause, while a metadata mutation must be rejected.

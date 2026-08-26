@@ -31,16 +31,25 @@ SOURCE_SKILL="$SOURCE_DIR/SKILL.md"
 SOURCE_README="$SOURCE_DIR/README.md"
 SOURCE_GATES="$SOURCE_DIR/references/门禁清单.md"
 SOURCE_STAGES="$SOURCE_DIR/references/阶段契约.json"
+SOURCE_DEPENDENCIES="$SOURCE_DIR/references/依赖清单.json"
 AGENTS_SKILLS_ROOT="$(canonical_path "${SUPERWRITER_AGENTS_SKILLS_ROOT:-$HOME_ROOT/.agents/skills}")"
 OPENCODE_SKILLS_ROOT="$(canonical_path "${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$HOME_ROOT/.opencode/skills}")"
 if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
   WPSCOMPOSER_SKILL_SOURCE="$SOURCE_DIR/../WPSComposer/skills/WPSComposer"
-  for repository_name in WPSComposer WpsComposer; do
-    for repository in "$SOURCE_DIR/.."/*; do
-      if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
-        WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
-        break 2
-      fi
+  WPS_SEARCH_ROOTS=("$SOURCE_DIR/..")
+  SOURCE_PARENT="${SOURCE_DIR%/*}"
+  if [ "${SOURCE_PARENT##*/}" = .worktrees ]; then
+    WPS_SEARCH_ROOTS+=("$SOURCE_DIR/../../..")
+  fi
+  for search_root in "${WPS_SEARCH_ROOTS[@]}"; do
+    for repository_name in WPSComposer WpsComposer; do
+      for repository in "$search_root"/*; do
+        if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+          WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+          break 3
+        fi
+      done
+
     done
   done
 fi
@@ -50,10 +59,12 @@ HOSTS=("$HOME_ROOT/.agents/skills" "$HOME_ROOT/.claude/skills" "$HOME_ROOT/.code
 HOST_NAMES=(agents claude codex)
 BACKUP_ROOT="$HOME_ROOT/.local/share/superwriter/backups"
 
-[ -f "$AGENTS_SKILLS_ROOT/grilling/SKILL.md" ] || fail "agents skill source is unavailable"
-[ -f "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw/SKILL.md" ] || fail "Excalidraw skill source is unavailable"
-[ -f "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md" ] || fail "WPSComposer source is unavailable"
-[ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || fail "WPSComposer source is incomplete"
+python3 -B "$SOURCE_DIR/scripts/check_dependencies.py" \
+  --manifest "$SOURCE_DEPENDENCIES" \
+  --agents-root "$AGENTS_SKILLS_ROOT" \
+  --opencode-root "$OPENCODE_SKILLS_ROOT" \
+  --wps-source "$WPSCOMPOSER_SKILL_SOURCE"
+
 [ "$(awk 'NR == 1 { print; exit }' "$SOURCE_README")" = "# SuperWriter" ] || fail "README project name must be SuperWriter"
 skill_name="$(awk '$0 == "---" { boundary++; next } boundary == 1 && /^name:[[:space:]]*/ { sub(/^name:[[:space:]]*/, ""); print }' "$SOURCE_SKILL")"
 [ "$skill_name" = superwriter ] || fail "internal skill id must remain superwriter"
@@ -177,7 +188,7 @@ def manifest(root):
     return result
 source, agents, opencode, wps = map(Path, sys.argv[1:5]); hosts = list(map(Path, sys.argv[5:]))
 dependencies = ["grilling", "grill-me", "grill-with-docs", "to-spec", "domain-modeling", "ai-image-to-ppt"]
-superwriter_files = ["SKILL.md", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md", "references/阶段契约.json", "references/验收清单模板.json"]
+superwriter_files = ["SKILL.md", "scripts/render_svg.py", "scripts/render_svg_macos.js", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md", "references/阶段契约.json", "references/验收清单模板.json", "references/依赖清单.json"]
 
 def module_path(module):
     stem = wps.joinpath(*module.split("."))
@@ -244,7 +255,7 @@ wps_vendor = [
     "node_modules/wpsjs/src/lib/res/etDemo.xlsx", "node_modules/wpsjs/src/lib/res/wppDemo.pptx",
     "node_modules/wpsjs/src/lib/res/wpsDemo.docx",
 ]
-expected_superwriter = {"references": ("dir", "")}
+expected_superwriter = {"references": ("dir", ""), "scripts": ("dir", "")}
 for rel in superwriter_files:
     path = source / rel
     if not path.is_file(): fail(f"SuperWriter source manifest entry is missing: {rel}")
@@ -306,5 +317,5 @@ fi
 
 [ -d "$ACCEPTANCE_DIR" ] || fail "acceptance directory does not exist: $ACCEPTANCE_DIR"
 ACCEPTANCE_DIR="$(cd "$ACCEPTANCE_DIR" && pwd)"
-for command in markitdown pdfinfo file unzip sips; do require_command "$command"; done
+for command in markitdown pdfinfo file unzip sips osascript; do require_command "$command"; done
 python3 -B "$SOURCE_DIR/scripts/verify_acceptance.py" "$ACCEPTANCE_DIR"

@@ -47,12 +47,20 @@ AGENTS_SKILLS_ROOT="${SUPERWRITER_AGENTS_SKILLS_ROOT:-$RAW_HOME/.agents/skills}"
 OPENCODE_SKILLS_ROOT="${SUPERWRITER_OPENCODE_SKILLS_ROOT:-$RAW_HOME/.opencode/skills}"
 if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
   WPSCOMPOSER_SKILL_SOURCE="$SRC/../WPSComposer/skills/WPSComposer"
-  for repository_name in WPSComposer WpsComposer; do
-    for repository in "$SRC/.."/*; do
-      if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
-        WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
-        break 2
-      fi
+  WPS_SEARCH_ROOTS=("$SRC/..")
+  SRC_PARENT="${SRC%/*}"
+  if [ "${SRC_PARENT##*/}" = .worktrees ]; then
+    WPS_SEARCH_ROOTS+=("$SRC/../../..")
+  fi
+  for search_root in "${WPS_SEARCH_ROOTS[@]}"; do
+    for repository_name in WPSComposer WpsComposer; do
+      for repository in "$search_root"/*; do
+        if [ -d "$repository" ] && [ "${repository##*/}" = "$repository_name" ]; then
+          WPSCOMPOSER_SKILL_SOURCE="$repository/skills/WPSComposer"
+          break 3
+        fi
+      done
+
     done
   done
 fi
@@ -70,19 +78,19 @@ require_file() {
 }
 
 require_file "$SRC/SKILL.md"
+require_file "$SRC/scripts/render_svg.py"
+require_file "$SRC/scripts/render_svg_macos.js"
+python3 -B "$SRC/scripts/check_dependencies.py" \
+  --manifest "$SRC/references/依赖清单.json" \
+  --agents-root "$AGENTS_SKILLS_ROOT" \
+  --opencode-root "$OPENCODE_SKILLS_ROOT" \
+  --wps-source "$WPSCOMPOSER_SKILL_SOURCE"
 dependency_sources=()
 for skill in "${DEPENDENCIES[@]}"; do
   canonical_path_into source_skill "$AGENTS_SKILLS_ROOT/$skill"
-  require_file "$source_skill/SKILL.md"
   dependency_sources+=("$source_skill")
 done
 canonical_path_into EXCALIDRAW_SOURCE "$OPENCODE_SKILLS_ROOT/obsidian-excalidraw"
-require_file "$EXCALIDRAW_SOURCE/SKILL.md"
-require_file "$WPSCOMPOSER_SKILL_SOURCE/SKILL.md"
-[ -d "$WPSCOMPOSER_SKILL_SOURCE/scripts/macos_probe" ] || {
-  echo "WPSComposer source is incomplete: $WPSCOMPOSER_SKILL_SOURCE" >&2
-  exit 1
-}
 
 # The default agents dependency source is itself the first managed host. Take
 # an immutable transaction snapshot before any target tree can be moved or
@@ -131,20 +139,31 @@ import sys
 source_count = int(sys.argv[1])
 sources = sys.argv[2:2 + source_count]
 targets = sys.argv[2 + source_count:]
+
+def contains(parent, child):
+    try:
+        return os.path.commonpath((parent, child)) == parent
+    except ValueError:
+        return False
+
 for source in sources:
+    canonical_source = os.path.realpath(source)
     for target in targets:
+        lexical_target = os.path.abspath(target)
+        if contains(canonical_source, lexical_target) or contains(lexical_target, canonical_source):
+            print(
+                f"Unsafe source/target overlap: source {source!r} and lexical target {target!r} contain one another",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
         # Replaying an installer-owned leaf symlink is safe: unlinking it never
-        # removes its referent. Directory targets still get full inode/alias checks.
+        # removes its referent, but only after lexical overlap has been excluded.
         if os.path.islink(target):
             continue
         canonical_target = os.path.realpath(target)
-        try:
-            overlaps = os.path.commonpath((source, canonical_target)) == canonical_target
-        except ValueError:
-            overlaps = False
-        if overlaps:
+        if contains(canonical_source, canonical_target) or contains(canonical_target, canonical_source):
             print(
-                f"Unsafe source/target overlap: source {source!r} resolves inside target {target!r}",
+                f"Unsafe source/target overlap: source {source!r} and target {target!r} resolve inside one another",
                 file=sys.stderr,
             )
             raise SystemExit(1)
@@ -259,9 +278,11 @@ for index in "${!host_roots[@]}"; do
   fi
 
   rm -rf "$stage_new/superwriter"
-  mkdir -p "$stage_new/superwriter"
+  mkdir -p "$stage_new/superwriter/scripts"
   cp "$SRC/SKILL.md" "$stage_new/superwriter/SKILL.md"
   cp -R "$SRC/references" "$stage_new/superwriter/references"
+  cp "$SRC/scripts/render_svg.py" "$stage_new/superwriter/scripts/render_svg.py"
+  cp "$SRC/scripts/render_svg_macos.js" "$stage_new/superwriter/scripts/render_svg_macos.js"
 
   for dependency_index in "${!DEPENDENCIES[@]}"; do
     skill="${DEPENDENCIES[$dependency_index]}"

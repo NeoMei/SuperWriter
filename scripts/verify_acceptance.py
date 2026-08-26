@@ -18,6 +18,8 @@ import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
 
+from render_svg import RenderSvgError, render_svg
+
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
