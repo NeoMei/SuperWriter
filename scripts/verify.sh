@@ -69,7 +69,7 @@ python3 -B "$SOURCE_DIR/scripts/check_dependencies.py" \
 skill_name="$(awk '$0 == "---" { boundary++; next } boundary == 1 && /^name:[[:space:]]*/ { sub(/^name:[[:space:]]*/, ""); print }' "$SOURCE_SKILL")"
 [ "$skill_name" = superwriter ] || fail "internal skill id must remain superwriter"
 skill_title="$(awk '$0 == "---" { boundary++; next } boundary >= 2 && /^# / { print; exit }' "$SOURCE_SKILL")"
-[ "$skill_title" = "# SuperWriter —— 技术标代写流水线" ] || fail "skill display name must be SuperWriter"
+[ "$skill_title" = "# SuperWriter —— 智能技术标写作助手" ] || fail "skill display name must be SuperWriter"
 
 description="$(awk '/^description:/{print; exit}' "$SOURCE_SKILL")"
 case "$description" in "description: Use when "*) ;; *) fail "skill description must contain only a Use when trigger" ;; esac
