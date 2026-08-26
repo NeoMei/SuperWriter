@@ -116,16 +116,16 @@ actions = re.findall(r"^\[门 (\d+)·interaction=(machine|human)\]", skill, re.M
 if [(int(number), interaction) for number, interaction in actions] != expected_interactions:
     fail("skill gate action metadata is invalid")
 expected_stages = [
-    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0},
+    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0, "interactive_feedback": True},
     {"stage": 1, "interaction": "machine", "action": "continue", "gate": None},
-    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2},
-    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3},
-    {"stage": 4, "interaction": "machine", "action": "continue", "gate": None},
-    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5},
-    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6},
-    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7},
-    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8},
-    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery"},
+    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2, "interactive_feedback": True},
+    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3, "interactive_feedback": True},
+    {"stage": 4, "interaction": "machine", "action": "continue", "gate": None, "interactive_feedback": True},
+    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5, "interactive_feedback": True},
+    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6, "interactive_feedback": True},
+    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7, "interactive_feedback": True},
+    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8, "interactive_feedback": True},
+    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery", "interactive_feedback": True},
 ]
 if stage_contract != {"version": 1, "stages": expected_stages}:
     fail("stage interaction contract is invalid")
