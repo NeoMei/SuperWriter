@@ -17,7 +17,7 @@
       {"stage": 3, "path": "大纲.md"},
       {"stage": 4, "path": "章节/02-示例.md"},
       {"stage": 5, "path": "章节/缺口登记.md"},
-      {"stage": 6, "path": "配图/图1-示例.excalidraw.md"},
+      {"stage": 6, "path": "配图/图1-示例.jpg"},
       {"stage": 7, "path": "合并稿.md"},
       {"stage": 8, "path": "终稿审定.md"},
       {"stage": 9, "path": "导出/技术标-示例.docx"}
@@ -29,15 +29,9 @@
   "point_chapters": {"P01": "2"},
   "figures": [
     {
-      "source": "配图/图1-示例.excalidraw.md",
-      "render_source": "配图/图1-示例.svg",
-      "render": "配图/图1-示例.png",
+      "render": "配图/图1-示例.jpg",
       "caption": "图 1 示例",
-      "source_sha256": "生成时填写",
-      "render_source_sha256": "生成时填写",
-      "render_sha256": "生成时填写",
-      "nodes": [{"id": "node-a", "label": "节点 A"}],
-      "edges": []
+      "render_sha256": "生成时填写"
     }
   ],
   "outputs": {

@@ -254,6 +254,49 @@ def png_header(payload: bytes, label: str):
         fail(f"{label} does not have a valid PNG header")
 
 
+def jpeg_header(payload: bytes, label: str):
+    """Return JPEG dimensions without requiring Pillow."""
+    try:
+        if len(payload) < 4 or payload[:2] != b"\xff\xd8":
+            raise ValueError
+        offset = 2
+        sof_markers = {
+            0xC0, 0xC1, 0xC2, 0xC3,
+            0xC5, 0xC6, 0xC7,
+            0xC9, 0xCA, 0xCB,
+            0xCD, 0xCE, 0xCF,
+        }
+        while offset < len(payload):
+            if payload[offset] != 0xFF:
+                raise ValueError
+            while offset < len(payload) and payload[offset] == 0xFF:
+                offset += 1
+            if offset >= len(payload):
+                raise ValueError
+            marker = payload[offset]
+            offset += 1
+            if marker in {0x01, *range(0xD0, 0xDA)}:
+                continue
+            if offset + 2 > len(payload):
+                raise ValueError
+            length = struct.unpack(">H", payload[offset:offset + 2])[0]
+            if length < 2 or offset + length > len(payload):
+                raise ValueError
+            if marker in sof_markers:
+                if length < 7:
+                    raise ValueError
+                height, width = struct.unpack(">HH", payload[offset + 3:offset + 7])
+                if not width or not height:
+                    raise ValueError
+                return width, height
+            if marker in {0xD9, 0xDA}:
+                break
+            offset += length
+        raise ValueError
+    except (IndexError, struct.error, ValueError):
+        fail(f"{label} does not have a valid JPEG header")
+
+
 def bmp_pixels(path: Path, label: str) -> bytes:
     try:
         payload = path.read_bytes()
@@ -279,8 +322,14 @@ def bmp_pixels(path: Path, label: str) -> bytes:
         fail(f"{label} sips output is unreadable")
 
 
-def normalized_pixels(payload: bytes, label: str, directory: Path, stem: str) -> bytes:
-    source = directory / f"{stem}.png"
+def normalized_pixels(
+    payload: bytes,
+    label: str,
+    directory: Path,
+    stem: str,
+    suffix: str = ".png",
+) -> bytes:
+    source = directory / f"{stem}{suffix}"
     output = directory / f"{stem}.bmp"
     source.write_bytes(payload)
     result = subprocess.run(
@@ -293,13 +342,19 @@ def normalized_pixels(payload: bytes, label: str, directory: Path, stem: str) ->
     return bmp_pixels(output, label)
 
 
-def compare_pixels(left: bytes, right: bytes, message: str) -> None:
+def compare_pixels(
+    left: bytes,
+    right: bytes,
+    message: str,
+    *,
+    max_large_error_ratio: float = 0.02,
+) -> None:
     differences = [abs(a - b) for a, b in zip(left, right)]
     if not differences:
         fail(message)
     mean_error = sum(differences) / len(differences)
     large_error_ratio = sum(value > 24 for value in differences) / len(differences)
-    if mean_error > 4.0 or large_error_ratio > 0.02:
+    if mean_error > 4.0 or large_error_ratio > max_large_error_ratio:
         fail(message)
 
 
@@ -466,102 +521,150 @@ def validate_svg_source(svg: Path, expected_nodes, expected_edges, rectangles):
 
 
 def validate_figure(root: Path, item: object):
-    require_keys(item, {"source", "render_source", "render", "caption", "source_sha256", "render_source_sha256", "render_sha256", "nodes", "edges"}, "acceptance manifest figure")
+    """Validate a figure entry, supporting both ai-image-to-ppt and excalidraw formats."""
     if not isinstance(item, dict):
         fail("acceptance manifest figure entry is invalid")
-    source = project_path(root, item.get("source"), "figure source")
-    render_source = project_path(root, item.get("render_source"), "figure render source")
-    render = project_path(root, item.get("render"), "figure render")
-    require_file(source, "missing native Excalidraw source")
-    require_file(render_source, "missing SVG render source")
-    require_file(render, "missing rendered architecture diagram")
+
+    is_excalidraw = "source" in item
+    if is_excalidraw:
+        require_keys(
+            item,
+            {
+                "source", "render_source", "render", "caption",
+                "source_sha256", "render_source_sha256", "render_sha256",
+                "nodes", "edges",
+            },
+            "acceptance manifest figure",
+        )
+    else:
+        require_keys(
+            item,
+            {"render", "caption", "render_sha256"},
+            "acceptance manifest figure",
+        )
+
     caption = item.get("caption")
-    nodes = item.get("nodes")
-    edges = item.get("edges")
-    if not isinstance(caption, str) or not caption or not isinstance(nodes, list) or not isinstance(edges, list):
-        fail("acceptance manifest figure caption/topology is invalid")
-    for node in nodes:
-        require_keys(node, {"id", "label"}, "acceptance manifest figure node")
-    for edge in edges:
-        require_keys(edge, {"from", "to", "label"}, "acceptance manifest figure edge")
-    if not all(valid_digest(item.get(name)) for name in ("source_sha256", "render_source_sha256", "render_sha256")):
-        fail("acceptance manifest figure digest is invalid")
+    render = project_path(root, item.get("render"), "figure render")
+    figure_label = "rendered architecture diagram" if is_excalidraw else "rendered figure"
+    require_file(render, f"missing {figure_label}")
+    if not isinstance(caption, str) or not caption:
+        fail("acceptance manifest figure caption is invalid")
+    if not valid_digest(item.get("render_sha256")):
+        fail("acceptance manifest figure render digest is invalid")
 
-    elements = excalidraw_scene(source)
-    expected_nodes = {node.get("id"): node.get("label") for node in nodes if isinstance(node, dict)}
-    if len(expected_nodes) != len(nodes) or any(not key or not isinstance(value, str) for key, value in expected_nodes.items()):
-        fail("acceptance manifest figure nodes are invalid")
-    rectangles = {element.get("id"): element for element in elements if element.get("type") == "rectangle"}
-    arrows = [element for element in elements if element.get("type") == "arrow"]
-    if set(rectangles) != set(expected_nodes):
-        fail(f"native Excalidraw must contain exactly {len(nodes)} declared rectangle elements")
-    if len(arrows) != len(edges):
-        fail(f"native Excalidraw must contain exactly {len(edges)} declared arrow elements")
+    if is_excalidraw:
+        # Excalidraw format validation
+        source = project_path(root, item.get("source"), "figure source")
+        render_source = project_path(root, item.get("render_source"), "figure render source")
+        require_file(source, "missing native Excalidraw source")
+        require_file(render_source, "missing SVG render source")
+        nodes = item.get("nodes")
+        edges = item.get("edges")
+        if not isinstance(nodes, list) or not isinstance(edges, list):
+            fail("acceptance manifest figure nodes/edges are invalid for excalidraw format")
+        for node in nodes:
+            require_keys(node, {"id", "label"}, "acceptance manifest figure node")
+        for edge in edges:
+            require_keys(edge, {"from", "to", "label"}, "acceptance manifest figure edge")
+        if not all(valid_digest(item.get(name)) for name in ("source_sha256", "render_source_sha256")):
+            fail("acceptance manifest figure source digests are invalid")
 
-    boxes = []
-    for node_id, label in expected_nodes.items():
-        rectangle = rectangles[node_id]
-        try:
-            x, y = float(rectangle["x"]), float(rectangle["y"])
-            width, height = float(rectangle["width"]), float(rectangle["height"])
-        except (KeyError, TypeError, ValueError):
-            fail("Excalidraw node geometry is invalid")
-        if width <= 0 or height <= 0:
-            fail("Excalidraw node geometry is invalid")
-        for other_id, left, top, right, bottom in boxes:
-            if x < right and x + width > left and y < bottom and y + height > top:
-                fail(f"Excalidraw node geometry overlaps: {other_id} and {node_id}")
-        boxes.append((node_id, x, y, x + width, y + height))
-        labels = [element for element in elements if element.get("type") == "text" and element.get("containerId") == node_id]
-        if len(labels) != 1 or labels[0].get("text", labels[0].get("originalText")) != label:
-            fail(f"Excalidraw node label differs from manifest: {node_id}")
+        elements = excalidraw_scene(source)
+        expected_nodes = {node.get("id"): node.get("label") for node in nodes if isinstance(node, dict)}
+        if len(expected_nodes) != len(nodes) or any(not key or not isinstance(value, str) for key, value in expected_nodes.items()):
+            fail("acceptance manifest figure nodes are invalid")
+        rectangles = {element.get("id"): element for element in elements if element.get("type") == "rectangle"}
+        arrows = [element for element in elements if element.get("type") == "arrow"]
+        if set(rectangles) != set(expected_nodes):
+            fail(f"native Excalidraw must contain exactly {len(nodes)} declared rectangle elements")
+        if len(arrows) != len(edges):
+            fail(f"native Excalidraw must contain exactly {len(edges)} declared arrow elements")
 
-    actual_edges = []
-    for arrow in arrows:
-        start, end = arrow.get("startBinding"), arrow.get("endBinding")
-        if not isinstance(start, dict) or not isinstance(end, dict):
-            fail("every Excalidraw arrow must have startBinding and endBinding")
-        endpoints = (rectangles.get(start.get("elementId")), rectangles.get(end.get("elementId")))
-        if None in endpoints:
-            fail("every Excalidraw arrow binding must reference a rectangle endpoint")
-        for endpoint in endpoints:
-            ids = {bound.get("id") for bound in endpoint.get("boundElements", []) if isinstance(bound, dict)}
-            if arrow.get("id") not in ids:
-                fail("Excalidraw arrow endpoints must list the arrow in boundElements")
-        labels = [element.get("text", element.get("originalText")) for element in elements
-                  if element.get("type") == "text" and element.get("containerId") == arrow.get("id")]
-        actual_edges.append((start.get("elementId"), end.get("elementId"), labels[0] if len(labels) == 1 else None))
-    expected_edges = [(edge.get("from"), edge.get("to"), edge.get("label")) for edge in edges if isinstance(edge, dict)]
-    if len(expected_edges) != len(edges) or any(not all(isinstance(value, str) and value for value in edge) for edge in expected_edges):
-        fail("acceptance manifest figure edges are invalid")
-    if sorted(actual_edges) != sorted(expected_edges):
-        fail("Excalidraw directed topology/edge labels differ from manifest")
-    validate_svg_source(render_source, expected_nodes, expected_edges, rectangles)
-    if sha256(source) != item.get("source_sha256"):
-        fail("Excalidraw source digest differs from acceptance manifest")
-    if sha256(render_source) != item.get("render_source_sha256"):
-        fail("SVG render source digest differs from acceptance manifest")
+        boxes = []
+        for node_id, label in expected_nodes.items():
+            rectangle = rectangles[node_id]
+            try:
+                x, y = float(rectangle["x"]), float(rectangle["y"])
+                width, height = float(rectangle["width"]), float(rectangle["height"])
+            except (KeyError, TypeError, ValueError):
+                fail("Excalidraw node geometry is invalid")
+            if width <= 0 or height <= 0:
+                fail("Excalidraw node geometry is invalid")
+            for other_id, left, top, right, bottom in boxes:
+                if x < right and x + width > left and y < bottom and y + height > top:
+                    fail(f"Excalidraw node geometry overlaps: {other_id} and {node_id}")
+            boxes.append((node_id, x, y, x + width, y + height))
+            labels = [element for element in elements if element.get("type") == "text" and element.get("containerId") == node_id]
+            if len(labels) != 1 or labels[0].get("text", labels[0].get("originalText")) != label:
+                fail(f"Excalidraw node label differs from manifest: {node_id}")
+
+        actual_edges = []
+        for arrow in arrows:
+            start, end = arrow.get("startBinding"), arrow.get("endBinding")
+            if not isinstance(start, dict) or not isinstance(end, dict):
+                fail("every Excalidraw arrow must have startBinding and endBinding")
+            endpoints = (rectangles.get(start.get("elementId")), rectangles.get(end.get("elementId")))
+            if None in endpoints:
+                fail("every Excalidraw arrow binding must reference a rectangle endpoint")
+            for endpoint in endpoints:
+                ids = {bound.get("id") for bound in endpoint.get("boundElements", []) if isinstance(bound, dict)}
+                if arrow.get("id") not in ids:
+                    fail("Excalidraw arrow endpoints must list the arrow in boundElements")
+            labels = [element.get("text", element.get("originalText")) for element in elements
+                      if element.get("type") == "text" and element.get("containerId") == arrow.get("id")]
+            actual_edges.append((start.get("elementId"), end.get("elementId"), labels[0] if len(labels) == 1 else None))
+        expected_edges = [(edge.get("from"), edge.get("to"), edge.get("label")) for edge in edges if isinstance(edge, dict)]
+        if len(expected_edges) != len(edges) or any(not all(isinstance(value, str) and value for value in edge) for edge in expected_edges):
+            fail("acceptance manifest figure edges are invalid")
+        if sorted(actual_edges) != sorted(expected_edges):
+            fail("Excalidraw directed topology/edge labels differ from manifest")
+        validate_svg_source(render_source, expected_nodes, expected_edges, rectangles)
+        if sha256(source) != item.get("source_sha256"):
+            fail("Excalidraw source digest differs from acceptance manifest")
+        if sha256(render_source) != item.get("render_source_sha256"):
+            fail("SVG render source digest differs from acceptance manifest")
 
     render_payload = render.read_bytes()
-    width, height = png_header(render_payload, "rendered architecture diagram")
+    render_suffix = render.suffix.lower()
+    if is_excalidraw:
+        width, height = png_header(render_payload, figure_label)
+        normalization_suffix = ".png"
+    elif render_suffix == ".png":
+        width, height = png_header(render_payload, figure_label)
+        normalization_suffix = ".png"
+    elif render_suffix in {".jpg", ".jpeg"}:
+        width, height = jpeg_header(render_payload, figure_label)
+        normalization_suffix = ".jpg"
+    else:
+        fail("ai-image-to-ppt figure render must be PNG or JPEG")
     if not (100 <= width <= 20000 and 100 <= height <= 20000):
-        fail("rendered architecture diagram dimensions are unreasonable")
+        fail(f"{figure_label} dimensions are unreasonable")
+
     with tempfile.TemporaryDirectory(prefix="superwriter-render-") as temporary:
-        pixels = normalized_pixels(render_payload, "rendered architecture diagram", Path(temporary), "render")
+        pixels = normalized_pixels(
+            render_payload,
+            figure_label,
+            Path(temporary),
+            "render",
+            normalization_suffix,
+        )
     if sha256(render) != item.get("render_sha256"):
-        fail("rendered diagram digest differs from acceptance manifest")
-    with tempfile.TemporaryDirectory(prefix="superwriter-svg-render-") as temporary:
-        directory = Path(temporary)
-        svg_png = directory / "svg.png"
-        try:
-            render_svg(render_source, svg_png)
-        except RenderSvgError as exc:
-            fail(str(exc))
-        svg_payload = svg_png.read_bytes()
-        png_header(svg_payload, "SVG raster")
-        svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")
-    compare_pixels(svg_pixels, pixels, "SVG raster differs from accepted PNG")
-    return source, render, caption, render_payload, width, height, pixels
+        fail("rendered figure digest differs from acceptance manifest")
+
+    if is_excalidraw:
+        with tempfile.TemporaryDirectory(prefix="superwriter-svg-render-") as temporary:
+            directory = Path(temporary)
+            svg_png = directory / "svg.png"
+            try:
+                render_svg(render_source, svg_png)
+            except RenderSvgError as exc:
+                fail(str(exc))
+            svg_payload = svg_png.read_bytes()
+            png_header(svg_payload, "SVG raster")
+            svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")
+        compare_pixels(svg_pixels, pixels, "SVG raster differs from accepted PNG")
+
+    return source if is_excalidraw else render, render, caption, render_payload, width, height, pixels
 
 
 def main() -> None:
@@ -720,7 +823,11 @@ def main() -> None:
     figure_paths = []
     for figure in figures:
         if isinstance(figure, dict):
-            figure_paths.extend(figure.get(name) for name in ("source", "render_source", "render"))
+            # Support both excalidraw (source, render_source, render) and ai-image-to-ppt (render only)
+            paths = [figure.get("render")]
+            if "source" in figure:
+                paths.extend([figure.get("source"), figure.get("render_source")])
+            figure_paths.extend(p for p in paths if p)
     if len(figure_paths) != len(set(figure_paths)):
         fail("acceptance manifest figure paths must be unique")
     validated_figures = [validate_figure(root, figure) for figure in figures]
@@ -745,7 +852,7 @@ def main() -> None:
           "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
           "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
           "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
-    for figure_index, (_, _, caption, render_payload, width, height, render_pixels) in enumerate(validated_figures):
+    for figure_index, (_, render, caption, render_payload, width, height, render_pixels) in enumerate(validated_figures):
         matches = []
         for drawing in document.findall(".//w:drawing", ns):
             docpr = drawing.find(".//wp:docPr", ns)
@@ -766,14 +873,37 @@ def main() -> None:
             fail("DOCX expected diagram relationship target is missing")
         with zipfile.ZipFile(docx_path) as archive:
             embedded = archive.read(member)
-        embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+        if embedded.startswith(b"\x89PNG\r\n\x1a\n"):
+            embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".png"
+        elif embedded.startswith(b"\xff\xd8"):
+            embedded_width, embedded_height = jpeg_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".jpg"
+        elif render.suffix.lower() == ".png":
+            embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".png"
+        else:
+            embedded_width, embedded_height = jpeg_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".jpg"
         if not (100 <= embedded_width <= 20000 and 100 <= embedded_height <= 20000):
             fail("DOCX embedded diagram dimensions are unreasonable")
         if abs((width / height) - (embedded_width / embedded_height)) / (width / height) > 0.002:
             fail("DOCX embedded diagram aspect ratio differs from the rendered diagram")
         with tempfile.TemporaryDirectory(prefix="superwriter-image-verify-") as temporary:
-            embedded_pixels = normalized_pixels(embedded, "DOCX embedded diagram", Path(temporary), f"embedded-{figure_index}")
-        compare_pixels(render_pixels, embedded_pixels, "DOCX embedded diagram pixels differ from the rendered diagram")
+            embedded_pixels = normalized_pixels(
+                embedded,
+                "DOCX embedded diagram",
+                Path(temporary),
+                f"embedded-{figure_index}",
+                embedded_suffix,
+            )
+        render_suffix = ".jpg" if render.suffix.lower() in {".jpg", ".jpeg"} else ".png"
+        compare_pixels(
+            render_pixels,
+            embedded_pixels,
+            "DOCX embedded diagram pixels differ from the rendered diagram",
+            max_large_error_ratio=0.03 if render_suffix != embedded_suffix else 0.02,
+        )
 
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)

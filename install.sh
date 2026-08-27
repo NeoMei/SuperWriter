@@ -60,6 +60,7 @@ if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
           break 3
         fi
       done
+
     done
   done
 fi

@@ -551,6 +551,7 @@ cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_R
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
 cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
   "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
 WPS_REPO="$CASE_ROOT/WPSComposer"
@@ -587,6 +588,7 @@ HOME="$TEST_HOME" \
   SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
   bash "$worktree_root/scripts/verify.sh"
 
+
 # Keep the historical local WpsComposer checkout spelling compatible.
 new_fixture legacy-sibling-wps
 mkdir -p "$CASE_ROOT/SuperWriter/scripts"
@@ -594,6 +596,7 @@ cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_R
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
 cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
   "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WpsComposer"
 WPS_REPO="$CASE_ROOT/WpsComposer"

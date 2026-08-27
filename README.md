@@ -22,13 +22,13 @@ SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 s
 3 大纲与矩阵锁定
 4 分章写作
 5 章节核查与补素材（人工确认）
-6 Excalidraw / SVG / PNG 配图
+6 AI 配图（默认 ai-image-to-ppt / 退化 Excalidraw）
 7 合并稿与覆盖核查
 8 终稿审定（人工确认）
 9 WPSComposer 导出 DOCX / PDF 并验收
 ```
 
-项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、Excalidraw 可见几何与 SVG/PNG/DOCX 图像链，以及输出格式和页数约束。
+项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、配图存在性与图文对应（默认 ai-image-to-ppt JPG / 退化 Excalidraw+SVG+PNG 图像链），以及输出格式和页数约束。
 
 SVG 栅格化统一调用 `scripts/render_svg.py`：先尝试 macOS `sips`，当系统版本无法解码 SVG 时自动回退到 `osascript -l JavaScript` 驱动的 AppKit。两条路径均为 macOS 系统能力，不需要 PyMuPDF、浏览器或其他第三方渲染器。
 
@@ -92,6 +92,9 @@ bash scripts/verify.sh
 bash scripts/verify.sh --acceptance-dir /absolute/path/to/客户名/标段名
 
 # 仓库回归测试
+python3 tests/test_dependency_contract.py
+python3 tests/test_render_svg.py
+python3 tests/test_verify_acceptance.py
 bash tests/test_install.sh
 bash tests/test_verify_artifacts.sh
 ```
@@ -114,6 +117,11 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ## 版本记录
 
+### Unreleased
+
+- 为阶段 0–9 增加内容特定的互动反馈，仅门 2 / 5 / 8 停等人工确认。
+- 配图默认改用 ai-image-to-ppt JPG/PNG，并保留 Excalidraw + SVG + PNG 的可编辑退化路径。
+
 ### v0.1.0 (2026-08-20)
 
 - 当前发布版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
@@ -122,4 +130,4 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ## 当前状态
 
-截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。
+截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。上述 Unreleased 变更尚未包含在 `v0.1.0` 标签中。

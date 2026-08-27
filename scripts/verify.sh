@@ -49,6 +49,7 @@ if [ -z "${WPSCOMPOSER_SKILL_SOURCE:-}" ]; then
           break 3
         fi
       done
+
     done
   done
 fi
@@ -63,11 +64,12 @@ python3 -B "$SOURCE_DIR/scripts/check_dependencies.py" \
   --agents-root "$AGENTS_SKILLS_ROOT" \
   --opencode-root "$OPENCODE_SKILLS_ROOT" \
   --wps-source "$WPSCOMPOSER_SKILL_SOURCE"
+
 [ "$(awk 'NR == 1 { print; exit }' "$SOURCE_README")" = "# SuperWriter" ] || fail "README project name must be SuperWriter"
 skill_name="$(awk '$0 == "---" { boundary++; next } boundary == 1 && /^name:[[:space:]]*/ { sub(/^name:[[:space:]]*/, ""); print }' "$SOURCE_SKILL")"
 [ "$skill_name" = superwriter ] || fail "internal skill id must remain superwriter"
 skill_title="$(awk '$0 == "---" { boundary++; next } boundary >= 2 && /^# / { print; exit }' "$SOURCE_SKILL")"
-[ "$skill_title" = "# SuperWriter —— 技术标代写流水线" ] || fail "skill display name must be SuperWriter"
+[ "$skill_title" = "# SuperWriter —— 智能技术标写作助手" ] || fail "skill display name must be SuperWriter"
 
 description="$(awk '/^description:/{print; exit}' "$SOURCE_SKILL")"
 case "$description" in "description: Use when "*) ;; *) fail "skill description must contain only a Use when trigger" ;; esac
@@ -114,16 +116,16 @@ actions = re.findall(r"^\[门 (\d+)·interaction=(machine|human)\]", skill, re.M
 if [(int(number), interaction) for number, interaction in actions] != expected_interactions:
     fail("skill gate action metadata is invalid")
 expected_stages = [
-    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0},
+    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0, "interactive_feedback": True},
     {"stage": 1, "interaction": "machine", "action": "continue", "gate": None},
-    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2},
-    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3},
-    {"stage": 4, "interaction": "machine", "action": "continue", "gate": None},
-    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5},
-    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6},
-    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7},
-    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8},
-    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery"},
+    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2, "interactive_feedback": True},
+    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3, "interactive_feedback": True},
+    {"stage": 4, "interaction": "machine", "action": "continue", "gate": None, "interactive_feedback": True},
+    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5, "interactive_feedback": True},
+    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6, "interactive_feedback": True},
+    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7, "interactive_feedback": True},
+    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8, "interactive_feedback": True},
+    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery", "interactive_feedback": True},
 ]
 if stage_contract != {"version": 1, "stages": expected_stages}:
     fail("stage interaction contract is invalid")
