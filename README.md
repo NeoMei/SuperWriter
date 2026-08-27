@@ -92,6 +92,9 @@ bash scripts/verify.sh
 bash scripts/verify.sh --acceptance-dir /absolute/path/to/客户名/标段名
 
 # 仓库回归测试
+python3 tests/test_dependency_contract.py
+python3 tests/test_render_svg.py
+python3 tests/test_verify_acceptance.py
 bash tests/test_install.sh
 bash tests/test_verify_artifacts.sh
 ```
@@ -114,6 +117,11 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ## 版本记录
 
+### Unreleased
+
+- 为阶段 0–9 增加内容特定的互动反馈，仅门 2 / 5 / 8 停等人工确认。
+- 配图默认改用 ai-image-to-ppt JPG/PNG，并保留 Excalidraw + SVG + PNG 的可编辑退化路径。
+
 ### v0.1.0 (2026-08-20)
 
 - 当前发布版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
@@ -122,4 +130,4 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ## 当前状态
 
-截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。配图默认策略已切换为 ai-image-to-ppt，Excalidraw 保留为矢量可编辑退化路径。
+截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。上述 Unreleased 变更尚未包含在 `v0.1.0` 标签中。

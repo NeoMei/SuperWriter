@@ -342,13 +342,19 @@ def normalized_pixels(
     return bmp_pixels(output, label)
 
 
-def compare_pixels(left: bytes, right: bytes, message: str) -> None:
+def compare_pixels(
+    left: bytes,
+    right: bytes,
+    message: str,
+    *,
+    max_large_error_ratio: float = 0.02,
+) -> None:
     differences = [abs(a - b) for a, b in zip(left, right)]
     if not differences:
         fail(message)
     mean_error = sum(differences) / len(differences)
     large_error_ratio = sum(value > 24 for value in differences) / len(differences)
-    if mean_error > 4.0 or large_error_ratio > 0.02:
+    if mean_error > 4.0 or large_error_ratio > max_large_error_ratio:
         fail(message)
 
 
@@ -891,7 +897,13 @@ def main() -> None:
                 f"embedded-{figure_index}",
                 embedded_suffix,
             )
-        compare_pixels(render_pixels, embedded_pixels, "DOCX embedded diagram pixels differ from the rendered diagram")
+        render_suffix = ".jpg" if render.suffix.lower() in {".jpg", ".jpeg"} else ".png"
+        compare_pixels(
+            render_pixels,
+            embedded_pixels,
+            "DOCX embedded diagram pixels differ from the rendered diagram",
+            max_large_error_ratio=0.03 if render_suffix != embedded_suffix else 0.02,
+        )
 
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)

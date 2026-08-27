@@ -15,7 +15,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from verify_acceptance import jpeg_header, validate_figure  # noqa: E402
+from verify_acceptance import compare_pixels, jpeg_header, validate_figure  # noqa: E402
 
 
 class AcceptanceImageContractTest(unittest.TestCase):
@@ -48,6 +48,19 @@ class AcceptanceImageContractTest(unittest.TestCase):
         self.assertIn(
             "acceptance manifest figure has unknown or missing keys",
             error.getvalue(),
+        )
+
+    def test_cross_format_pixel_comparison_allows_bounded_color_conversion(self):
+        left = bytes(400)
+        right = bytes([25] * 10 + [0] * 390)
+
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            compare_pixels(left, right, "pixels differ")
+        compare_pixels(
+            left,
+            right,
+            "pixels differ",
+            max_large_error_ratio=0.03,
         )
 
 

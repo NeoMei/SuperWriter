@@ -191,11 +191,155 @@ manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\
 PY
 }
 
+convert_fixture_to_ai_jpg() {
+  local root="$1"
+  local project="$root/验收/模拟客户A/模拟标段1"
+  local png="$project/配图/图1-国产化适配架构.png"
+  local jpg="$project/配图/图1-国产化适配架构.jpg"
+  /usr/bin/sips -s format jpeg "$png" --out "$jpg" >/dev/null
+  python3 -B - "$project" "$jpg" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+import zipfile
+
+root, jpg = map(Path, sys.argv[1:])
+manifest_path = root / "验收清单.json"
+merged_path = root / "合并稿.md"
+docx_path = root / "导出/技术标-模拟标段1.docx"
+old_render = "配图/图1-国产化适配架构.png"
+new_render = "配图/图1-国产化适配架构.jpg"
+caption = "图 1 国产化适配架构"
+payload = jpg.read_bytes()
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["pipeline"]["stage_evidence"][6]["path"] = new_render
+manifest["figures"] = [{
+    "render": new_render,
+    "caption": caption,
+    "render_sha256": hashlib.sha256(payload).hexdigest(),
+}]
+merged_path.write_text(
+    merged_path.read_text(encoding="utf-8").replace(old_render, new_render),
+    encoding="utf-8",
+)
+manifest["outputs"]["merged_sha256"] = hashlib.sha256(merged_path.read_bytes()).hexdigest()
+manifest_path.write_text(
+    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+
+temporary = docx_path.with_suffix(".tmp.docx")
+with zipfile.ZipFile(docx_path, "r") as source, zipfile.ZipFile(temporary, "w") as target:
+    for item in source.infolist():
+        name = item.filename
+        data = source.read(name)
+        if name == "word/media/image1.png":
+            name = "word/media/image1.jpeg"
+            data = payload
+        elif name == "word/_rels/document.xml.rels":
+            data = data.replace(b"media/image1.png", b"media/image1.jpeg")
+        elif name == "[Content_Types].xml" and b'Extension="jpeg"' not in data:
+            data = data.replace(
+                b"</Types>",
+                b'<Default Extension="jpeg" ContentType="image/jpeg"/></Types>',
+            )
+        target.writestr(name, data)
+temporary.replace(docx_path)
+PY
+}
+
+replace_ai_docx_with_png() {
+  local root="$1"
+  local mode="$2"
+  local project="$root/验收/模拟客户A/模拟标段1"
+  local jpg="$project/配图/图1-国产化适配架构.jpg"
+  local png="$project/配图/embedded-$mode.png"
+  if [ "$mode" = converted ]; then
+    /usr/bin/sips -s format png "$jpg" --out "$png" >/dev/null
+  else
+    python3 -B - "$png" <<'PY'
+from pathlib import Path
+import struct
+import sys
+import zlib
+
+path = Path(sys.argv[1])
+width, height = 368, 188
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+payload = (
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+    + chunk(b"IDAT", zlib.compress((b"\x00" + b"\x00" * (width * 3)) * height))
+    + chunk(b"IEND", b"")
+)
+path.write_bytes(payload)
+PY
+  fi
+  python3 -B - "$project/导出/技术标-模拟标段1.docx" "$png" <<'PY'
+from pathlib import Path
+import sys
+import zipfile
+
+docx, png = map(Path, sys.argv[1:])
+payload = png.read_bytes()
+temporary = docx.with_suffix(".tmp.docx")
+with zipfile.ZipFile(docx, "r") as source, zipfile.ZipFile(temporary, "w") as target:
+    for item in source.infolist():
+        name = item.filename
+        data = source.read(name)
+        if name == "word/media/image1.jpeg":
+            name = "word/media/image1.png"
+            data = payload
+        elif name == "word/_rels/document.xml.rels":
+            data = data.replace(b"media/image1.jpeg", b"media/image1.png")
+        target.writestr(name, data)
+temporary.replace(docx)
+PY
+}
+
 baseline="$(fresh_fixture baseline)"
 PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
+
+ai_jpg_fixture="$(fresh_fixture ai-image-jpg)"
+convert_fixture_to_ai_jpg "$ai_jpg_fixture"
+expect_accepted ai-image-jpg "$ai_jpg_fixture" \
+  --acceptance-dir "$ai_jpg_fixture/验收/模拟客户A/模拟标段1"
+
+ai_converted_fixture="$(fresh_fixture ai-image-docx-converted-png)"
+convert_fixture_to_ai_jpg "$ai_converted_fixture"
+replace_ai_docx_with_png "$ai_converted_fixture" converted
+expect_accepted ai-image-docx-converted-png "$ai_converted_fixture" \
+  --acceptance-dir "$ai_converted_fixture/验收/模拟客户A/模拟标段1"
+
+ai_corrupt_fixture="$(fresh_fixture ai-image-corrupt-jpg)"
+convert_fixture_to_ai_jpg "$ai_corrupt_fixture"
+python3 -B - "$ai_corrupt_fixture/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.jpg" \
+  "$ai_corrupt_fixture/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+jpg, manifest_path = map(Path, sys.argv[1:])
+jpg.write_bytes(b"not a jpeg")
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["figures"][0]["render_sha256"] = hashlib.sha256(jpg.read_bytes()).hexdigest()
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected ai-image-corrupt-jpg "FAIL: rendered figure does not have a valid JPEG header" \
+  "$ai_corrupt_fixture" --acceptance-dir "$ai_corrupt_fixture/验收/模拟客户A/模拟标段1"
+
+ai_mismatch_fixture="$(fresh_fixture ai-image-docx-mismatch)"
+convert_fixture_to_ai_jpg "$ai_mismatch_fixture"
+replace_ai_docx_with_png "$ai_mismatch_fixture" mismatch
+expect_rejected ai-image-docx-mismatch "FAIL: DOCX embedded diagram pixels differ from the rendered diagram" \
+  "$ai_mismatch_fixture" --acceptance-dir "$ai_mismatch_fixture/验收/模拟客户A/模拟标段1"
 
 # Acceptance must fall back to AppKit when the system sips cannot decode SVG,
 # while continuing to use the real sips for PNG normalization.
