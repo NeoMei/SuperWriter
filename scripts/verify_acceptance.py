@@ -254,6 +254,49 @@ def png_header(payload: bytes, label: str):
         fail(f"{label} does not have a valid PNG header")
 
 
+def jpeg_header(payload: bytes, label: str):
+    """Return JPEG dimensions without requiring Pillow."""
+    try:
+        if len(payload) < 4 or payload[:2] != b"\xff\xd8":
+            raise ValueError
+        offset = 2
+        sof_markers = {
+            0xC0, 0xC1, 0xC2, 0xC3,
+            0xC5, 0xC6, 0xC7,
+            0xC9, 0xCA, 0xCB,
+            0xCD, 0xCE, 0xCF,
+        }
+        while offset < len(payload):
+            if payload[offset] != 0xFF:
+                raise ValueError
+            while offset < len(payload) and payload[offset] == 0xFF:
+                offset += 1
+            if offset >= len(payload):
+                raise ValueError
+            marker = payload[offset]
+            offset += 1
+            if marker in {0x01, *range(0xD0, 0xDA)}:
+                continue
+            if offset + 2 > len(payload):
+                raise ValueError
+            length = struct.unpack(">H", payload[offset:offset + 2])[0]
+            if length < 2 or offset + length > len(payload):
+                raise ValueError
+            if marker in sof_markers:
+                if length < 7:
+                    raise ValueError
+                height, width = struct.unpack(">HH", payload[offset + 3:offset + 7])
+                if not width or not height:
+                    raise ValueError
+                return width, height
+            if marker in {0xD9, 0xDA}:
+                break
+            offset += length
+        raise ValueError
+    except (IndexError, struct.error, ValueError):
+        fail(f"{label} does not have a valid JPEG header")
+
+
 def bmp_pixels(path: Path, label: str) -> bytes:
     try:
         payload = path.read_bytes()
@@ -279,8 +322,14 @@ def bmp_pixels(path: Path, label: str) -> bytes:
         fail(f"{label} sips output is unreadable")
 
 
-def normalized_pixels(payload: bytes, label: str, directory: Path, stem: str) -> bytes:
-    source = directory / f"{stem}.png"
+def normalized_pixels(
+    payload: bytes,
+    label: str,
+    directory: Path,
+    stem: str,
+    suffix: str = ".png",
+) -> bytes:
+    source = directory / f"{stem}{suffix}"
     output = directory / f"{stem}.bmp"
     source.write_bytes(payload)
     result = subprocess.run(
@@ -469,16 +518,33 @@ def validate_figure(root: Path, item: object):
     """Validate a figure entry, supporting both ai-image-to-ppt and excalidraw formats."""
     if not isinstance(item, dict):
         fail("acceptance manifest figure entry is invalid")
+
+    is_excalidraw = "source" in item
+    if is_excalidraw:
+        require_keys(
+            item,
+            {
+                "source", "render_source", "render", "caption",
+                "source_sha256", "render_source_sha256", "render_sha256",
+                "nodes", "edges",
+            },
+            "acceptance manifest figure",
+        )
+    else:
+        require_keys(
+            item,
+            {"render", "caption", "render_sha256"},
+            "acceptance manifest figure",
+        )
+
     caption = item.get("caption")
     render = project_path(root, item.get("render"), "figure render")
-    require_file(render, "missing rendered figure")
+    figure_label = "rendered architecture diagram" if is_excalidraw else "rendered figure"
+    require_file(render, f"missing {figure_label}")
     if not isinstance(caption, str) or not caption:
         fail("acceptance manifest figure caption is invalid")
     if not valid_digest(item.get("render_sha256")):
         fail("acceptance manifest figure render digest is invalid")
-
-    # Detect format: excalidraw has "source" field, ai-image-to-ppt does not
-    is_excalidraw = "source" in item
 
     if is_excalidraw:
         # Excalidraw format validation
@@ -552,60 +618,45 @@ def validate_figure(root: Path, item: object):
         if sha256(render_source) != item.get("render_source_sha256"):
             fail("SVG render source digest differs from acceptance manifest")
 
-    # Common validation for both formats
     render_payload = render.read_bytes()
-    # Support both PNG and JPG
-    if render.suffix.lower() == ".png":
-        width, height = png_header(render_payload, "rendered figure")
+    render_suffix = render.suffix.lower()
+    if is_excalidraw:
+        width, height = png_header(render_payload, figure_label)
+        normalization_suffix = ".png"
+    elif render_suffix == ".png":
+        width, height = png_header(render_payload, figure_label)
+        normalization_suffix = ".png"
+    elif render_suffix in {".jpg", ".jpeg"}:
+        width, height = jpeg_header(render_payload, figure_label)
+        normalization_suffix = ".jpg"
     else:
-        # For JPG, use PIL or fallback to basic validation
-        try:
-            from PIL import Image
-            import io
-            img = Image.open(io.BytesIO(render_payload))
-            width, height = img.size
-        except ImportError:
-            # If PIL not available, just check file is non-empty
-            if len(render_payload) < 100:
-                fail("rendered figure file is too small")
-            width, height = 1920, 1080  # Default dimensions for validation
+        fail("ai-image-to-ppt figure render must be PNG or JPEG")
     if not (100 <= width <= 20000 and 100 <= height <= 20000):
-        fail("rendered figure dimensions are unreasonable")
+        fail(f"{figure_label} dimensions are unreasonable")
+
+    with tempfile.TemporaryDirectory(prefix="superwriter-render-") as temporary:
+        pixels = normalized_pixels(
+            render_payload,
+            figure_label,
+            Path(temporary),
+            "render",
+            normalization_suffix,
+        )
     if sha256(render) != item.get("render_sha256"):
         fail("rendered figure digest differs from acceptance manifest")
 
-    # For excalidraw, do pixel comparison with SVG
     if is_excalidraw:
-        with tempfile.TemporaryDirectory(prefix="superwriter-render-") as temporary:
-            pixels = normalized_pixels(render_payload, "rendered figure", Path(temporary), "render")
         with tempfile.TemporaryDirectory(prefix="superwriter-svg-render-") as temporary:
             directory = Path(temporary)
             svg_png = directory / "svg.png"
-            result = subprocess.run(
-                ["sips", "-s", "format", "png", str(render_source), "--out", str(svg_png)],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
-            )
-            if result.returncode or not svg_png.is_file():
-                fail("SVG render source cannot be rasterized by sips")
+            try:
+                render_svg(render_source, svg_png)
+            except RenderSvgError as exc:
+                fail(str(exc))
             svg_payload = svg_png.read_bytes()
             png_header(svg_payload, "SVG raster")
             svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")
         compare_pixels(svg_pixels, pixels, "SVG raster differs from accepted PNG")
-    else:
-        # For ai-image-to-ppt, create dummy pixels for comparison (not needed)
-        with tempfile.TemporaryDirectory(prefix="superwriter-render-") as temporary:
-            if render.suffix.lower() == ".png":
-                pixels = normalized_pixels(render_payload, "rendered figure", Path(temporary), "render")
-            else:
-                # For JPG, convert to PNG first for pixel normalization
-                png_path = Path(temporary) / "converted.png"
-                result = subprocess.run(
-                    ["sips", "-s", "format", "png", str(render), "--out", str(png_path)],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
-                )
-                if result.returncode or not png_path.is_file():
-                    fail("JPG figure cannot be converted to PNG for validation")
-                pixels = normalized_pixels(png_path.read_bytes(), "rendered figure", Path(temporary), "render")
 
     return source if is_excalidraw else render, render, caption, render_payload, width, height, pixels
 
@@ -795,7 +846,7 @@ def main() -> None:
           "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
           "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
           "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
-    for figure_index, (_, _, caption, render_payload, width, height, render_pixels) in enumerate(validated_figures):
+    for figure_index, (_, render, caption, render_payload, width, height, render_pixels) in enumerate(validated_figures):
         matches = []
         for drawing in document.findall(".//w:drawing", ns):
             docpr = drawing.find(".//wp:docPr", ns)
@@ -816,13 +867,30 @@ def main() -> None:
             fail("DOCX expected diagram relationship target is missing")
         with zipfile.ZipFile(docx_path) as archive:
             embedded = archive.read(member)
-        embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+        if embedded.startswith(b"\x89PNG\r\n\x1a\n"):
+            embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".png"
+        elif embedded.startswith(b"\xff\xd8"):
+            embedded_width, embedded_height = jpeg_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".jpg"
+        elif render.suffix.lower() == ".png":
+            embedded_width, embedded_height = png_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".png"
+        else:
+            embedded_width, embedded_height = jpeg_header(embedded, "DOCX embedded diagram")
+            embedded_suffix = ".jpg"
         if not (100 <= embedded_width <= 20000 and 100 <= embedded_height <= 20000):
             fail("DOCX embedded diagram dimensions are unreasonable")
         if abs((width / height) - (embedded_width / embedded_height)) / (width / height) > 0.002:
             fail("DOCX embedded diagram aspect ratio differs from the rendered diagram")
         with tempfile.TemporaryDirectory(prefix="superwriter-image-verify-") as temporary:
-            embedded_pixels = normalized_pixels(embedded, "DOCX embedded diagram", Path(temporary), f"embedded-{figure_index}")
+            embedded_pixels = normalized_pixels(
+                embedded,
+                "DOCX embedded diagram",
+                Path(temporary),
+                f"embedded-{figure_index}",
+                embedded_suffix,
+            )
         compare_pixels(render_pixels, embedded_pixels, "DOCX embedded diagram pixels differ from the rendered diagram")
 
     docx_text = extracted_text("DOCX", docx_path)
