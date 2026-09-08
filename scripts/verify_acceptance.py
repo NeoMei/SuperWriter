@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
@@ -18,7 +19,11 @@ import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
 
+from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
+
 from render_svg import RenderSvgError, render_svg
+from svg_geometry_compare import SvgTextMaskError, masked_svg_pixels_match
+from collaboration.console import configure_utf8_stdio
 from collaboration.model import CollaborationError
 from collaboration.store import load_state
 from collaboration.workflow import figure_is_approved, require_delivery_ready
@@ -395,10 +400,17 @@ def normalized_export_text(text: str) -> str:
 
 
 def extracted_text(label: str, path: Path) -> str:
-    result = subprocess.run(
-        ["markitdown", str(path)], text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, check=False,
-    )
+    child_environment = os.environ.copy()
+    child_environment["PYTHONUTF8"] = "1"
+    child_environment["PYTHONIOENCODING"] = "utf-8"
+    try:
+        result = subprocess.run(
+            ["markitdown", str(path)], text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", check=False,
+            env=child_environment,
+        )
+    except OSError:
+        fail(f"{label} markitdown extraction failed")
     if result.returncode:
         fail(f"{label} markitdown extraction failed")
     return result.stdout
@@ -590,31 +602,6 @@ def jpeg_header(payload: bytes, label: str):
         fail(f"{label} does not have a valid JPEG header")
 
 
-def bmp_pixels(path: Path, label: str) -> bytes:
-    try:
-        payload = path.read_bytes()
-        if payload[:2] != b"BM":
-            raise ValueError
-        offset = struct.unpack_from("<I", payload, 10)[0]
-        dib_size, width, height, planes, depth, compression = struct.unpack_from("<IiiHHI", payload, 14)
-        if dib_size < 40 or width != 192 or abs(height) != 96 or planes != 1 or (depth, compression) not in {(24, 0), (32, 3)}:
-            raise ValueError
-        channels = depth // 8
-        stride = ((width * channels + 3) // 4) * 4
-        rows = []
-        for row_index in range(abs(height)):
-            row = payload[offset + row_index * stride:offset + row_index * stride + width * channels]
-            if len(row) != width * channels:
-                raise ValueError
-            rows.append(bytes(channel for index in range(0, len(row), channels)
-                              for channel in (row[index + 2], row[index + 1], row[index])))
-        if height > 0:
-            rows.reverse()
-        return b"".join(rows)
-    except (OSError, IndexError, struct.error, ValueError):
-        fail(f"{label} sips output is unreadable")
-
-
 def normalized_pixels(
     payload: bytes,
     label: str,
@@ -622,17 +609,52 @@ def normalized_pixels(
     stem: str,
     suffix: str = ".png",
 ) -> bytes:
-    source = directory / f"{stem}{suffix}"
-    output = directory / f"{stem}.bmp"
-    source.write_bytes(payload)
-    result = subprocess.run(
-        ["sips", "-m", "/System/Library/ColorSync/Profiles/sRGB Profile.icc",
-         "-s", "format", "bmp", "-z", "96", "192", str(source), "--out", str(output)],
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
-    )
-    if result.returncode or not output.is_file():
-        fail(f"{label} is not decodable by sips")
-    return bmp_pixels(output, label)
+    del directory, stem, suffix  # Retained in the public helper signature for callers.
+    try:
+        with Image.open(io.BytesIO(payload)) as opened:
+            opened.verify()
+        with Image.open(io.BytesIO(payload)) as opened:
+            image = ImageOps.exif_transpose(opened)
+            image.load()
+            profile = image.info.get("icc_profile")
+            # PNG tRNS transparency is metadata in palette/RGB modes, not an A band.
+            if "transparency" in image.info:
+                image = image.convert("RGBA")
+            if profile:
+                try:
+                    image = ImageCms.profileToProfile(
+                        image,
+                        ImageCms.ImageCmsProfile(io.BytesIO(profile)),
+                        ImageCms.createProfile("sRGB"),
+                        outputMode="RGBA" if "A" in image.getbands() else "RGB",
+                    )
+                except (OSError, ValueError, ImageCms.PyCMSError):
+                    fail(f"{label} has an invalid ICC color profile")
+            if "A" in image.getbands():
+                alpha = image.convert("RGBA")
+                background = Image.new("RGBA", alpha.size, "white")
+                image = Image.alpha_composite(background, alpha).convert("RGB")
+            else:
+                image = image.convert("RGB")
+            image = image.resize((192, 96), Image.Resampling.LANCZOS)
+            return image.tobytes()
+    except (OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError):
+        fail(f"{label} is not a decodable image")
+
+
+def pdf_metadata(pdf_path: Path) -> tuple[str, list[tuple[float, float]]]:
+    """Return creator and page sizes using the verifier's PyMuPDF runtime."""
+    try:
+        import fitz
+    except ImportError:
+        fail("PDF metadata verification requires PyMuPDF; install project requirements")
+    try:
+        with fitz.open(pdf_path) as document:
+            creator = document.metadata.get("creator", "") or ""
+            sizes = [(float(page.rect.width), float(page.rect.height)) for page in document]
+    except (OSError, ValueError, RuntimeError) as error:
+        fail(f"PDF metadata is unreadable: {error}")
+    return creator, sizes
 
 
 def compare_pixels(
@@ -726,8 +748,8 @@ def validate_pdf_figures(pdf_path: Path, figures: list) -> None:
         # small additional proportion of channels, but not the mean tolerance.
         source_format = "jpeg" if render.suffix.lower() in {".jpg", ".jpeg"} else "png"
         if source_format == "jpeg":
-            # Use the PDF renderer's JPEG decoder on both sides. The original
-            # sips decoder remains authoritative for the separate DOCX check.
+            # Use the PDF renderer's JPEG decoder on both sides to avoid
+            # compounding two different resampling filters.
             source_pixmap = fitz.Pixmap(str(render))
             if source_pixmap.colorspace is not None and source_pixmap.colorspace.n != 3:
                 source_pixmap = fitz.Pixmap(fitz.csRGB, source_pixmap)
@@ -1060,7 +1082,15 @@ def validate_figure(root: Path, item: object):
             svg_payload = svg_png.read_bytes()
             png_header(svg_payload, "SVG raster")
             svg_pixels = normalized_pixels(svg_payload, "SVG raster", directory, "svg-normalized")
-        compare_pixels(svg_pixels, pixels, "SVG raster differs from accepted PNG")
+        if not pixels_match(svg_pixels, pixels):
+            try:
+                geometry_matches = masked_svg_pixels_match(
+                    render_source, svg_pixels, pixels
+                )
+            except SvgTextMaskError as exc:
+                fail(f"SVG raster differs from accepted PNG; {exc}")
+            if not geometry_matches:
+                fail("SVG raster differs from accepted PNG outside bounded text regions")
 
     return source if is_excalidraw else render, render, caption, render_payload, width, height, pixels
 
@@ -1344,6 +1374,7 @@ def validate_v2_bindings(
 
 
 def main() -> None:
+    configure_utf8_stdio()
     if len(sys.argv) != 2:
         fail("acceptance verifier requires one project directory")
     root = Path(sys.argv[1]).resolve()
@@ -1571,16 +1602,12 @@ def main() -> None:
         for value in [*points, *terms, *(figure[2] for figure in validated_figures)]:
             if normalized(value) not in compact:
                 fail(f"{label} markitdown output is missing required text: {value}")
-    metadata = subprocess.run(["pdfinfo", str(pdf_path)], text=True, stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT, check=False)
-    if metadata.returncode:
-        fail("PDF metadata is unreadable")
-    if not re.search(r"^Creator:\s+.*WPS", metadata.stdout, re.M):
+    creator, page_sizes = pdf_metadata(pdf_path)
+    if "WPS" not in creator:
         fail("PDF Creator must contain WPS")
-    page_match = re.search(r"^Pages:\s+(\d+)$", metadata.stdout, re.M)
-    if page_match is None or int(page_match.group(1)) <= 0:
+    if not page_sizes:
         fail("PDF delivery must contain at least one page")
-    pages = int(page_match.group(1))
+    pages = len(page_sizes)
     for label, text in extracted:
         require_ordered_source_coverage(label, text, source_blocks)
         require_ordered_export_coverage(
@@ -1594,10 +1621,15 @@ def main() -> None:
         fail("PDF delivery page count violates acceptance manifest constraints")
     if pdf_contract.get("page_size") != "A4":
         fail("acceptance manifest PDF page size must be A4")
-    for page in range(1, pages + 1):
-        detail = subprocess.run(["pdfinfo", "-f", str(page), "-l", str(page), str(pdf_path)],
-                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-        if detail.returncode or not re.search(rf"^Page\s+{page}\s+size:\s+.*\(A4\)$", detail.stdout, re.M):
+    a4_width, a4_height = 595.2756, 841.8898
+    for page, (width, height) in enumerate(page_sizes, 1):
+        portrait = math.isclose(width, a4_width, abs_tol=1.0) and math.isclose(
+            height, a4_height, abs_tol=1.0
+        )
+        landscape = math.isclose(width, a4_height, abs_tol=1.0) and math.isclose(
+            height, a4_width, abs_tol=1.0
+        )
+        if not (portrait or landscape):
             fail(f"PDF delivery page {page} must be A4")
 
     print(f"PASS: explicit acceptance manifest and artifacts at {root} are satisfied")

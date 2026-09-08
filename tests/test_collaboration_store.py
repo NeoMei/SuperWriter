@@ -3,6 +3,8 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import multiprocessing
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -10,6 +12,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from scripts.collaboration import store
 from scripts.collaboration.model import CollaborationError, apply_event
 from scripts.collaboration.store import (
     commit_event,
@@ -24,6 +27,14 @@ from collaboration_fixtures import approval_event, delivery_ready_state, pending
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "scripts" / "collaboration_state.py"
+
+
+def _commit_project_preference(root: str, event_id: str, expected_revision: int, queue) -> None:
+    try:
+        state = commit_event(Path(root), project_event(event_id), expected_revision)
+        queue.put(("ok", state["revision"]))
+    except CollaborationError as error:
+        queue.put(("error", str(error)))
 
 
 def digest(content: str) -> str:
@@ -89,7 +100,7 @@ def add_pending_object(root: Path, object_id: str = "approach") -> tuple[dict, d
     relative = Path("产出") / f"{object_id}.md"
     content = "# 写作方案\n"
     (root / relative).parent.mkdir(parents=True, exist_ok=True)
-    (root / relative).write_text(content, encoding="utf-8")
+    (root / relative).write_bytes(content.encode("utf-8"))
     obj = {
         "id": object_id,
         "kind": "approach",
@@ -108,6 +119,63 @@ def add_pending_object(root: Path, object_id: str = "approach") -> tuple[dict, d
 
 
 class CollaborationStoreTest(unittest.TestCase):
+    def test_state_lock_closes_handle_when_acquisition_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            handle = mock.Mock()
+            with mock.patch("scripts.collaboration.store.os.open", return_value=42), \
+                    mock.patch("scripts.collaboration.store.os.fdopen", return_value=handle), \
+                    mock.patch(
+                        "scripts.collaboration.store.acquire_file_lock",
+                        side_effect=OSError("lock denied"),
+                    ):
+                with self.assertRaisesRegex(CollaborationError, "cannot lock"):
+                    with store._state_lock(Path(directory)):
+                        self.fail("unavailable lock must not enter transaction")
+
+            handle.close.assert_called_once_with()
+
+    def test_state_files_are_utf8_with_lf_newlines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, "项目A")
+            commit_event(root, project_event("preference-lf", "简洁\n清晰"), 0)
+
+            state_bytes = (root / "协作状态.json").read_bytes()
+            view_bytes = (root / "流水线状态.md").read_bytes()
+            self.assertIn("项目A".encode("utf-8"), state_bytes)
+            self.assertIn("简洁".encode("utf-8"), view_bytes)
+            self.assertNotIn(b"\r\n", state_bytes)
+            self.assertNotIn(b"\r\n", view_bytes)
+            self.assertTrue(state_bytes.endswith(b"\n"))
+            self.assertTrue(view_bytes.endswith(b"\n"))
+
+    def test_real_processes_serialize_same_revision_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            initialize(root, "test-project")
+            context = multiprocessing.get_context("spawn")
+            queue = context.Queue()
+            processes = [
+                context.Process(
+                    target=_commit_project_preference,
+                    args=(str(root), f"process-{index}", 0, queue),
+                )
+                for index in range(2)
+            ]
+            for process in processes:
+                process.start()
+            results = [queue.get(timeout=10) for _ in processes]
+            for process in processes:
+                process.join(timeout=10)
+                self.assertEqual(process.exitcode, 0)
+
+            self.assertEqual(sum(result[0] == "ok" for result in results), 1)
+            self.assertEqual(sum(result[0] == "error" for result in results), 1)
+            self.assertIn("revision", next(result[1] for result in results if result[0] == "error"))
+            persisted = load_state(root)
+            self.assertEqual(persisted["revision"], 1)
+            self.assertEqual(len(persisted["decisions"]), 1)
+
     def test_put_object_preserves_each_version_in_content_addressed_snapshots(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -121,7 +189,7 @@ class CollaborationStoreTest(unittest.TestCase):
             )
             state = commit_event(root, changed, state["revision"])
             content = "# \u5199\u4f5c\u65b9\u6848 v2\n"
-            (root / first["path"]).write_text(content, encoding="utf-8")
+            (root / first["path"]).write_bytes(content.encode("utf-8"))
             second = deepcopy(first)
             second.update(version=2, sha256=digest(content), status="draft")
             state = commit_event(
@@ -146,7 +214,7 @@ class CollaborationStoreTest(unittest.TestCase):
                 state["revision"],
             )
             content = "# \u5199\u4f5c\u65b9\u6848 v2\n"
-            (root / first["path"]).write_text(content, encoding="utf-8")
+            (root / first["path"]).write_bytes(content.encode("utf-8"))
             second = deepcopy(first)
             second.update(version=2, sha256=digest(content), status="draft")
 
@@ -173,7 +241,7 @@ class CollaborationStoreTest(unittest.TestCase):
             root = Path(directory)
             content = "# \u65e7 v2 \u9879\u76ee\n"
             path = root / "写作共识.md"
-            path.write_text(content, encoding="utf-8")
+            path.write_bytes(content.encode("utf-8"))
             state = pending_state()
             state["objects"]["approach"]["sha256"] = digest(content)
             (root / "协作状态.json").write_text(
@@ -193,13 +261,18 @@ class CollaborationStoreTest(unittest.TestCase):
             root = Path(directory)
             content = "safe"
             path = root / "object.md"
-            path.write_text(content, encoding="utf-8")
+            path.write_bytes(content.encode("utf-8"))
             obj = {
                 "id": "brief", "kind": "brief", "path": "object.md", "version": 1,
                 "sha256": digest(content), "dependencies": {}, "status": "draft",
                 "metadata": {},
             }
-            (root / ".协作内容快照").symlink_to(Path(outside), target_is_directory=True)
+            try:
+                (root / ".协作内容快照").symlink_to(
+                    Path(outside), target_is_directory=True
+                )
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlinks unavailable on this Windows account: {error}")
 
             with self.assertRaisesRegex(CollaborationError, "snapshot"):
                 snapshot_object_content(root, obj)
@@ -384,7 +457,7 @@ class CollaborationStoreTest(unittest.TestCase):
             outline = deepcopy(drifted["objects"]["outline"])
             outline.update(version=2, status="draft")
             outline_path = root / outline["path"]
-            outline_path.write_text("revised outline", encoding="utf-8")
+            outline_path.write_bytes(b"revised outline")
             outline["sha256"] = hashlib.sha256(outline_path.read_bytes()).hexdigest()
             put = event_for_object("put_object", outline, "revise-outline", {"object": outline})
             revised = commit_event(root, put, drifted["revision"])
@@ -421,7 +494,7 @@ class CollaborationStoreTest(unittest.TestCase):
             outline = deepcopy(state["objects"]["outline"])
             outline.update(version=2, path="大纲-v2.md", status="draft")
             outline_path = root / outline["path"]
-            outline_path.write_text("revised outline", encoding="utf-8")
+            outline_path.write_bytes(b"revised outline")
             outline["sha256"] = hashlib.sha256(outline_path.read_bytes()).hexdigest()
             revised = commit_event(
                 root,
@@ -501,8 +574,11 @@ class CollaborationStoreTest(unittest.TestCase):
             root = Path(directory)
             initialize(root, "test-project")
             outside_file = Path(outside) / "other-customer.md"
-            outside_file.write_text("secret", encoding="utf-8")
-            (root / "escaped.md").symlink_to(outside_file)
+            outside_file.write_bytes(b"secret")
+            try:
+                (root / "escaped.md").symlink_to(outside_file)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlinks unavailable on this Windows account: {error}")
             for object_id, path in (("traversal", "../other.md"), ("symlink", "escaped.md")):
                 obj = {
                     "id": object_id,
@@ -549,7 +625,7 @@ class CollaborationStoreTest(unittest.TestCase):
             (root / obj["path"]).write_text("# 被直接改写\n", encoding="utf-8")
             load_state(root)
 
-            (root / obj["path"]).write_text(original, encoding="utf-8")
+            (root / obj["path"]).write_bytes(original.encode("utf-8"))
             restarted = load_state(root)
 
             self.assertEqual(restarted["objects"]["approach"]["status"], "stale")
@@ -571,7 +647,7 @@ class CollaborationStoreTest(unittest.TestCase):
             with self.assertRaisesRegex(CollaborationError, "stale"):
                 commit_event(root, rejected, state["revision"])
 
-            (root / obj["path"]).write_text(original, encoding="utf-8")
+            (root / obj["path"]).write_bytes(original.encode("utf-8"))
             restarted = load_state(root)
             self.assertEqual(restarted["objects"]["approach"]["status"], "stale")
             self.assertEqual(restarted["revision"], state["revision"])
@@ -659,11 +735,14 @@ class CollaborationStoreTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "客户 项目"
             root.mkdir()
+            child_env = os.environ.copy()
+            child_env.update(PYTHONIOENCODING="ascii", PYTHONUTF8="0")
             init = subprocess.run(
                 [sys.executable, str(CLI), "init", "--project", str(root), "--project-id", "客户A"],
                 text=True,
                 capture_output=True,
                 cwd=Path(directory),
+                env=child_env,
             )
             self.assertEqual(init.returncode, 0, init.stderr)
             self.assertEqual(json.loads(init.stdout)["project_id"], "客户A")
@@ -674,6 +753,7 @@ class CollaborationStoreTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 cwd=Path(directory),
+                env=child_env,
             )
             self.assertEqual(applied.returncode, 0, applied.stderr)
             self.assertEqual(json.loads(applied.stdout)["revision"], 1)
@@ -682,6 +762,7 @@ class CollaborationStoreTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 cwd=Path(directory),
+                env=child_env,
             )
             self.assertEqual(shown.returncode, 0, shown.stderr)
             self.assertEqual(json.loads(shown.stdout)["revision"], 1)
@@ -691,6 +772,7 @@ class CollaborationStoreTest(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 cwd=Path(directory),
+                env=child_env,
             )
             self.assertNotEqual(stale.returncode, 0)
             self.assertEqual(stale.stdout, "")

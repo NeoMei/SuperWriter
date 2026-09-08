@@ -12,14 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 def check_entry(root):
     entry = root / "references/legacy-v1/继续旧项目.md"
     text = entry.read_text(encoding="utf-8")
-    assert "references/legacy-v1/继续旧项目.md" in (root / "SKILL.md").read_text()
+    assert "references/legacy-v1/继续旧项目.md" in (root / "SKILL.md").read_text(encoding="utf-8")
     rows = dict(re.findall(r"^\| `([^`]+)` \| `([^`]+)` \|$", text, re.M))
     frozen = root / "references/legacy-v1"
-    skill = (frozen / "SKILL.md").read_text()
+    skill = (frozen / "SKILL.md").read_text(encoding="utf-8")
     refs = set(re.findall(r"references/[^`\s)]+", skill))
     assert set(rows) == refs, (rows, refs)
     changed = {"阶段契约.json", "门禁清单.md", "验收清单模板.json"}
-    provenance = json.loads((frozen / "source.json").read_text())
+    provenance = json.loads((frozen / "source.json").read_text(encoding="utf-8"))
     for original, target in rows.items():
         name = Path(original).name
         expected = f"references/legacy-v1/{name}" if name in changed else original
@@ -28,11 +28,11 @@ def check_entry(root):
         assert path.is_file(), path
         if name in changed:
             assert hashlib.sha256(path.read_bytes()).hexdigest() == provenance["files"][original]
-    contract = json.loads((root / rows["references/阶段契约.json"]).read_text())
+    contract = json.loads((root / rows["references/阶段契约.json"]).read_text(encoding="utf-8"))
     assert contract["version"] == 1
     assert [row["stage"] for row in contract["stages"]] == list(range(10))
     assert [row["stage"] for row in contract["stages"] if row["interaction"] == "human"] == [2, 5, 8]
-    template = json.loads((root / rows["references/验收清单模板.json"]).read_text())
+    template = json.loads((root / rows["references/验收清单模板.json"]).read_text(encoding="utf-8"))
     assert template["version"] == 1
     assert template["pipeline"]["human_gates"] == [2, 5, 8]
     assert hashlib.sha256((frozen / "SKILL.md").read_bytes()).hexdigest() == provenance["files"]["SKILL.md"]

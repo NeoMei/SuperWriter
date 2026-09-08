@@ -1,0 +1,11 @@
+# Frozen legacy contracts and approved fixtures are hashed byte-for-byte.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.docx binary
+*.pptx binary
+*.xlsx binary
+*.bin binary
+*.excalidraw text eol=lf

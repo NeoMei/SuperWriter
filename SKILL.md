@@ -31,6 +31,12 @@ python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" apply --project
 
 每次写入或审阅都绑定精确对象 ID、version、UTF-8 内容 SHA-256 与状态 revision。用户点击偏好、默认选项、沉默、机器检查和代理自己的判断都不是批准；只有带真实用户证据的 `approve` 事件可批准写作对象。HTML 审阅页是可选界面，与 CLI 使用同一状态库；不可用时退回 CLI，不改变语义。
 
+## 本机命令与路径
+
+上面的 Bash 示例用于 macOS。Windows 使用原生 Python 与 PowerShell：先设置 `$env:SUPERWRITER_SKILL_ROOT = "$HOME\.codex\skills\superwriter"`，再运行 `python "$env:SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project "C:\客户项目\技术方案"`。其他子命令同样替换解释器与环境变量语法；不要把 Bash 的 `export`、续行反斜杠直接交给 PowerShell。
+
+项目根参数使用本机绝对路径；状态与清单中登记的路径统一使用项目内 `/` 相对路径，例如 `章节/第一章.md`。文件按 UTF-8 保存，复制已确认内容时保留实际字节和换行；不通过重算摘要掩盖内容漂移。安装和自检由 SuperWriter 自己的跨平台入口负责，WPSComposer 的平台兼容性由其项目维护。
+
 ## 讨论方法
 
 先消化招标文件、评分表和已有材料，展示当前理解、矛盾、推荐方案及理由，再问一个会实际改变写法的问题。已有答案不重复问；只有真实取舍才给两到三个选项并标出推荐项。可借用 brainstorming 的发散与收敛方法讨论内容，但不自动转成软件实现计划、issue 或外部发布。

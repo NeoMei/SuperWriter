@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
-import fcntl
 import hashlib
 import json
 import os
@@ -21,6 +20,7 @@ from .model import (
     strict_json_loads,
     validate_state,
 )
+from .locking import acquire as acquire_file_lock, release as release_file_lock
 
 
 from .workflow import next_action
@@ -77,12 +77,19 @@ def _state_lock(root: Path) -> Iterator[None]:
     except OSError as error:
         raise CollaborationError(f"cannot open project state lock: {error}") from error
     try:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        yield
+        acquire_file_lock(lock_file)
     except OSError as error:
-        raise CollaborationError(f"cannot lock project state: {error}") from error
-    finally:
         lock_file.close()
+        raise CollaborationError(f"cannot lock project state: {error}") from error
+    try:
+        yield
+    finally:
+        try:
+            release_file_lock(lock_file)
+        except OSError as error:
+            raise CollaborationError(f"cannot unlock project state: {error}") from error
+        finally:
+            lock_file.close()
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -92,6 +99,7 @@ def _atomic_write(path: Path, content: str) -> None:
         with tempfile.NamedTemporaryFile(
             mode="w",
             encoding="utf-8",
+            newline="\n",
             dir=path.parent,
             prefix=f".{path.name}.",
             suffix=".tmp",

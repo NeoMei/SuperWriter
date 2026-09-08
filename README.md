@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.0`；协作流程协议为 v2。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.1`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -19,10 +19,10 @@ SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **Super
 
 ## 依赖
 
-- Python 3
+- Python 3.10 或更高版本（macOS 与 Windows 原生 Python）
 - WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
-- 交付检查所需的 `markitdown`、`pdfinfo`、`file`、`unzip`，以及 macOS `sips`、`osascript`/AppKit
-- 含配图或使用原生长文排版的 PDF 验收还要求运行验收器的 Python 环境安装 `PyMuPDF`（`python3 -m pip install PyMuPDF`），用于核对 PDF 图片像素和页眉页脚位置；缺少此依赖时验收失败，不自动安装。
+- 交付检查使用 `markitdown[docx,pdf]`、`Pillow`、`PyMuPDF` 和 `resvg-py`，版本范围见 `requirements.txt`。在运行验收器的 Python 环境执行 `python -m pip install -r requirements.txt`（macOS 可用 `python3`）；缺少所需依赖时验收失败，不自动安装。
+- 图片与 PDF 验收无需 `sips`、`osascript`、`pdfinfo`、`file` 或 `unzip`；SVG 中文字体由本机字体环境提供。
 - 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
 第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：
@@ -35,47 +35,69 @@ SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **Super
 
 ## 安装
 
+macOS 与 Windows 共用 Python 安装入口，不需要在 Windows 安装 Bash。依赖源仍通过上表中的环境变量指定；安装器不会下载依赖或修改 WPSComposer 项目。
+
+macOS：
+
 ```bash
-WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
-SUPERWRITER_AGENTS_SKILLS_ROOT=/path/to/agents/skills \
-SUPERWRITER_OPENCODE_SKILLS_ROOT=/path/to/opencode/skills \
-  bash install.sh
+export WPSCOMPOSER_SKILL_SOURCE="/path/to/WPSComposer/skills/WPSComposer"
+export SUPERWRITER_AGENTS_SKILLS_ROOT="/path/to/agents/skills"
+export SUPERWRITER_OPENCODE_SKILLS_ROOT="/path/to/opencode/skills"
+python3 install.py
 ```
 
-安装器预检完整 SuperWriter 运行时和依赖，再以事务方式同步到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`，并更新 Codex 路由。任一必需状态模块、审阅资源或验证入口缺失时，安装在修改宿主前失败；提交阶段失败会回滚。
+Windows PowerShell（路径支持中文和空格）：
 
-已安装后从 skill 根调用工具，不假设客户目录含有仓库脚本：
+```powershell
+$env:WPSCOMPOSER_SKILL_SOURCE = "C:\Skills\WPSComposer\skills\WPSComposer"
+$env:SUPERWRITER_AGENTS_SKILLS_ROOT = "$HOME\.agents\skills"
+$env:SUPERWRITER_OPENCODE_SKILLS_ROOT = "$HOME\.opencode\skills"
+python .\install.py
+```
+
+也可以使用 `bash install.sh` 或 `./install.ps1` 包装入口。安装器预检 SuperWriter 运行时和依赖，再以事务方式同步到用户目录下的 `.agents/skills`、`.claude/skills`、`.codex/skills`，并更新 Codex 路由。任一必需文件缺失时，安装在修改宿主前失败；提交阶段失败会回滚。WPSComposer 的系统适配和 Office 环境要求以其项目文档为准。
+
+已安装后从 skill 根调用工具，客户工作目录只保存客户产物。
+
+macOS：
 
 ```bash
 export SUPERWRITER_SKILL_ROOT="$HOME/.codex/skills/superwriter"
-python3 "$SUPERWRITER_SKILL_ROOT/scripts/verify_workflow.py" --source-root "$SUPERWRITER_SKILL_ROOT"
-python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project /absolute/customer/project
+python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project "/absolute/customer/project"
 python3 "$SUPERWRITER_SKILL_ROOT/scripts/review_server.py" --help
 ```
 
-## 验证
+Windows PowerShell：
 
-```bash
-bash scripts/verify.sh
-python3 scripts/verify_workflow.py --source-root .
-python3 scripts/verify_workflow.py --project /absolute/customer/project
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-bash tests/test_install.sh
+```powershell
+$env:SUPERWRITER_SKILL_ROOT = "$HOME\.codex\skills\superwriter"
+python "$env:SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project "C:\客户项目\技术方案"
+python "$env:SUPERWRITER_SKILL_ROOT/scripts/review_server.py" --help
 ```
 
-交付时先用当前 revision 的 v2 清单运行 `verify_acceptance.py`；PASS 后记录实际 delivery，再原子刷新清单到新 revision 并重跑验证。验证器不会自动批准内容或完成 delivery。
+状态、事件和验收清单中的项目内路径统一使用 `/`（例如 `章节/第一章.md`）；CLI 的 `--project` 使用本机目录路径。文件使用 UTF-8；批准绑定实际文件字节摘要，跨机器传输时须保留文件字节，换行变化仍会触发内容失效。
+
+## 验证
+
+从仓库运行（Windows 将 `python3` 换为 `python`）：
+
+```bash
+python3 scripts/verify.py
+python3 scripts/verify_workflow.py --source-root .
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+交付时，从安装的 skill 根调用 `scripts/verify_acceptance.py <项目目录>`。先使用当前 revision 的 v2 清单验证；PASS 后记录实际 delivery，再原子刷新清单到新 revision 并重跑验证。验证器不会自动批准内容或完成 delivery。
+
+已配置 macOS 与 Windows 的源码兼容性测试矩阵，WPSComposer 不在此仓库的系统兼容性测试范围。真实 WPS 导出及 Windows 实机验证证据单独记录，不能由 Mac 测试通过推定。改造说明与当前验证边界见 [双平台兼容性记录](docs/acceptance/mac-windows-compatibility.md)。
 
 ### 查询当前 SuperWriter 版本
 
 ```bash
-awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ { sub(/^version:[[:space:]]*/, ""); print; exit }' "./SKILL.md"
+python3 -c "from pathlib import Path; print(next(s for s in Path('SKILL.md').read_text(encoding='utf-8').splitlines() if s.startswith('version:')))"
 ```
 
-查询已安装副本时，将 `"./SKILL.md"` 换成：
-
-- `"$HOME/.agents/skills/superwriter/SKILL.md"`
-- `"$HOME/.claude/skills/superwriter/SKILL.md"`
-- `"$HOME/.codex/skills/superwriter/SKILL.md"`
+查询已安装副本时，将 `SKILL.md` 换为用户目录下 `.codex/skills/superwriter/SKILL.md`（或对应 Agents / Claude 路径）。
 
 ## 版本边界
 

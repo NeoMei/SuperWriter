@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import unittest
 
-from collaboration_fixtures import approval_event, pending_state
+from collaboration_fixtures import approval_event, delivery_ready_state, pending_state
 from scripts.collaboration.model import (
     CollaborationError,
     apply_event,
@@ -82,6 +82,61 @@ def put_event(obj: dict, event_id: str) -> dict:
 
 
 class CollaborationModelTest(unittest.TestCase):
+    def test_object_paths_reject_nonportable_windows_forms(self):
+        state = initial_state("test-project")
+        obj = {
+            "id": "brief", "kind": "brief", "path": "brief.md", "version": 1,
+            "sha256": "a" * 64, "dependencies": {}, "status": "draft", "metadata": {},
+        }
+        invalid_paths = (
+            r"C:\\customer\\brief.md",
+            "C:/customer/brief.md",
+            r"\\\\server\\share\\brief.md",
+            r"chapters\\brief.md",
+            "chapters/CON.md",
+            "chapters/aux.txt",
+            "chapters/CON .txt",
+            "chapters/COM¹.md",
+            "chapters/com².txt",
+            "chapters/LPT³.pdf",
+            "chapters/name. ",
+            "chapters/a:b.md",
+            "chapters/bad?.md",
+            "chapters/control\x01.md",
+        )
+        for index, path in enumerate(invalid_paths):
+            with self.subTest(path=path):
+                candidate = deepcopy(obj)
+                candidate["path"] = path
+                event = put_event(candidate, f"nonportable-{index}")
+                with self.assertRaisesRegex(CollaborationError, "project-relative"):
+                    apply_event(state, event)
+
+    def test_delivery_output_paths_use_same_portable_path_contract(self):
+        state = delivery_ready_state()
+        delivery = {
+            "id": "delivery", "kind": "delivery", "path": "delivery/report.json",
+            "version": 1, "sha256": "8" * 64,
+            "dependencies": {"manuscript": 1}, "status": "draft", "metadata": {},
+        }
+        state["objects"]["delivery"] = delivery
+        event = {
+            "id": "bad-output-path", "kind": "record_delivery",
+            "object_id": delivery["id"], "version": delivery["version"],
+            "sha256": delivery["sha256"], "channel": "agent",
+            "evidence": {"reference": "synthetic-test", "text": "checks passed"},
+            "payload": {
+                "manuscript_sha256": state["objects"]["manuscript"]["sha256"],
+                "outputs": {
+                    "docx": {"path": "delivery/CON.docx", "sha256": "1" * 64},
+                    "pdf": {"path": "delivery/result.pdf", "sha256": "2" * 64},
+                },
+            },
+        }
+
+        with self.assertRaisesRegex(CollaborationError, "project-relative"):
+            apply_event(state, event)
+
     def test_initial_state_matches_version_two_contract(self):
         state = initial_state("example-bid")
 

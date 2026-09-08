@@ -29,7 +29,7 @@ class NativePdfTextTest(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         shutil.copytree(ROOT / "tests/fixtures/native-longform", self.root, dirs_exist_ok=True)
-        self.markdown = (self.root / "manuscript.md").read_text()
+        self.markdown = (self.root / "manuscript.md").read_text(encoding="utf-8")
         self.pdf = self.root / "native.pdf"
 
     def verify(self):

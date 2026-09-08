@@ -1,0 +1,37 @@
+name: SuperWriter compatibility
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        python: ['3.10', '3.13']
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install SuperWriter verification dependencies
+        run: python -m pip install --only-binary=resvg-py -r requirements.txt
+      - name: Verify workflow contracts and frozen legacy bytes
+        run: python scripts/verify_workflow.py --source-root .
+      - name: Run Python regression suites
+        run: python -m unittest discover -s tests -p "test_*.py" -v

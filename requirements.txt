@@ -1,0 +1,4 @@
+markitdown[docx,pdf]>=0.1.4,<0.2
+Pillow>=10.1,<13
+PyMuPDF>=1.24,<2
+resvg-py>=0.4,<0.6

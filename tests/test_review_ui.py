@@ -13,7 +13,7 @@ class ReviewUIRegressionTest(unittest.TestCase):
         result = subprocess.run(
             ["node", str(ROOT / "tests/review_ui_harness.js"),
              str(ROOT / "scripts/review_assets/review.js")],
-            text=True, capture_output=True, timeout=15,
+            text=True, encoding="utf-8", capture_output=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout.count("PASS "), 5)

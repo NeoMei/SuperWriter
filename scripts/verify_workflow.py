@@ -11,10 +11,12 @@ import stat
 import sys
 
 try:
+    from collaboration.console import configure_utf8_stdio
     from collaboration.model import CollaborationError, strict_json_loads
     from collaboration.store import load_state
     from collaboration.workflow import next_action, require_delivery_ready
 except ImportError:
+    from scripts.collaboration.console import configure_utf8_stdio
     from scripts.collaboration.model import CollaborationError, strict_json_loads
     from scripts.collaboration.store import load_state
     from scripts.collaboration.workflow import next_action, require_delivery_ready
@@ -189,6 +191,7 @@ def verify_project(project: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser()
     targets = parser.add_mutually_exclusive_group(required=True)
     targets.add_argument("--source-root", type=Path)

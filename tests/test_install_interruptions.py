@@ -1,115 +1,139 @@
-"""Real installer rollback at interrupted rename boundaries, in disposable homes."""
-from pathlib import Path
+"""Installer rollback when interruption lands at atomic commit boundaries."""
+
+from __future__ import annotations
+
+import json
 import os
-import shlex
-import subprocess
+from pathlib import Path
+import signal
 import tempfile
 import unittest
+from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[1]
+import install as portable_installer
+from tests.test_installer_portable import DEPENDENCIES, tree_manifest
 
 
 class InstallInterruptionTest(unittest.TestCase):
-    def test_signal_during_explicit_failure_rollback_preserves_every_original(self):
-        setup = (ROOT / 'tests/test_install.sh').read_text().split('# Baseline:')[0]
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            shim = root / 'shim'
-            shim.mkdir()
-            (shim / 'mv').write_text('''#!/bin/bash
-set -eu
-src="$1"; dst="$2"
-if [[ "$src" == */new-skills && "$dst" == */.claude/skills ]] && \\
-   [ ! -f "$COMMIT_FAILURE_MARKER" ]; then
-  : > "$COMMIT_FAILURE_MARKER"
-  exit 96
-fi
-if [[ "$src" == */backup-skills && "$dst" == */.claude/skills ]] && \\
-   [ ! -f "$SIGNAL_MARKER" ]; then
-  : > "$SIGNAL_MARKER"
-  kill -TERM "$PPID"
-fi
-# Complete this real restore. The installer must still restore the earlier
-# agents host after receiving TERM during explicit rollback.
-exec /bin/mv "$@"
-''')
-            (shim / 'mv').chmod(0o755)
-            script = root / 'case.sh'
-            script.write_text(setup + '\nREPO_ROOT=' + shlex.quote(str(ROOT)) + '''
-new_fixture explicit-rollback-signal
-seed_existing_hosts
-before="$(snapshot_tree "$TEST_HOME")"
-set +e
-PATH="$SIGNAL_SHIM:$PATH" run_install > "$CASE_ROOT/install.log" 2>&1
-rc=$?
-set -e
-cat "$CASE_ROOT/install.log"
-[ -f "$COMMIT_FAILURE_MARKER" ] || fail "commit failure was not exercised"
-[ -f "$SIGNAL_MARKER" ] || fail "rollback interruption was not exercised"
-after="$(snapshot_tree "$TEST_HOME")"
-[ "$before" = "$after" ] || fail "interrupted explicit rollback changed host trees or route"
-[ "$rc" -eq 1 ] || fail "expected original commit failure after rollback, got $rc"
-''')
-            env = os.environ.copy()
-            env.update(SIGNAL_SHIM=str(shim), SIGNAL_MARKER=str(root / 'signaled'),
-                       COMMIT_FAILURE_MARKER=str(root / 'commit-failed'))
-            result = subprocess.run(['bash', str(script)], cwd=ROOT, env=env,
-                                    capture_output=True, text=True, timeout=60)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    def make_fixture(self, root: Path) -> tuple[Path, dict[str, str]]:
+        home = root / "home"
+        home.mkdir()
+        agents = root / "agents"
+        opencode = root / "opencode"
+        for skill in DEPENDENCIES:
+            path = agents / skill
+            path.mkdir(parents=True)
+            (path / "SKILL.md").write_text(f"# {skill}\n", encoding="utf-8")
+        excalidraw = opencode / "obsidian-excalidraw"
+        excalidraw.mkdir(parents=True)
+        (excalidraw / "SKILL.md").write_text("# obsidian-excalidraw\n", encoding="utf-8")
+        repository = root / "WPSComposer"
+        wps = repository / "skills" / "WPSComposer"
+        wps.mkdir(parents=True)
+        (wps / "SKILL.md").write_text(
+            "---\nname: WPSComposer\n---\n\n# WPS Composer\n", encoding="utf-8"
+        )
+        plugin = repository / ".codex-plugin" / "plugin.json"
+        plugin.parent.mkdir(parents=True)
+        plugin.write_text(
+            json.dumps({"name": "wps-composer", "version": "0.8.1"}), encoding="utf-8"
+        )
+        for host in (".agents", ".claude", ".codex"):
+            old = home / host / "skills" / "superwriter" / "OLD"
+            old.parent.mkdir(parents=True)
+            old.write_text(f"old:{host}\n", encoding="utf-8")
+        route = home / ".codex" / "AGENTS.md"
+        route.write_text("original route\n", encoding="utf-8")
+        return home, {
+            "HOME": str(home),
+            "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+            "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+            "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+        }
 
-    def test_signals_restore_all_hosts_and_route_at_commit_boundaries(self):
-        setup = (ROOT / 'tests/test_install.sh').read_text().split('# Baseline:')[0]
-        cases = [('TERM', 'backup-skills', 'after'),
-                 ('TERM', 'new-skills', 'before'),
-                 ('INT', 'new-skills', 'after'),
-                 ('HUP', 'backup-AGENTS.md', 'after'),
-                 ('TERM', 'new-AGENTS.md', 'after')]
-        for signal, target, timing in cases:
-            with self.subTest(signal=signal, target=target, timing=timing), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                shim = root / 'shim'
-                shim.mkdir()
-                marker = root / 'triggered'
-                (shim / 'mv').write_text('''#!/bin/bash
-set -eu
-src="$1"; dst="$2"
-match=0
-case "$SIGNAL_TARGET" in
-  backup-*) [ "${dst##*/}" = "$SIGNAL_TARGET" ] && match=1 ;;
-  *) [ "${src##*/}" = "$SIGNAL_TARGET" ] && match=1 ;;
-esac
-if [ "$match" = 1 ] && [ ! -f "$SIGNAL_MARKER" ]; then
-  : > "$SIGNAL_MARKER"
-  if [ "$SIGNAL_TIMING" = after ]; then /bin/mv "$@"; fi
-  kill -s "$SIGNAL_NAME" "$PPID"
-  exit 0
-fi
-exec /bin/mv "$@"
-''')
-                (shim / 'mv').chmod(0o755)
-                script = root / 'case.sh'
-                script.write_text(setup + '\nREPO_ROOT=' + shlex.quote(str(ROOT)) + '''
-new_fixture signal
-seed_existing_hosts
-before="$(snapshot_tree "$TEST_HOME")"
-set +e
-PATH="$SIGNAL_SHIM:$PATH" run_install > "$CASE_ROOT/install.log" 2>&1
-rc=$?
-set -e
-cat "$CASE_ROOT/install.log"
-[ -f "$SIGNAL_MARKER" ] || fail "interruption was not exercised"
-[ "$rc" -eq "$SIGNAL_EXIT" ] || fail "unexpected signal exit: $rc"
-after="$(snapshot_tree "$TEST_HOME")"
-[ "$before" = "$after" ] || fail "interruption changed host trees or route"
-''')
-                env = os.environ.copy()
-                env.update(SIGNAL_SHIM=str(shim), SIGNAL_NAME=signal, SIGNAL_TARGET=target,
-                           SIGNAL_TIMING=timing, SIGNAL_MARKER=str(marker),
-                           SIGNAL_EXIT=str({'TERM':143, 'INT':130, 'HUP':129}[signal]))
-                result = subprocess.run(['bash', str(script)], cwd=ROOT, env=env,
-                                        capture_output=True, text=True, timeout=60)
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    def test_interruptions_restore_all_hosts_and_route_at_commit_boundaries(self):
+        cases = (
+            (signal.SIGTERM, "backup-skills", ".agents", "after"),
+            (signal.SIGTERM, "new-skills", ".agents", "before"),
+            (signal.SIGINT, "new-skills", ".claude", "after"),
+            (getattr(signal, "SIGHUP", signal.SIGTERM), "backup-AGENTS.md", ".codex", "after"),
+            (signal.SIGTERM, "new-AGENTS.md", ".codex", "after"),
+        )
+        for signum, source_name, host_name, timing in cases:
+            with self.subTest(signum=signum, source=source_name, host=host_name, timing=timing):
+                with tempfile.TemporaryDirectory(prefix="superwriter-signal-") as temporary:
+                    home, environment = self.make_fixture(Path(temporary))
+                    before = tree_manifest(home)
+                    real_replace = portable_installer.atomic_replace
+                    triggered = False
+
+                    def interrupt_at_boundary(source: Path, target: Path) -> None:
+                        nonlocal triggered
+                        target_host = (home / host_name).resolve()
+                        if (
+                            not triggered
+                            and (
+                                source_name in (source.name, target.name)
+                                or source.name.startswith(source_name + ".")
+                                or target.name.startswith(source_name + ".")
+                            )
+                            and (
+                                target == target_host / "skills"
+                                or target.parent == target_host
+                                or source.parent == target_host
+                            )
+                        ):
+                            triggered = True
+                            if timing == "after":
+                                real_replace(source, target)
+                            raise portable_installer.InstallInterrupted(signum)
+                        real_replace(source, target)
+
+                    with mock.patch.object(
+                        portable_installer, "atomic_replace", side_effect=interrupt_at_boundary
+                    ):
+                        with self.assertRaises(portable_installer.InstallInterrupted):
+                            portable_installer.install(environment)
+                    self.assertTrue(triggered)
+                    self.assertEqual(tree_manifest(home), before)
+
+    @unittest.skipIf(os.name == "nt", "os.kill signal delivery differs on Windows")
+    def test_signal_during_explicit_rollback_does_not_interrupt_recovery(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-rollback-signal-") as temporary:
+            home, environment = self.make_fixture(Path(temporary))
+            before = tree_manifest(home)
+            real_replace = portable_installer.atomic_replace
+            commit_failed = False
+            rollback_signaled = False
+
+            def fail_then_signal_rollback(source: Path, target: Path) -> None:
+                nonlocal commit_failed, rollback_signaled
+                if (
+                    not commit_failed
+                    and source.name == "new-skills"
+                    and target == (home / ".claude" / "skills").resolve()
+                ):
+                    commit_failed = True
+                    raise OSError("injected commit failure")
+                if (
+                    commit_failed
+                    and not rollback_signaled
+                    and source.name == "backup-skills"
+                    and target == (home / ".agents" / "skills").resolve()
+                ):
+                    rollback_signaled = True
+                    os.kill(os.getpid(), signal.SIGTERM)
+                real_replace(source, target)
+
+            with mock.patch.object(
+                portable_installer, "atomic_replace", side_effect=fail_then_signal_rollback
+            ):
+                with self.assertRaises(OSError):
+                    portable_installer.install(environment)
+            self.assertTrue(commit_failed)
+            self.assertTrue(rollback_signaled)
+            self.assertEqual(tree_manifest(home), before)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

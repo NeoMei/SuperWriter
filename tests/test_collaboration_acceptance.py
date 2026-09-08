@@ -192,9 +192,8 @@ def delivery_state(root: Path, *, with_figure: bool = False) -> dict:
     }
     state["active_object_id"] = "delivery"
     state["stage"] = "delivery"
-    (root / "协作状态.json").write_text(
-        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    (root / "协作状态.json").write_bytes(
+        (json.dumps(state, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     )
     return state
 

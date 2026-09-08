@@ -120,7 +120,7 @@ class ReviewServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         changed = load_state(self.root)
         content = "# 写作方案 v2\n"
-        (self.root / self.obj["path"]).write_text(content, encoding="utf-8")
+        (self.root / self.obj["path"]).write_bytes(content.encode("utf-8"))
         revised = deepcopy(self.obj)
         revised.update(version=2, sha256=digest(content), status="draft")
         changed = commit_event(
@@ -195,7 +195,7 @@ class ReviewServerTest(unittest.TestCase):
         }
         for object_id, content in texts.items():
             obj = state["objects"][object_id]
-            (self.root / obj["path"]).write_text(content, encoding="utf-8")
+            (self.root / obj["path"]).write_bytes(content.encode("utf-8"))
             obj["sha256"] = digest(content)
             for approval in state["approvals"]:
                 if approval["object_id"] == object_id:
@@ -268,7 +268,7 @@ class ReviewServerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         changed = load_state(self.root)
         content = "# \u5199\u4f5c\u65b9\u6848 v2\n"
-        (self.root / self.obj["path"]).write_text(content, encoding="utf-8")
+        (self.root / self.obj["path"]).write_bytes(content.encode("utf-8"))
         revised = deepcopy(self.obj)
         revised.update(version=2, sha256=digest(content), status="draft")
         changed = commit_event(
@@ -351,7 +351,7 @@ class ReviewServerTest(unittest.TestCase):
         self.assertIn("image_url", view)
         revised = deepcopy(obj)
         new_content = '<svg xmlns="http://www.w3.org/2000/svg"><text>new</text></svg>'
-        image.write_text(new_content, encoding="utf-8")
+        image.write_bytes(new_content.encode("utf-8"))
         revised.update(version=2, sha256=digest(new_content))
         commit_event(self.root, event_for_object(
             "put_object", revised, "put-brief-image-v2", {"object": revised},
@@ -380,7 +380,7 @@ class ReviewServerTest(unittest.TestCase):
         outline = deepcopy(state["objects"]["outline"])
         outline.update(version=2, status="draft")
         outline_path = self.root / outline["path"]
-        outline_path.write_text("# 修订大纲\n", encoding="utf-8")
+        outline_path.write_bytes("# 修订大纲\n".encode("utf-8"))
         outline["sha256"] = digest("# 修订大纲\n")
         state = commit_event(
             self.root,
@@ -441,7 +441,7 @@ class ReviewServerTest(unittest.TestCase):
             "插入位置: 不应采信的错误格式\n"
         )
         figure_set = state["objects"]["figure-set"]
-        (self.root / figure_set["path"]).write_text(review_text, encoding="utf-8")
+        (self.root / figure_set["path"]).write_bytes(review_text.encode("utf-8"))
         figure_set["sha256"] = digest(review_text)
         for approval in state["approvals"]:
             if approval["object_id"] == "figure-set":
