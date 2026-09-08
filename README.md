@@ -81,12 +81,14 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
 
-### 未发布：发布后审查修复
+### v0.2.1 (2026-09-08)
+
+[SuperWriter 0.2.1 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.1)
 
 - 修复大纲连续调整后旧合稿批准被恢复，以及安装中断时回滚备份丢失的问题。
 - 修复审阅服务阻塞、历史图片显示和提交失败提示，保持当前版本确认。
 - 增加 PDF 实际配图校验，支持核对 WPS 长文目录、页眉和分节页码；相关验收需要 PyMuPDF。
-- 审查范围与验证证据见 [发布后全面审查报告](docs/acceptance/2026-09-08-post-release-audit.md)。这些补丁尚未发布。
+- 审查范围与验证证据见 [发布后全面审查报告](docs/acceptance/2026-09-08-post-release-audit.md)。
 
 ### v0.2.0 (2026-09-08)
 
