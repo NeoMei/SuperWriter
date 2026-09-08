@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.1.0`；协作流程协议为 v2。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.0`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -78,8 +78,19 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 
 ## 版本边界
 
-v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。仓库中的 Unreleased 更改尚未包含在 `v0.1.0` 发布标签。
+v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### v0.2.0 (2026-09-08)
+
+[SuperWriter 0.2.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.0)
+
+- 写前围绕目标、材料缺口和写作方法持续讨论，确认方案及大纲后进入逐章写作。
+- 方案、大纲、每章、配图集和合稿支持修改与当前版本确认；上游变化会使受影响的确认失效。
+- 可选本地 HTML 审阅，与对话路径共用可恢复状态和审阅记录。
+- 旧项目沿冻结 v1 入口继续，迁移须明确决定且不导入历史确认。
+- 通过实际 WPSComposer DOCX/PDF 验收后记录交付完成；安装与产物校验覆盖完整运行时。
+- 验收包含 168 项 Python 测试、安装事务和原生产物测试；模拟批准不代表真实用户验收。
 
 ### v0.1.0 (2026-08-20)
 
-截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。当前七阶段协作能力属于后续 Unreleased 源码。
+截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。七阶段协作能力从 `v0.2.0` 开始提供。

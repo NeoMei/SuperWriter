@@ -1,7 +1,7 @@
 ---
 name: superwriter
 description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.
-version: 0.1.0
+version: 0.2.0
 ---
 
 # SuperWriter —— 智能技术标写作助手

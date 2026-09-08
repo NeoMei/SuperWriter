@@ -74,7 +74,7 @@ class DependencyContractTest(unittest.TestCase):
     def test_dependency_manifest_matches_release_contract(self):
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["schema_version"], 1)
-        self.assertEqual(manifest["superwriter_version"], "0.1.0")
+        self.assertEqual(manifest["superwriter_version"], "0.2.0")
         by_id = {item["id"]: item for item in manifest["dependencies"]}
         self.assertEqual(set(by_id), {
             "WPSComposer", "grilling", "grill-me", "grill-with-docs",
@@ -94,8 +94,8 @@ class DependencyContractTest(unittest.TestCase):
     def test_skill_and_readme_publish_the_same_versions_and_dependency_ids(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("version: 0.1.0", skill)
-        self.assertIn("v0.1.0 (2026-08-20)", readme)
+        self.assertIn("version: 0.2.0", skill)
+        self.assertIn("v0.2.0 (2026-09-08)", readme)
         self.assertIn("WPSComposer `0.7.2`", skill)
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         for dependency in manifest["dependencies"]:
