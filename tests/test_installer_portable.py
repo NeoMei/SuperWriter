@@ -141,6 +141,14 @@ class PortableInstallerTest(unittest.TestCase):
         )
         self.assertEqual(selected, r"C:\Users\测试 用户")
 
+    def test_explicit_empty_home_does_not_fall_back_on_windows(self):
+        selected = portable_installer.select_home(
+            {"HOME": "", "USERPROFILE": r"C:\Users\runneradmin"},
+            platform_name="nt",
+            native_home=lambda: Path(r"C:\fallback"),
+        )
+        self.assertEqual(selected, "")
+
     def test_windows_directory_junction_is_recognized_as_installer_reference(self):
         junction = Path("simulated-junction")
         with mock.patch.object(portable_installer.os, "name", "nt"):
@@ -370,7 +378,14 @@ class PortableInstallerTest(unittest.TestCase):
             )
             self.assertEqual(len(retained), 1)
             self.assertEqual(retained[0].read_text(encoding="utf-8"), "old:.agents\n")
-            self.assertIn(str(retained[0].parents[2]), stderr.getvalue())
+            prefix = "Rollback incomplete: host backup retained at "
+            reported = [
+                Path(line.removeprefix(prefix))
+                for line in stderr.getvalue().splitlines()
+                if line.startswith(prefix)
+            ]
+            self.assertEqual(len(reported), 1)
+            self.assertTrue(os.path.samefile(reported[0], retained[0].parents[1]))
 
     def test_public_wps_reference_is_not_copied_into_hosts(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-wps-reference-") as temporary:

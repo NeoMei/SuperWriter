@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import os
 from pathlib import Path
 import stat
@@ -130,22 +131,45 @@ def _temporary_output(output: Path) -> Path:
     return Path(name)
 
 
-def _resvg_renderer(source: Path) -> bytes:
+def _resvg_renderer(source: Path, *, skip_system_fonts: bool = False) -> bytes:
     try:
+        from fontTools.ttLib import TTFont
+        import pymupdf
         import resvg_py
     except ImportError:
         raise RenderSvgError(
-            "SVG rendering requires resvg-py; install project requirements"
+            "SVG rendering requires resvg-py, PyMuPDF, and fonttools; "
+            "install project requirements"
         ) from None
     try:
         svg = source.read_text(encoding="utf-8")
-        return resvg_py.svg_to_bytes(
-            svg_string=svg,
-            resources_dir=str(source.parent),
-            # resvg loads the host font database and resolves generic SVG
-            # families from it, including platform CJK fallback faces.
-            skip_system_fonts=False,
-        )
+        font = pymupdf.Font("cjk")
+        if not font.buffer:
+            raise ValueError("PyMuPDF CJK fallback font is empty")
+        with tempfile.TemporaryDirectory(prefix="superwriter-cjk-font-") as temporary:
+            font_path = Path(temporary) / "DroidSansFallback.ttf"
+            # PyMuPDF's compact CJK font omits the PostScript name required by
+            # current fontdb/resvg. Complete only that metadata in the private
+            # temporary copy; outlines and metrics remain unchanged.
+            with TTFont(io.BytesIO(font.buffer)) as repaired:
+                for name_id, value in (
+                    (4, "Droid Sans Fallback Regular"),
+                    (6, "DroidSansFallback"),
+                    (16, "Droid Sans Fallback"),
+                    (17, "Regular"),
+                ):
+                    repaired["name"].setName(value, name_id, 3, 1, 0x0409)
+                repaired.save(str(font_path))
+            return resvg_py.svg_to_bytes(
+                svg_string=svg,
+                resources_dir=str(source.parent),
+                # Explicit SVG families such as Arial or PingFang remain first.
+                # The packaged font makes generic CJK fallback deterministic on
+                # hosts that do not install a CJK system font, including CI.
+                skip_system_fonts=skip_system_fonts,
+                font_files=[str(font_path)],
+                sans_serif_family="Droid Sans Fallback",
+            )
     except (OSError, UnicodeError, ValueError, RuntimeError):
         raise RenderSvgError(
             "SVG rendering failed: resvg could not render the SVG"

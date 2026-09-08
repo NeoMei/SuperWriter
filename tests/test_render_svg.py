@@ -14,6 +14,7 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "scripts" / "render_svg.py"
 SAMPLE = ROOT / "验收" / "模拟客户A" / "模拟标段1" / "配图" / "图1-国产化适配架构.svg"
+V2_SAMPLE = ROOT / "验收" / "协作写作-v2-模拟" / "配图" / "审阅记录确认循环.svg"
 
 
 def load_helper():
@@ -44,6 +45,51 @@ def valid_png() -> bytes:
 
 
 class RenderSvgTest(unittest.TestCase):
+    def test_bundled_cjk_fallback_renders_without_system_fonts(self):
+        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
+            self.skipTest("requires resvg-py and PyMuPDF")
+        module = load_helper()
+
+        payload = module._resvg_renderer(V2_SAMPLE, skip_system_fonts=True)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "fallback.png"
+            output.write_bytes(payload)
+            self.assertTrue(module._valid_png(output))
+            sys.path.insert(0, str(ROOT / "scripts"))
+            try:
+                from svg_geometry_compare import masked_svg_pixels_match
+                from verify_acceptance import normalized_pixels
+            finally:
+                sys.path.pop(0)
+            rendered = normalized_pixels(payload, "fallback", Path(temporary), "fallback")
+            approved = normalized_pixels(
+                V2_SAMPLE.with_suffix(".png").read_bytes(),
+                "approved",
+                Path(temporary),
+                "approved",
+            )
+            self.assertTrue(masked_svg_pixels_match(V2_SAMPLE, rendered, approved))
+
+    def test_resvg_receives_a_private_bundled_cjk_font_file(self):
+        module = load_helper()
+        seen = {}
+
+        class FakeResvg:
+            @staticmethod
+            def svg_to_bytes(**kwargs):
+                seen.update(kwargs)
+                font_file = Path(kwargs["font_files"][0])
+                if not font_file.is_file() or font_file.stat().st_size <= 1_000_000:
+                    raise AssertionError("bundled font was not readable during render")
+                return valid_png()
+
+        with mock.patch.dict(sys.modules, {"resvg_py": FakeResvg}):
+            self.assertEqual(module._resvg_renderer(SAMPLE), valid_png())
+        self.assertEqual(seen["sans_serif_family"], "Droid Sans Fallback")
+        self.assertFalse(seen["skip_system_fonts"])
+        self.assertFalse(Path(seen["font_files"][0]).exists())
+
     def test_real_resvg_renderer_produces_a_decodable_png(self):
         if importlib.util.find_spec("resvg_py") is None:
             self.skipTest("requires resvg-py")
@@ -107,7 +153,8 @@ class RenderSvgTest(unittest.TestCase):
             sys.modules, {"resvg_py": None}
         ), self.assertRaisesRegex(
             module.RenderSvgError,
-            r"^SVG rendering requires resvg-py; install project requirements$",
+            r"^SVG rendering requires resvg-py, PyMuPDF, and fonttools; "
+            r"install project requirements$",
         ):
             module.render_svg(SAMPLE, Path(temporary) / "render.png")
 

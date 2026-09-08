@@ -73,9 +73,8 @@ def select_home(
     platform_name: str = os.name,
     native_home: Callable[[], Path] = Path.home,
 ) -> str:
-    configured = environment.get("HOME", "")
-    if configured:
-        return configured
+    if "HOME" in environment:
+        return environment["HOME"]
     if platform_name == "nt":
         userprofile = environment.get("USERPROFILE", "")
         if userprofile:

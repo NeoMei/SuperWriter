@@ -527,7 +527,7 @@ def native_pdf_body_text(pdf_path: Path, docx_path: Path, markdown: str, text: s
                     entry = re.fullmatch(r"(.+?)(?:\.{2,}|…{2,})\s*([1-9]\d*)\s*", line.strip())
                     heading = headings.get(normalized(entry.group(1))) if entry else None
                     if heading is None:
-                        fail("PDF native table of contents contains unexpected content")
+                        fail(f"PDF native table of contents contains unexpected content: {line.strip()!r}")
                     toc_entries.append((heading, int(entry.group(2))))
             else:
                 body_pages.append("\n".join(raw_lines))

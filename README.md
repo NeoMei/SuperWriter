@@ -21,8 +21,8 @@ SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **Super
 
 - Python 3.10 或更高版本（macOS 与 Windows 原生 Python）
 - WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
-- 交付检查使用 `markitdown[docx,pdf]`、`Pillow`、`PyMuPDF` 和 `resvg-py`，版本范围见 `requirements.txt`。在运行验收器的 Python 环境执行 `python -m pip install -r requirements.txt`（macOS 可用 `python3`）；缺少所需依赖时验收失败，不自动安装。
-- 图片与 PDF 验收无需 `sips`、`osascript`、`pdfinfo`、`file` 或 `unzip`；SVG 中文字体由本机字体环境提供。
+- 交付检查使用 `markitdown[docx,pdf]`、`Pillow`、`PyMuPDF`、`resvg-py` 和 `fonttools`，版本范围见 `requirements.txt`。在运行验收器的 Python 环境执行 `python -m pip install -r requirements.txt`（macOS 可用 `python3`）；缺少所需依赖时验收失败，不自动安装。
+- 图片与 PDF 验收无需 `sips`、`osascript`、`pdfinfo`、`file` 或 `unzip`；SVG 优先使用本机声明字体，并为缺少中文字体的系统提供依赖包内置的中文字体回退。
 - 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
 第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：

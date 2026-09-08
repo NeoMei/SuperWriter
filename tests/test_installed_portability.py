@@ -73,14 +73,19 @@ import json, sys, threading, urllib.request
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 from review_server import create_server
+print("probe: create server", flush=True)
 server = create_server(Path(sys.argv[2]), port=0)
+print("probe: server ready", flush=True)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 try:
-    with urllib.request.urlopen(f"http://127.0.0.1:{server.server_address[1]}/?token={server.review_token}") as response:
+    with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+        f"http://127.0.0.1:{server.server_address[1]}/?token={server.review_token}", timeout=10
+    ) as response:
         assert response.status == 200
         assert b"html" in response.read().lower()
 finally:
+    print("probe: stop server", flush=True)
     server.shutdown()
     server.server_close()
     thread.join()
@@ -89,6 +94,6 @@ print("PASS installed HTTP review service")
             response = subprocess.run([sys.executable, "-c", probe,
                                        str(skill / "scripts"), str(project)],
                                       env=env, cwd=project, text=True, encoding="utf-8",
-                                      capture_output=True, timeout=20)
+                                      capture_output=True, timeout=60)
             self.assertEqual(response.returncode, 0, response.stdout + response.stderr)
             self.assertIn("PASS installed HTTP", response.stdout)
