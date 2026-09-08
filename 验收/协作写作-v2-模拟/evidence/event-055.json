@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-055-approve",
+  "kind": "approve",
+  "object_id": "figure-01",
+  "version": 3,
+  "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:55",
+    "text": "synthetic-test 确认同一 v2 矢量图内容，裁去空白画布后标签和关系不变。"
+  },
+  "payload": {}
+}

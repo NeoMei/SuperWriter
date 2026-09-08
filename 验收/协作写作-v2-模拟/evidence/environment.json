@@ -1,0 +1,68 @@
+{
+  "scope": "synthetic-test isolated host and real local WPS runtime; no production host update",
+  "python": {
+    "executable": "/Library/Developer/CommandLineTools/usr/bin/python3",
+    "version": "3.9.6 (default, May 22 2026, 11:13:45) \n[Clang 21.0.0 (clang-2100.1.1.101)]"
+  },
+  "platform": {
+    "platform": "macOS-26.6.2-arm64-arm-64bit",
+    "mac_ver": [
+      "26.6.2",
+      [
+        "",
+        "",
+        ""
+      ],
+      "arm64"
+    ],
+    "sw_vers": {
+      "command": [
+        "sw_vers"
+      ],
+      "exit_code": 0,
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83\n",
+      "stderr": ""
+    }
+  },
+  "commands": {
+    "python3": "/usr/bin/python3",
+    "file": "/usr/bin/file",
+    "unzip": "/usr/bin/unzip",
+    "pdfinfo": "/Users/neomei/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override/pdfinfo",
+    "markitdown": "/Users/neomei/.local/bin/markitdown",
+    "sips": "/usr/bin/sips",
+    "osascript": "/usr/bin/osascript"
+  },
+  "sources": {
+    "superwriter_worktree": "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing",
+    "installed_superwriter": "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter",
+    "installed_skill_sha256": "4aaf3a72cff11f118dca65694e4487deddb00c3ba48e986d671a6ab972c0f880",
+    "installed_acceptance_verifier_sha256": "749a4276bd041fb4dac185c62364706b46bca63afbff59d18688656edc128d4a",
+    "wpscomposer_source": "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer",
+    "wpscomposer_skill_sha256": "8a416500ec2781fb3fd6315253d78033a28a21a80fe61967dd59494a0774c075",
+    "isolated_env_file": "task-8-scratch/isolated-env.json"
+  },
+  "git_author": {
+    "name": {
+      "command": [
+        "git",
+        "config",
+        "user.name"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    },
+    "email": {
+      "command": [
+        "git",
+        "config",
+        "user.email"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "user_acceptance": false
+}

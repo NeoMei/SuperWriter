@@ -1,0 +1,27 @@
+# Actual installed-skill behavior evidence
+
+This is a historical actual next response authored after reading the isolated installed SuperWriter skill and the listed synthetic inputs. It is not a fabricated conversation transcript, real user reply, or user acceptance. Run 1 covered the chapters, material state, preference, and messaging authority, but omitted how the supplied single-flowchart requirement fits. Run 2 below corrects that omission without rewriting this response.
+
+## Exact test prompt
+
+这是一次 synthetic-test，不等待真实用户答复。请按照当前已安装 SuperWriter SKILL，在起草写作方案前给出下一条实际回复。事实：P01 要求审阅流程、逐章确认与中断恢复；P02 要求区分材料获取安排和可用证据，并做文件一致性复核；当前有模拟流程说明和验收要求，测量表尚未放入项目，模拟负责人仅同意稍后提供；界面里曾记录“正式、具体”的写作偏好，但没有任何方案批准。负责人名称只用于材料登记，没有授权你向其发送消息。正文为两章、一张流程图，禁止无依据的速度或效果承诺。请先展示理解与推荐理由，再只问一个会改变写法的问题。
+
+## Actual next response
+
+我已把本次 synthetic-test 的写作边界收敛为两条主线：第一章回应 P01，说明输入登记、方案和大纲审阅、逐章修改确认以及中断恢复；第二章回应 P02，说明材料缺口、证据核验、文件一致性和交付复核。现有模拟流程说明可以支撑流程写法，但“模拟负责人同意稍后提供测量表”只代表 acquisition_status=agreed；文件实际放入当前项目并核对样本与计量口径后，才能记为 acquired + verified 并作为正文依据。界面中“正式、具体”的偏好只用于调整文风，不构成对方案或后续对象的批准；负责人名称也不授权我代为发送消息。
+
+我建议即使后续取得并核验测量表，也只用它说明需要记录哪些字段和怎样核验，不引用平均时长或响应速度。这样既能具体回应 P02 的证据要求，又不会把 synthetic-test 数据写成效果承诺。
+
+聚焦问题（synthetic-test，将由脚本明确选择推荐项继续，不冒充真实用户答复）：第二章是否采用“取得并核验模拟测量表后，只描述记录方法、不引用量化效果”的写法？
+
+## Explicit synthetic continuation
+
+The harness will explicitly select the recommended handling so execution can continue; this is not a user reply or approval.
+
+## Bound sources
+
+- Installed skill: `/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/SKILL.md` (`41568fb13b3282d91decfa32ae253f72b648324ab62d22fb3afbb5bb59f40ff9`)
+- `/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/demo-inputs/写作目标.md` (`2c9e193cc168cade6ada6ced97e7fe3cefefc3be133069cac9c50927bb18e860`)
+- `/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/demo-inputs/支撑材料.md` (`1852ef1d61de628b3ac76dd1964ce96b452751986fb5630a25c7de14adad6a24`)
+- `/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/demo-inputs/补充测量材料.md` (`d84760d5112e685df193a8ec43ed40e28f1fb1d668966ce5be0bf84a63e04031`)
+- `/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/demo-inputs/要求材料.md` (`989eea885aa204d50cd4c1fe69b674bf98a5a4a5ccf4e285bce580122037cdec`)

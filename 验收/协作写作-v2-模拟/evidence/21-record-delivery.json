@@ -1,0 +1,20 @@
+{
+  "scope": "synthetic-test machine receipt after complete validation PASS",
+  "command": [
+    "python3",
+    "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/scripts/collaboration_state.py",
+    "apply",
+    "--project",
+    "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点",
+    "--event-file",
+    "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点/record-delivery.json",
+    "--expected-revision",
+    "62"
+  ],
+  "expected_revision": 62,
+  "exit_code": 0,
+  "stderr": "",
+  "result_revision": 63,
+  "delivery_status": "verified",
+  "event_id": "synthetic-063-record_delivery"
+}

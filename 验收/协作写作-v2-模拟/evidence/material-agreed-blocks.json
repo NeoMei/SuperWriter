@@ -1,0 +1,7 @@
+{
+  "action": "wait",
+  "object_id": "chapter-02",
+  "blockers": [
+    "measurement: must be acquired and verified"
+  ]
+}

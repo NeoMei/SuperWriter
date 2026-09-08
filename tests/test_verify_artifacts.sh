@@ -17,6 +17,12 @@ fresh_fixture() {
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
   cp "$REPO_ROOT/scripts/check_dependencies.py" "$fixture/scripts/check_dependencies.py"
   cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
+  cp "$REPO_ROOT/scripts/verify_workflow.py" "$fixture/scripts/verify_workflow.py"
+  cp "$REPO_ROOT/scripts/collaboration_state.py" "$fixture/scripts/collaboration_state.py"
+  cp "$REPO_ROOT/scripts/review_server.py" "$fixture/scripts/review_server.py"
+  rm -rf "$fixture/scripts/collaboration" "$fixture/scripts/review_assets"
+  cp -R "$REPO_ROOT/scripts/collaboration" "$fixture/scripts/collaboration"
+  cp -R "$REPO_ROOT/scripts/review_assets" "$fixture/scripts/review_assets"
   cp "$REPO_ROOT/scripts/render_svg.py" "$fixture/scripts/render_svg.py"
   cp "$REPO_ROOT/scripts/render_svg_macos.js" "$fixture/scripts/render_svg_macos.js"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
@@ -300,11 +306,220 @@ temporary.replace(docx)
 PY
 }
 
+convert_project_to_v2() {
+  local fixture="$1"
+  local project="$fixture/验收/模拟客户A/模拟标段1"
+  python3 -B - "$fixture/scripts" "$project" <<'PY'
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+scripts, root = map(Path, sys.argv[1:])
+sys.path.insert(0, str(scripts))
+from collaboration.model import apply_event, initial_state
+
+manifest_path = root / "验收清单.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+(root / "写作共识.md").write_text(
+    "# 写作共识\n\n本文件仅用于 synthetic-test 验收夹具。\n", encoding="utf-8"
+)
+(root / "配图/配图集审阅.md").write_text(
+    "# synthetic-test 配图集审阅\n\n## figure-01\n"
+    "图题: 图 1 国产化适配架构\n"
+    "插入位置: 第三章“国产化适配架构”段后\n",
+    encoding="utf-8",
+)
+(root / "交付/synthetic-test-验收报告.md").parent.mkdir(parents=True, exist_ok=True)
+(root / "交付/synthetic-test-验收报告.md").write_text(
+    "# synthetic-test 交付验收草稿\n\n等待原生文件检查。\n", encoding="utf-8"
+)
+
+def file_digest(relative):
+    return hashlib.sha256((root / relative).read_bytes()).hexdigest()
+
+def add_approved(state, object_id, kind, path, dependencies, metadata):
+    updated = deepcopy(state)
+    updated["objects"][object_id] = {
+        "id": object_id, "kind": kind, "path": path, "version": 1,
+        "sha256": file_digest(path), "dependencies": dependencies,
+        "status": "pending_review", "metadata": metadata,
+    }
+    updated["active_object_id"] = object_id
+    obj = updated["objects"][object_id]
+    event = {
+        "id": f"synthetic-test-approve-{object_id}", "kind": "approve",
+        "object_id": object_id, "version": 1, "sha256": obj["sha256"],
+        "channel": "chat",
+        "evidence": {
+            "reference": "synthetic-test",
+            "text": f"synthetic-test explicit approval for {object_id}",
+        },
+        "payload": {},
+    }
+    return apply_event(updated, event)
+
+state = initial_state("synthetic-test-native-acceptance")
+state = add_approved(state, "approach", "approach", "写作共识.md", {},
+                     {"material_resolutions": {}})
+chapter_ids = []
+state = add_approved(state, "outline", "outline", "大纲.md", {"approach": 1},
+                     {"chapter_order": [f"chapter-{item['number']}" for item in manifest["chapters"]]})
+for item in manifest["chapters"]:
+    object_id = f"chapter-{item['number']}"
+    chapter_ids.append(object_id)
+    state = add_approved(
+        state, object_id, "chapter", item["path"], {"approach": 1, "outline": 1},
+        {"required_material_ids": []},
+    )
+figure = manifest["figures"][0]
+state = add_approved(
+    state, "figure-01", "figure", figure["render"], {"chapter-3": 1}, {},
+)
+figure_dependencies = {object_id: 1 for object_id in chapter_ids}
+figure_dependencies["figure-01"] = 1
+state = add_approved(
+    state, "figure-set", "figure_set", "配图/配图集审阅.md",
+    figure_dependencies, {"figure_ids": ["figure-01"], "mode": "generated"},
+)
+manuscript_dependencies = {object_id: 1 for object_id in chapter_ids}
+manuscript_dependencies["figure-set"] = 1
+state = add_approved(
+    state, "manuscript", "manuscript", "合并稿.md", manuscript_dependencies, {},
+)
+delivery_path = "交付/synthetic-test-验收报告.md"
+state["objects"]["delivery"] = {
+    "id": "delivery", "kind": "delivery", "path": delivery_path,
+    "version": 1, "sha256": file_digest(delivery_path),
+    "dependencies": {"manuscript": 1}, "status": "draft", "metadata": {},
+}
+state["active_object_id"] = "delivery"
+state["stage"] = "delivery"
+(root / "协作状态.json").write_text(
+    json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+)
+manifest["version"] = 2
+manifest["pipeline"] = {
+    "workflow_version": 2, "state": "协作状态.json",
+    "state_revision": state["revision"], "manuscript_object_id": "manuscript",
+}
+manifest_path.write_text(
+    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+)
+PY
+}
+
+record_v2_delivery() {
+  local fixture="$1"
+  local project="$fixture/验收/模拟客户A/模拟标段1"
+  local event="$project/record-delivery.json"
+  local revision
+  revision="$(python3 -B - "$project" "$event" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+root, event_path = map(Path, sys.argv[1:])
+state = json.loads((root / "协作状态.json").read_text(encoding="utf-8"))
+manifest = json.loads((root / "验收清单.json").read_text(encoding="utf-8"))
+delivery = state["objects"]["delivery"]
+outputs = {}
+for kind in ("docx", "pdf"):
+    relative = manifest["outputs"][kind]
+    outputs[kind] = {
+        "path": relative,
+        "sha256": hashlib.sha256((root / relative).read_bytes()).hexdigest(),
+    }
+event = {
+    "id": "synthetic-test-record-delivery", "kind": "record_delivery",
+    "object_id": "delivery", "version": delivery["version"],
+    "sha256": delivery["sha256"], "channel": "agent",
+    "evidence": {
+        "reference": "synthetic-test-native-verifier",
+        "text": "synthetic-test native artifact checks passed",
+    },
+    "payload": {
+        "manuscript_sha256": state["objects"]["manuscript"]["sha256"],
+        "outputs": outputs,
+    },
+}
+event_path.write_text(json.dumps(event, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+print(state["revision"])
+PY
+)"
+  python3 -B "$fixture/scripts/collaboration_state.py" apply \
+    --project "$project" --event-file "$event" --expected-revision "$revision" >/dev/null
+}
+
+refresh_v2_manifest_revision() {
+  local project="$1"
+  python3 -B - "$project" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+manifest_path = root / "验收清单.json"
+state = json.loads((root / "协作状态.json").read_text(encoding="utf-8"))
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+manifest["pipeline"]["state_revision"] = state["revision"]
+temporary = manifest_path.with_name(".验收清单.json.synthetic-test.tmp")
+with temporary.open("w", encoding="utf-8") as stream:
+    json.dump(manifest, stream, ensure_ascii=False, indent=2)
+    stream.write("\n")
+    stream.flush()
+    os.fsync(stream.fileno())
+os.replace(temporary, manifest_path)
+PY
+}
+
 baseline="$(fresh_fixture baseline)"
 PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
   'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
+
+v2_draft="$(fresh_fixture v2-draft)"
+convert_project_to_v2 "$v2_draft"
+expect_accepted v2-draft "$v2_draft" \
+  --acceptance-dir "$v2_draft/验收/模拟客户A/模拟标段1"
+
+record_v2_delivery "$v2_draft"
+expect_rejected v2-recorded-stale-manifest \
+  "FAIL: acceptance manifest state revision differs from current collaboration state" \
+  "$v2_draft" --acceptance-dir "$v2_draft/验收/模拟客户A/模拟标段1"
+refresh_v2_manifest_revision "$v2_draft/验收/模拟客户A/模拟标段1"
+expect_accepted v2-final "$v2_draft" \
+  --acceptance-dir "$v2_draft/验收/模拟客户A/模拟标段1"
+
+v2_downgrade="$(fresh_fixture v2-downgrade)"
+convert_project_to_v2 "$v2_downgrade"
+python3 -B - "$v2_downgrade/验收/模拟客户A/模拟标段1/验收清单.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+manifest["version"] = 1
+manifest["pipeline"] = {
+    "status": "流水线状态.md", "score_table": "评分表解析.md",
+    "matrix": "应答矩阵.md", "outline": "大纲.md", "completed_stage": 9,
+    "human_gates": [2, 5, 8], "machine_gates": [0, 3, 6, 7],
+    "stage_evidence": [{"stage": stage, "path": path} for stage, path in enumerate([
+        "评分表解析.md", "CONTEXT.md", "深访记录.md", "大纲.md",
+        "章节/02-总体技术方案.md", "章节/缺口登记.md",
+        "配图/图1-国产化适配架构.excalidraw.md", "合并稿.md", "终稿审定.md",
+        "导出/技术标-模拟标段1.docx",
+    ])],
+}
+path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+expect_rejected v2-downgrade "FAIL: collaborative project cannot downgrade acceptance" \
+  "$v2_downgrade" --acceptance-dir "$v2_downgrade/验收/模拟客户A/模拟标段1"
 
 ai_jpg_fixture="$(fresh_fixture ai-image-jpg)"
 convert_fixture_to_ai_jpg "$ai_jpg_fixture"
@@ -953,104 +1168,6 @@ for host in .agents .claude .codex; do
   rm -rf "$missing_dependency-test-home/$host/skills/grill-me"
 done
 expect_rejected missing-dependency "grill-me is missing or incomplete" "$missing_dependency"
-
-# Stage interaction metadata is the sole execution contract. Prose cannot create
-# another pause, while a metadata mutation must be rejected.
-unlabelled_pause="$(fresh_fixture unlabelled-pause)"
-python3 - "$unlabelled_pause/SKILL.md" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-needle = "**阶段 4 分章写作**"
-assert needle in text
-path.write_text(text.replace(needle, needle + "：写作前必须停下等待用户确认；", 1), encoding="utf-8")
-PY
-reinstall_fixture "$unlabelled_pause"
-expect_accepted unlabelled-pause "$unlabelled_pause"
-
-synonym_pause="$(fresh_fixture synonym-pause)"
-python3 - "$synonym_pause/SKILL.md" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-needle = "**阶段 4 分章写作**"
-path.write_text(text.replace(needle, needle + "：继续前必须先征得用户同意；", 1), encoding="utf-8")
-PY
-reinstall_fixture "$synonym_pause"
-expect_accepted synonym-pause "$synonym_pause"
-
-confirmation_record="$(fresh_fixture confirmation-record)"
-python3 - "$confirmation_record/SKILL.md" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-needle = "**阶段 4 分章写作**"
-path.write_text(text.replace(needle, needle + "：加载门 2 客户确认记录后自动继续；", 1), encoding="utf-8")
-PY
-reinstall_fixture "$confirmation_record"
-expect_accepted confirmation-record "$confirmation_record"
-
-invalid_stage_contract="$(fresh_fixture invalid-stage-contract)"
-python3 - "$invalid_stage_contract/references/阶段契约.json" <<'PY'
-import json, sys
-from pathlib import Path
-path = Path(sys.argv[1])
-if path.exists():
-    data = json.loads(path.read_text(encoding="utf-8"))
-else:
-    data = {"version": 1, "stages": [{"stage": n, "interaction": "machine", "action": "continue"} for n in range(10)]}
-data["stages"][4]["interaction"] = "human"
-data["stages"][4]["action"] = "wait"
-path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-PY
-reinstall_fixture "$invalid_stage_contract"
-expect_rejected invalid-stage-contract "FAIL: stage interaction contract is invalid" "$invalid_stage_contract"
-
-duplicate_stage_key="$(fresh_fixture duplicate-stage-key)"
-python3 - "$duplicate_stage_key/references/阶段契约.json" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1]); text = path.read_text(encoding="utf-8")
-path.write_text(text.replace('{\n  "version": 1,', '{\n  "version": 1,\n  "version": 1,', 1), encoding="utf-8")
-PY
-reinstall_fixture "$duplicate_stage_key"
-expect_rejected duplicate-stage-key "FAIL: stage interaction contract is invalid: duplicate key: version" "$duplicate_stage_key"
-
-for contract_case in 'version:float' 'stage:bool' 'gate:float'; do
-  field="${contract_case%%:*}"
-  kind="${contract_case#*:}"
-  invalid_contract_integer="$(fresh_fixture "contract-$field-$kind")"
-  python3 - "$invalid_contract_integer/references/阶段契约.json" "$field" "$kind" <<'PY'
-import json, sys
-from pathlib import Path
-path = Path(sys.argv[1]); field, kind = sys.argv[2:]
-data = json.loads(path.read_text(encoding="utf-8"))
-if field == "version": target, key = data, "version"
-elif field == "stage": target, key = data["stages"][0], "stage"
-else: target, key = data["stages"][0], "gate"
-value = target[key]
-target[key] = bool(value) if kind == "bool" else float(value)
-path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-PY
-  reinstall_fixture "$invalid_contract_integer"
-  expect_rejected "contract-$field-$kind" "FAIL: stage interaction contract integer fields must use JSON integers" \
-    "$invalid_contract_integer"
-done
-
-invalid_gate_metadata="$(fresh_fixture invalid-gate-metadata)"
-python3 - "$invalid_gate_metadata/references/门禁清单.md" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-path.write_text(text.replace("## 门 5 章节核查 [interaction=human]", "## 门 5 章节核查（非人工）", 1), encoding="utf-8")
-PY
-reinstall_fixture "$invalid_gate_metadata"
-expect_rejected invalid-gate-metadata "FAIL: gate interaction metadata is invalid" "$invalid_gate_metadata"
 
 # Backup discovery is name/date independent and never permits backup skills in a host root.
 discoverable_backup="$(fresh_fixture discoverable-backup)"

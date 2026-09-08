@@ -1,0 +1,710 @@
+{
+  "schema_version": 2,
+  "project_id": "synthetic-collaborative-writing",
+  "revision": 29,
+  "stage": "illustrations",
+  "active_object_id": "chapter-02",
+  "objects": {
+    "brief": {
+      "id": "brief",
+      "kind": "brief",
+      "path": "目标与材料分析.md",
+      "version": 1,
+      "sha256": "8124f524e4f939b7bbfa3e8f54d7908f24291993a2cfd093684798b851c402da",
+      "dependencies": {},
+      "status": "draft",
+      "metadata": {}
+    },
+    "approach": {
+      "id": "approach",
+      "kind": "approach",
+      "path": "写作共识.md",
+      "version": 2,
+      "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+      "dependencies": {},
+      "status": "approved",
+      "metadata": {}
+    },
+    "outline": {
+      "id": "outline",
+      "kind": "outline",
+      "path": "大纲.md",
+      "version": 2,
+      "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+      "dependencies": {
+        "approach": 2
+      },
+      "status": "approved",
+      "metadata": {
+        "chapter_order": [
+          "chapter-01",
+          "chapter-02"
+        ]
+      }
+    },
+    "chapter-01": {
+      "id": "chapter-01",
+      "kind": "chapter",
+      "path": "章节/01-审阅流程.md",
+      "version": 2,
+      "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+      "dependencies": {
+        "approach": 2,
+        "outline": 2
+      },
+      "status": "approved",
+      "metadata": {
+        "required_material_ids": []
+      }
+    },
+    "chapter-02": {
+      "id": "chapter-02",
+      "kind": "chapter",
+      "path": "章节/02-异常验收.md",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "dependencies": {
+        "approach": 2,
+        "outline": 2
+      },
+      "status": "approved",
+      "metadata": {
+        "required_material_ids": [
+          "measurement"
+        ]
+      }
+    }
+  },
+  "materials": {
+    "measurement": {
+      "id": "measurement",
+      "description": "模拟测量记录",
+      "purpose": "核验记录字段，不用于效果承诺",
+      "affected_objects": [
+        "chapter-02"
+      ],
+      "critical": true,
+      "source": "当前模拟项目材料/补充测量材料.md",
+      "acquisition_method": "由模拟负责人提供项目内测试表",
+      "acquisition_status": "acquired",
+      "verification_status": "verified",
+      "resolution": ""
+    }
+  },
+  "decisions": [
+    {
+      "event_id": "synthetic-001-record_preference",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:1",
+        "text": "synthetic-test 记录写作偏好；该偏好不构成方案批准。"
+      },
+      "recorded_at": "2026-09-07T16:32:48.346986Z",
+      "scope": "project",
+      "text": "正式、具体"
+    }
+  ],
+  "approvals": [
+    {
+      "event_id": "synthetic-010-approve",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:10",
+        "text": "synthetic-test 确认当前方案及补材获取安排。"
+      },
+      "recorded_at": "2026-09-07T16:32:48.890976Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "synthetic-017-approve",
+      "object_id": "outline",
+      "version": 2,
+      "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:17",
+        "text": "synthetic-test 确认当前两章大纲。"
+      },
+      "recorded_at": "2026-09-07T16:32:49.307153Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "synthetic-024-approve",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:24",
+        "text": "synthetic-test 确认修订后的第一章。"
+      },
+      "recorded_at": "2026-09-07T16:32:49.768783Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "synthetic-028-approve",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:28",
+        "text": "synthetic-test 确认第二章，材料仅用于记录方法示例。"
+      },
+      "recorded_at": "2026-09-07T16:32:50.077262Z",
+      "superseded_by": null
+    }
+  ],
+  "processed_events": {
+    "synthetic-001-record_preference": {
+      "id": "synthetic-001-record_preference",
+      "kind": "record_preference",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:1",
+        "text": "synthetic-test 记录写作偏好；该偏好不构成方案批准。"
+      },
+      "payload": {
+        "scope": "project",
+        "text": "正式、具体"
+      }
+    },
+    "synthetic-002-put_object": {
+      "id": "synthetic-002-put_object",
+      "kind": "put_object",
+      "object_id": "brief",
+      "version": 1,
+      "sha256": "8124f524e4f939b7bbfa3e8f54d7908f24291993a2cfd093684798b851c402da",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:2",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "brief",
+          "kind": "brief",
+          "path": "目标与材料分析.md",
+          "version": 1,
+          "sha256": "8124f524e4f939b7bbfa3e8f54d7908f24291993a2cfd093684798b851c402da",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-003-advance": {
+      "id": "synthetic-003-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:3",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "approach"
+      }
+    },
+    "synthetic-004-upsert_material": {
+      "id": "synthetic-004-upsert_material",
+      "kind": "upsert_material",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:4",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "material": {
+          "id": "measurement",
+          "description": "模拟测量记录",
+          "purpose": "核验记录字段，不用于效果承诺",
+          "affected_objects": [
+            "chapter-02"
+          ],
+          "critical": true,
+          "source": "当前模拟项目材料/补充测量材料.md",
+          "acquisition_method": "由模拟负责人提供项目内测试表",
+          "acquisition_status": "agreed",
+          "verification_status": "unverified",
+          "resolution": ""
+        }
+      }
+    },
+    "synthetic-005-put_object": {
+      "id": "synthetic-005-put_object",
+      "kind": "put_object",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "6f53618f5fba64161a6ca4f2fd67ce6dca1de10e8f02e8843ea4c1121be46fae",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:5",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "approach",
+          "kind": "approach",
+          "path": "写作共识.md",
+          "version": 1,
+          "sha256": "6f53618f5fba64161a6ca4f2fd67ce6dca1de10e8f02e8843ea4c1121be46fae",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-006-submit_review": {
+      "id": "synthetic-006-submit_review",
+      "kind": "submit_review",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "6f53618f5fba64161a6ca4f2fd67ce6dca1de10e8f02e8843ea4c1121be46fae",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:6",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-007-request_changes": {
+      "id": "synthetic-007-request_changes",
+      "kind": "request_changes",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "6f53618f5fba64161a6ca4f2fd67ce6dca1de10e8f02e8843ea4c1121be46fae",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:7",
+        "text": "synthetic-test 突出证据边界，采用审阅记录这一统一术语。"
+      },
+      "payload": {
+        "comment": "突出证据边界，采用审阅记录这一统一术语。"
+      }
+    },
+    "synthetic-008-put_object": {
+      "id": "synthetic-008-put_object",
+      "kind": "put_object",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:8",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "approach",
+          "kind": "approach",
+          "path": "写作共识.md",
+          "version": 2,
+          "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-009-submit_review": {
+      "id": "synthetic-009-submit_review",
+      "kind": "submit_review",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:9",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-010-approve": {
+      "id": "synthetic-010-approve",
+      "kind": "approve",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:10",
+        "text": "synthetic-test 确认当前方案及补材获取安排。"
+      },
+      "payload": {}
+    },
+    "synthetic-011-advance": {
+      "id": "synthetic-011-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:11",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "outline"
+      }
+    },
+    "synthetic-012-put_object": {
+      "id": "synthetic-012-put_object",
+      "kind": "put_object",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:12",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "outline",
+          "kind": "outline",
+          "path": "大纲.md",
+          "version": 1,
+          "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+          "dependencies": {
+            "approach": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "chapter_order": [
+              "chapter-01",
+              "chapter-02"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-013-submit_review": {
+      "id": "synthetic-013-submit_review",
+      "kind": "submit_review",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:13",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-014-request_changes": {
+      "id": "synthetic-014-request_changes",
+      "kind": "request_changes",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:14",
+        "text": "synthetic-test 第一章补中断恢复；第二章同时覆盖交付验收。"
+      },
+      "payload": {
+        "comment": "第一章补中断恢复；第二章同时覆盖交付验收。"
+      }
+    },
+    "synthetic-015-put_object": {
+      "id": "synthetic-015-put_object",
+      "kind": "put_object",
+      "object_id": "outline",
+      "version": 2,
+      "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:15",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "outline",
+          "kind": "outline",
+          "path": "大纲.md",
+          "version": 2,
+          "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+          "dependencies": {
+            "approach": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "chapter_order": [
+              "chapter-01",
+              "chapter-02"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-016-submit_review": {
+      "id": "synthetic-016-submit_review",
+      "kind": "submit_review",
+      "object_id": "outline",
+      "version": 2,
+      "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:16",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-017-approve": {
+      "id": "synthetic-017-approve",
+      "kind": "approve",
+      "object_id": "outline",
+      "version": 2,
+      "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:17",
+        "text": "synthetic-test 确认当前两章大纲。"
+      },
+      "payload": {}
+    },
+    "synthetic-018-advance": {
+      "id": "synthetic-018-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:18",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "chapters"
+      }
+    },
+    "synthetic-019-put_object": {
+      "id": "synthetic-019-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:19",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-01",
+          "kind": "chapter",
+          "path": "章节/01-审阅流程.md",
+          "version": 1,
+          "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+          "dependencies": {
+            "approach": 2,
+            "outline": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-020-submit_review": {
+      "id": "synthetic-020-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:20",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-021-request_changes": {
+      "id": "synthetic-021-request_changes",
+      "kind": "request_changes",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:21",
+        "text": "synthetic-test 请具体写出每章起草、自查、修改确认步骤；全文统一术语。"
+      },
+      "payload": {
+        "comment": "请具体写出每章起草、自查、修改确认步骤；全文统一术语。"
+      }
+    },
+    "synthetic-022-put_object": {
+      "id": "synthetic-022-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:22",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-01",
+          "kind": "chapter",
+          "path": "章节/01-审阅流程.md",
+          "version": 2,
+          "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+          "dependencies": {
+            "approach": 2,
+            "outline": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-023-submit_review": {
+      "id": "synthetic-023-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:23",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-024-approve": {
+      "id": "synthetic-024-approve",
+      "kind": "approve",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:24",
+        "text": "synthetic-test 确认修订后的第一章。"
+      },
+      "payload": {}
+    },
+    "synthetic-025-upsert_material": {
+      "id": "synthetic-025-upsert_material",
+      "kind": "upsert_material",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:25",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "material": {
+          "id": "measurement",
+          "description": "模拟测量记录",
+          "purpose": "核验记录字段，不用于效果承诺",
+          "affected_objects": [
+            "chapter-02"
+          ],
+          "critical": true,
+          "source": "当前模拟项目材料/补充测量材料.md",
+          "acquisition_method": "由模拟负责人提供项目内测试表",
+          "acquisition_status": "acquired",
+          "verification_status": "verified",
+          "resolution": ""
+        }
+      }
+    },
+    "synthetic-026-put_object": {
+      "id": "synthetic-026-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:26",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-02",
+          "kind": "chapter",
+          "path": "章节/02-异常验收.md",
+          "version": 1,
+          "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+          "dependencies": {
+            "approach": 2,
+            "outline": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": [
+              "measurement"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-027-submit_review": {
+      "id": "synthetic-027-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:27",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "synthetic-028-approve": {
+      "id": "synthetic-028-approve",
+      "kind": "approve",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:28",
+        "text": "synthetic-test 确认第二章，材料仅用于记录方法示例。"
+      },
+      "payload": {}
+    },
+    "synthetic-029-advance": {
+      "id": "synthetic-029-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:29",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "illustrations"
+      }
+    }
+  },
+  "invalidations": {}
+}

@@ -1,0 +1,15 @@
+{
+  "scope": "synthetic-test final acceptance from final refreshed isolated installation",
+  "command": [
+    "python3",
+    "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/scripts/verify_acceptance.py",
+    "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点"
+  ],
+  "installed_verifier_sha256": "9b965f1c49af896f3d6af8392cbe2c42aa857c92b91e3fd44194063878dc7bf3",
+  "source_verifier_sha256": "9b965f1c49af896f3d6af8392cbe2c42aa857c92b91e3fd44194063878dc7bf3",
+  "state_revision": 63,
+  "exit_code": 0,
+  "stdout": "PASS: explicit acceptance manifest and artifacts at /Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点 are satisfied\n",
+  "stderr": "",
+  "record_delivery_event_id": "synthetic-063-record_delivery"
+}

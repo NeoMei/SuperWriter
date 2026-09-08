@@ -1,0 +1,40 @@
+{
+  "kind": "synthetic-test native WPS evidence",
+  "source": {
+    "path": "合并稿.md",
+    "bytes": 1926,
+    "sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5"
+  },
+  "outputs": {
+    "docx": {
+      "path": "导出/协作审阅试点技术方案.docx",
+      "bytes": 51251,
+      "sha256": "b590f474e252b51d6b1e0c0d6c6dc654a8b7bebdf0e225b3b6a63e28b6fc2fd1"
+    },
+    "pdf": {
+      "path": "导出/协作审阅试点技术方案.pdf",
+      "bytes": 279810,
+      "sha256": "7e5edaf80983fd7d651e66a0ef60f1d171201dde000e1517db2ad553dc9b2175"
+    }
+  },
+  "figure": {
+    "path": "配图/审阅记录确认循环.png",
+    "bytes": 34974,
+    "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+    "dimensions": "1052x270"
+  },
+  "docx_application": "WPS Office_12.1.28492.28492_F1E327BC-269C-435d-A152-05C5408002CA",
+  "docx_drawings": [
+    {
+      "docPr_descr": "fig:review-cycle",
+      "cNvPr_descr": "fig:review-cycle",
+      "member": "word/media/image1.png",
+      "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+      "bytes": 34974
+    }
+  ],
+  "pdf_pages": 1,
+  "pdfinfo": "Title:           协作审阅试点技术方案（模拟验收）\nSubject:         \nKeywords:        \nAuthor:          梅雪峰\nCreator:         WPS 文字\nProducer:        macOS 版本26.6.2（版号25G83） Quartz PDFContext\nCreationDate:    Tue Sep  8 00:57:05 2026 CST\nModDate:         Tue Sep  8 00:57:05 2026 CST\nCustom Metadata: yes\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           1\nEncrypted:       no\nPage size:       595.3 x 841.9 pts (A4)\nPage rot:        0\nFile size:       279810 bytes\nOptimized:       no\nPDF version:     1.7\n",
+  "source_runtime": "/Users/neomei/.local/share/WPSComposer",
+  "user_acceptance": false
+}

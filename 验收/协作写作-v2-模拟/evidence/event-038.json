@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-038-approve",
+  "kind": "approve",
+  "object_id": "figure-set",
+  "version": 1,
+  "sha256": "55a7ae11c51bca9d1d03cbc644090ca1e577dff35fcc7ebc18c55894c0294205",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:38",
+    "text": "synthetic-test 确认当前配图、图题及第一章段后插入位置。"
+  },
+  "payload": {}
+}

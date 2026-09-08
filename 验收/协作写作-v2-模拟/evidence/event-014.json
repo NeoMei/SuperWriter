@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-014-request_changes",
+  "kind": "request_changes",
+  "object_id": "outline",
+  "version": 1,
+  "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:14",
+    "text": "synthetic-test 第一章补中断恢复；第二章同时覆盖交付验收。"
+  },
+  "payload": {
+    "comment": "第一章补中断恢复；第二章同时覆盖交付验收。"
+  }
+}

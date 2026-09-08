@@ -1,0 +1,23 @@
+{
+  "scope": "synthetic-test disposable copy; one PDF suffix appended after recorded delivery",
+  "command": [
+    "python3",
+    "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/scripts/verify_acceptance.py",
+    "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/stale-output-copy"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "FAIL: collaboration delivery draft must exist before acceptance validation\n",
+  "expected": "rejection",
+  "canonical_project_unchanged": true,
+  "copied_delivery_status_after_load": "stale",
+  "copied_delivery_invalidations": [
+    {
+      "kind": "content_drift",
+      "object_id": "delivery",
+      "version": 3,
+      "sha256": "c1943cd782c6fd3e23c0ebb5c4dcaccaf1a2fff896f4ea087d3865fa88bf705e"
+    }
+  ],
+  "copied_state_revision_after_load": 63
+}

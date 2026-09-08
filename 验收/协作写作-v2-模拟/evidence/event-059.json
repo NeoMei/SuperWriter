@@ -1,0 +1,28 @@
+{
+  "id": "synthetic-059-put_object",
+  "kind": "put_object",
+  "object_id": "manuscript",
+  "version": 4,
+  "sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:59",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "manuscript",
+      "kind": "manuscript",
+      "path": "合并稿.md",
+      "version": 4,
+      "sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5",
+      "dependencies": {
+        "chapter-01": 2,
+        "chapter-02": 1,
+        "figure-set": 2
+      },
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

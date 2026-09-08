@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SuperWriter 本地审阅</title>
+  <link rel="stylesheet" href="/assets/review.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="product">SuperWriter 本地审阅</p>
+        <h1 id="object-title">正在读取当前版本…</h1>
+      </div>
+      <div class="identity" id="identity"></div>
+    </header>
+
+    <section class="decision">
+      <h2>本次需要决定</h2>
+      <p>选择偏好只记录讨论方向；提交修改意见会退回当前版本；只有“确认当前版本”会形成正式确认。</p>
+      <div id="status" role="status" aria-live="polite">正在连接本地状态…</div>
+    </section>
+
+    <section class="comparison">
+      <article>
+        <div class="section-heading"><h2>前版</h2><span id="previous-label"></span></div>
+        <pre id="previous-content"></pre>
+      </article>
+      <article class="current">
+        <div class="section-heading"><h2>现版</h2><span id="current-label"></span></div>
+        <pre id="current-content"></pre>
+      </article>
+    </section>
+
+    <section id="figure-review" class="figure-review" hidden>
+      <h2>配图、图题、相关正文与插入位置</h2>
+      <div id="figure-items"></div>
+    </section>
+
+    <section class="actions">
+      <div class="action-block">
+        <label for="preference"><strong>选择偏好</strong></label>
+        <textarea id="preference" rows="3" placeholder="例如：语气更简洁，先保留这一论证顺序"></textarea>
+        <button id="save-preference" class="secondary">记录偏好</button>
+      </div>
+      <div class="action-block">
+        <label for="changes"><strong>提交修改意见</strong></label>
+        <textarea id="changes" rows="3" placeholder="明确写出需要修改的内容"></textarea>
+        <button id="request-changes" class="danger">提交修改意见</button>
+      </div>
+      <div class="action-block approve-block">
+        <strong>确认当前版本</strong>
+        <p>确认会绑定上方显示的对象、版本和摘要。</p>
+        <fieldset id="retention" hidden>
+          <legend>同时明确保留未变化章节（默认不选择）</legend>
+          <div id="retention-options"></div>
+        </fieldset>
+        <button id="approve" class="primary">确认当前版本</button>
+      </div>
+    </section>
+  </main>
+  <script src="/assets/review.js" defer></script>
+</body>
+</html>

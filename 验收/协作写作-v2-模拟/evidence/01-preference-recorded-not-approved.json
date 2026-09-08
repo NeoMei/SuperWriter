@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "project_id": "synthetic-collaborative-writing",
+  "revision": 1,
+  "stage": "intake",
+  "active_object_id": null,
+  "objects": {},
+  "materials": {},
+  "decisions": [
+    {
+      "event_id": "synthetic-001-record_preference",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:1",
+        "text": "synthetic-test 记录写作偏好；该偏好不构成方案批准。"
+      },
+      "recorded_at": "2026-09-07T16:32:48.346986Z",
+      "scope": "project",
+      "text": "正式、具体"
+    }
+  ],
+  "approvals": [],
+  "processed_events": {
+    "synthetic-001-record_preference": {
+      "id": "synthetic-001-record_preference",
+      "kind": "record_preference",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:1",
+        "text": "synthetic-test 记录写作偏好；该偏好不构成方案批准。"
+      },
+      "payload": {
+        "scope": "project",
+        "text": "正式、具体"
+      }
+    }
+  },
+  "invalidations": {}
+}

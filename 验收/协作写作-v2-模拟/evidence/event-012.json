@@ -1,0 +1,31 @@
+{
+  "id": "synthetic-012-put_object",
+  "kind": "put_object",
+  "object_id": "outline",
+  "version": 1,
+  "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:12",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "outline",
+      "kind": "outline",
+      "path": "大纲.md",
+      "version": 1,
+      "sha256": "7fe9479a6b5ab0dad5b2517c18e567ad280c1e4658fe242964856bc2c90f6bb0",
+      "dependencies": {
+        "approach": 2
+      },
+      "status": "draft",
+      "metadata": {
+        "chapter_order": [
+          "chapter-01",
+          "chapter-02"
+        ]
+      }
+    }
+  }
+}

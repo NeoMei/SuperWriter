@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-061-approve",
+  "kind": "approve",
+  "object_id": "manuscript",
+  "version": 4,
+  "sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:61",
+    "text": "synthetic-test 确认全局图号和由 WPS 原生生成章节号的当前合并稿，正文内容不变。"
+  },
+  "payload": {}
+}

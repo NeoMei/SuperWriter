@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-020-submit_review",
+  "kind": "submit_review",
+  "object_id": "chapter-01",
+  "version": 1,
+  "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:20",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {}
+}

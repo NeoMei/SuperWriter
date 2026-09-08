@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-042-request_changes",
+  "kind": "request_changes",
+  "object_id": "manuscript",
+  "version": 1,
+  "sha256": "dd464e786d94d0e361fb87268b743e2435eb8af46a7ad0f9f306f38e142474ef",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:42",
+    "text": "synthetic-test 删除第一章与第二章之间重复的过渡句，保留评分点和配图引用。"
+  },
+  "payload": {
+    "comment": "删除第一章与第二章之间重复的过渡句，保留评分点和配图引用。"
+  }
+}

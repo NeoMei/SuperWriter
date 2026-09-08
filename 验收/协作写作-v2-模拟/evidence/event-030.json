@@ -1,0 +1,26 @@
+{
+  "id": "synthetic-030-put_object",
+  "kind": "put_object",
+  "object_id": "figure-01",
+  "version": 1,
+  "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:30",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "figure-01",
+      "kind": "figure",
+      "path": "配图/历史/审阅记录确认循环-v1.png",
+      "version": 1,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "dependencies": {
+        "chapter-01": 2
+      },
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

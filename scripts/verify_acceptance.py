@@ -19,6 +19,9 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from render_svg import RenderSvgError, render_svg
+from collaboration.model import CollaborationError
+from collaboration.store import load_state
+from collaboration.workflow import figure_is_approved, require_delivery_ready
 
 
 def fail(message: str) -> None:
@@ -95,9 +98,82 @@ def normalized(value: str) -> str:
     )
 
 
+def _wps_frontmatter(
+    lines: list[str],
+) -> tuple[int, str | None, str | None, str | None]:
+    """Return a valid leading WPS frontmatter offset and semantic fields."""
+    if not lines or lines[0].strip() != "---":
+        return 0, None, None, None
+    try:
+        closing = next(
+            index for index, line in enumerate(lines[1:], 1) if line.strip() == "---"
+        )
+    except StopIteration:
+        return 0, None, None, None
+    allowed = {
+        "title", "design", "caption_numbering", "heading_numbering", "layout_engine",
+    }
+    values = {}
+    for line in lines[1:closing]:
+        match = re.fullmatch(r"([a-z][a-z0-9_]*):\s+(.+)", line.strip())
+        if match is None or match.group(1) not in allowed:
+            return 0, None, None, None
+        if match.group(1) in values:
+            return 0, None, None, None
+        values[match.group(1)] = match.group(2)
+    if not values:
+        return 0, None, None, None
+    return (
+        closing + 1,
+        values.get("title"),
+        values.get("heading_numbering"),
+        values.get("caption_numbering"),
+    )
+
+
+WPS_FIGURE_OPEN = re.compile(
+    r':::figure\s+\{#(?P<id>fig:[A-Za-z0-9][A-Za-z0-9_.:-]*)\s+'
+    r'caption="(?P<caption>[^"\n]+)"\s+width="[^"\n]+"\s+kind="[^"\n]+"\}'
+)
+
+
+def figure_description_candidates(text: str, caption: str) -> set[str]:
+    """Return the exact DOCX description allowed for one source figure caption."""
+    matched_ids = []
+    lines = text.splitlines()
+    _, _, _, caption_numbering = _wps_frontmatter(lines)
+    index = 0
+    while index < len(lines):
+        opening = WPS_FIGURE_OPEN.fullmatch(lines[index].strip())
+        if opening is None:
+            index += 1
+            continue
+        image_captions = []
+        index += 1
+        while index < len(lines) and lines[index].strip() != ":::":
+            image = re.fullmatch(r"!\[([^]]*)\]\([^)]*\)", lines[index].strip())
+            if image is not None:
+                image_captions.append(image.group(1))
+            index += 1
+        directive_caption = opening.group("caption")
+        caption_matches = directive_caption == caption
+        if caption_numbering == "global":
+            caption_matches = caption_matches or re.fullmatch(
+                rf"图\s*[1-9]\d*\s+{re.escape(directive_caption)}",
+                caption.strip(),
+            ) is not None
+        if index < len(lines) and image_captions == [caption] and caption_matches:
+            matched_ids.append(opening.group("id"))
+        index += 1
+    if len(matched_ids) > 1:
+        fail(f"canonical merged draft declares duplicate WPS figure IDs for: {caption}")
+    return set(matched_ids) if matched_ids else {caption}
+
+
 def markdown_block_sequence(text: str):
     blocks = []
     paragraph = []
+    in_figure_directive = False
 
     def append(kind: str, source: str) -> None:
         value = normalized(source)
@@ -111,18 +187,33 @@ def markdown_block_sequence(text: str):
             append("paragraph", " ".join(paragraph))
             paragraph.clear()
 
-    for raw in text.splitlines():
+    lines = text.splitlines()
+    body_offset, title, heading_numbering, _ = _wps_frontmatter(lines)
+    if title is not None:
+        append("title", title)
+    for raw in lines[body_offset:]:
         stripped = raw.strip()
+        if not in_figure_directive and WPS_FIGURE_OPEN.fullmatch(stripped):
+            flush_paragraph()
+            in_figure_directive = True
+            continue
+        if in_figure_directive and stripped == ":::":
+            flush_paragraph()
+            in_figure_directive = False
+            continue
         if not stripped:
             flush_paragraph()
             continue
         if re.fullmatch(r"(?:-{3,}|\*{3,}|_{3,})", stripped):
             flush_paragraph()
             continue
-        heading = re.match(r"^#{1,6}\s*(.*)$", stripped)
+        heading = re.match(r"^(#{1,6})\s*(.*)$", stripped)
         if heading:
             flush_paragraph()
-            append("heading", heading.group(1))
+            kind = "heading"
+            if heading_numbering == "chinese-formal" and len(heading.group(1)) <= 4:
+                kind = f"heading chinese-formal h{len(heading.group(1))}"
+            append(kind, heading.group(2))
             continue
         image = re.fullmatch(r"!\[([^]]*)\]\([^)]*\)", stripped)
         if image:
@@ -136,6 +227,8 @@ def markdown_block_sequence(text: str):
                 append("table row", " ".join(cells))
             continue
         paragraph.append(stripped)
+    if in_figure_directive:
+        fail("canonical merged draft has an unterminated WPS figure directive")
     flush_paragraph()
     return blocks
 
@@ -150,15 +243,22 @@ def require_ordered_source_coverage(label: str, text: str, source_blocks) -> Non
         cursor = position + len(block)
 
 
-def require_ordered_export_coverage(label: str, text: str, source_blocks) -> None:
+def require_ordered_export_coverage(
+    label: str,
+    text: str,
+    source_blocks,
+    *,
+    pdf_page_count: int | None = None,
+) -> None:
     paragraphs = [value for kind, value in source_blocks if kind == "paragraph"]
     if not paragraphs:
         fail("canonical merged draft has no substantive paragraphs")
     first_paragraph = paragraphs[0]
-    headings = [value for kind, value in source_blocks if kind == "heading"]
+    headings = export_heading_mappings(source_blocks)
     source_compact = "".join(value for _, value in source_blocks)
     cursor = 0
     started = False
+    pdf_footer_seen = False
     for kind, content, original, table_wrapped in export_lines(text):
         if kind in {"page", "separator", "image"}:
             continue
@@ -169,9 +269,24 @@ def require_ordered_export_coverage(label: str, text: str, source_blocks) -> Non
         body = normalized(content)
         if not body:
             continue  # Unicode punctuation and spacing are explicitly folded.
-        wrapped_heading = recognized_export_heading(content, table_wrapped, headings)
+        wrapped_heading = recognized_export_heading(
+            content,
+            table_wrapped,
+            headings,
+            allow_markdown_heading=label == "DOCX",
+        )
         if wrapped_heading is not None:
             body = wrapped_heading
+        if (
+            label == "PDF"
+            and pdf_page_count is not None
+            and body == str(pdf_page_count)
+            and cursor == len(source_compact)
+        ):
+            if pdf_footer_seen:
+                fail(f"{label} contains duplicate terminal page-number content")
+            pdf_footer_seen = True
+            continue
         if not started:
             if wrapped_heading is not None:
                 continue
@@ -186,17 +301,66 @@ def require_ordered_export_coverage(label: str, text: str, source_blocks) -> Non
         fail(f"{label} content does not contain the first canonical merged-draft paragraph")
 
 
-def recognized_export_heading(content: str, table_wrapped: bool, headings) -> str | None:
+def recognized_export_heading(
+    content: str,
+    table_wrapped: bool,
+    headings,
+    *,
+    allow_markdown_heading: bool = False,
+) -> str | None:
     candidate = content.strip()
+    markdown_heading = re.match(r"^#{1,6}\s+", candidate) is not None
+    if markdown_heading and not allow_markdown_heading:
+        return None
     candidate = re.sub(r"^#{1,6}\s*", "", candidate)
     if table_wrapped:
         candidate = re.sub(r"^第(?:[一二三四五六七八九十百]+|\d+)节\s*", "", candidate)
     value = normalized(candidate)
     if value in headings:
+        return headings[value]
+    if allow_markdown_heading and markdown_heading and value in headings.values():
         return value
     toc_candidate = re.sub(r"(?:\.{2,}|…{2,}|\s+)\d+\s*$", "", candidate)
     value = normalized(toc_candidate)
-    return value if value in headings else None
+    return headings.get(value)
+
+
+def chinese_numeral(number: int) -> str:
+    """Render the positive heading ordinals supported by WPS chinese-formal."""
+    digits = "零一二三四五六七八九"
+    if number < 10:
+        return digits[number]
+    if number < 20:
+        return "十" + (digits[number % 10] if number % 10 else "")
+    if number < 100:
+        return digits[number // 10] + "十" + (digits[number % 10] if number % 10 else "")
+    fail("canonical merged draft has too many headings for chinese-formal numbering")
+
+
+def export_heading_mappings(source_blocks) -> dict[str, str]:
+    """Map exact supported native heading renderings back to source headings."""
+    mappings = {}
+    counters = [0, 0, 0, 0]
+    for kind, value in source_blocks:
+        if kind == "title" or kind == "heading":
+            mappings[value] = value
+            continue
+        match = re.fullmatch(r"heading chinese-formal h([1-4])", kind)
+        if match is None:
+            continue
+        level = int(match.group(1))
+        counters[level - 1] += 1
+        for index in range(level, 4):
+            counters[index] = 0
+        ordinal = chinese_numeral(counters[level - 1])
+        prefixes = {
+            1: f"第{ordinal}章",
+            2: f"第{ordinal}节",
+            3: f"{ordinal}、",
+            4: f"（{ordinal}）",
+        }
+        mappings[normalized(prefixes[level] + value)] = value
+    return mappings
 
 
 def export_lines(text: str):
@@ -667,6 +831,284 @@ def validate_figure(root: Path, item: object):
     return source if is_excalidraw else render, render, caption, render_payload, width, height, pixels
 
 
+def validate_pipeline_v1(root: Path, pipeline: object) -> dict:
+    """Validate legacy stage/gate evidence and return common artifact paths."""
+    if (root / "协作状态.json").exists():
+        fail("collaborative project cannot downgrade acceptance")
+    require_keys(
+        pipeline,
+        {
+            "status", "score_table", "matrix", "outline", "completed_stage",
+            "human_gates", "machine_gates", "stage_evidence",
+        },
+        "acceptance manifest pipeline",
+    )
+    human_gates = pipeline.get("human_gates")
+    machine_gates = pipeline.get("machine_gates")
+    evidence = pipeline.get("stage_evidence")
+    if (
+        not is_json_integer(pipeline.get("completed_stage"))
+        or not isinstance(human_gates, list)
+        or not all(is_json_integer(value) for value in human_gates)
+        or not isinstance(machine_gates, list)
+        or not all(is_json_integer(value) for value in machine_gates)
+        or (
+            isinstance(evidence, list)
+            and any(
+                isinstance(entry, dict) and not is_json_integer(entry.get("stage"))
+                for entry in evidence
+            )
+        )
+    ):
+        fail("acceptance manifest integer fields must use JSON integers")
+    if (
+        pipeline.get("completed_stage") != 9
+        or human_gates != [2, 5, 8]
+        or machine_gates != [0, 3, 6, 7]
+    ):
+        fail("acceptance manifest pipeline/gate contract is invalid")
+    if (
+        not isinstance(evidence, list)
+        or [entry.get("stage") for entry in evidence if isinstance(entry, dict)]
+        != list(range(10))
+    ):
+        fail("acceptance manifest must declare stage 0 through 9 evidence")
+    for entry in evidence:
+        require_keys(entry, {"stage", "path"}, "acceptance manifest stage evidence")
+    evidence_paths = [entry["path"] for entry in evidence]
+    if len(evidence_paths) != len(set(evidence_paths)):
+        fail("acceptance manifest stage evidence paths must be unique")
+    for entry in evidence:
+        path = project_path(root, entry.get("path"), f"stage {entry.get('stage')} evidence")
+        require_file(
+            path,
+            f"required pipeline evidence is missing for stage {entry.get('stage')}: "
+            f"{entry.get('path')}",
+        )
+
+    status_path = project_path(root, pipeline.get("status"), "pipeline status")
+    score_path = project_path(root, pipeline.get("score_table"), "score table")
+    matrix_path = project_path(root, pipeline.get("matrix"), "matrix")
+    outline_path = project_path(root, pipeline.get("outline"), "outline")
+    for path in (status_path, score_path, matrix_path, outline_path):
+        require_file(
+            path,
+            f"required pipeline evidence is missing: {path.relative_to(root).as_posix()}",
+        )
+    status = status_path.read_text(encoding="utf-8")
+    if not re.search(r"当前阶段[：:]\s*9\s*[（(]?完成", status):
+        fail("pipeline status does not record stage 9 complete")
+    gate_line = next((line for line in status.splitlines() if "流程门" in line), "")
+    recorded_gates = {int(number) for number in re.findall(r"\d+", gate_line)}
+    for gate in [0, 2, 3, 5, 6, 7, 8]:
+        if gate not in recorded_gates:
+            fail(f"pipeline status is missing gate {gate} evidence")
+    human_count = re.search(r"人工介入[：:]\s*(\d+)\s*次", status)
+    if human_count is None or int(human_count.group(1)) != 3:
+        fail("pipeline status must record exactly three human interventions")
+    return {
+        "version": 1,
+        "state": None,
+        "score_path": score_path,
+        "matrix_path": matrix_path,
+        "outline_path": outline_path,
+        "evidence": evidence,
+        "delivery_record": None,
+    }
+
+
+def _one_state_object(state: dict, kind: str, label: str) -> dict:
+    matches = [obj for obj in state["objects"].values() if obj["kind"] == kind]
+    if len(matches) != 1:
+        fail(f"collaboration state must contain exactly one {label} object")
+    return matches[0]
+
+
+def validate_pipeline_v2(root: Path, pipeline: object) -> dict:
+    """Validate the exact current protocol-v2 review chain without recording delivery."""
+    require_keys(
+        pipeline,
+        {"workflow_version", "state", "state_revision", "manuscript_object_id"},
+        "acceptance manifest pipeline",
+    )
+    if (
+        pipeline.get("workflow_version") != 2
+        or not is_json_integer(pipeline.get("workflow_version"))
+        or not is_json_integer(pipeline.get("state_revision"))
+        or pipeline.get("state_revision") < 0
+    ):
+        fail("acceptance manifest v2 pipeline version/revision is invalid")
+    state_path = project_path(root, pipeline.get("state"), "collaboration state")
+    if pipeline.get("state") != "协作状态.json" or state_path != root / "协作状态.json":
+        fail("acceptance manifest v2 must bind project-root 协作状态.json")
+    require_file(state_path, "collaboration state is missing: 协作状态.json")
+    try:
+        state = load_state(root)
+        require_delivery_ready(state)
+    except CollaborationError as error:
+        fail(str(error))
+    if state["revision"] != pipeline.get("state_revision"):
+        fail("acceptance manifest state revision differs from current collaboration state")
+    if state["stage"] != "delivery":
+        fail("collaboration state must reach the delivery stage before acceptance")
+
+    manuscript_id = pipeline.get("manuscript_object_id")
+    if not isinstance(manuscript_id, str) or not manuscript_id:
+        fail("acceptance manifest manuscript_object_id is invalid")
+    manuscript = state["objects"].get(manuscript_id)
+    if (
+        manuscript is None
+        or manuscript["kind"] != "manuscript"
+        or manuscript["status"] != "approved"
+    ):
+        fail("acceptance manifest must bind the current approved manuscript object")
+    manuscript_path = project_path(root, manuscript["path"], "manuscript object path")
+    if manuscript["path"] != "合并稿.md" or manuscript_path != root / "合并稿.md":
+        fail("collaboration manuscript must be the canonical project-root 合并稿.md")
+
+    outline = _one_state_object(state, "outline", "outline")
+    if outline["status"] != "approved" or outline["path"] != "大纲.md":
+        fail("collaboration outline must be the current approved project-root 大纲.md")
+    score_path = root / "评分表解析.md"
+    matrix_path = root / "应答矩阵.md"
+    outline_path = root / "大纲.md"
+    for path in (score_path, matrix_path, outline_path):
+        require_file(
+            path,
+            f"required pipeline evidence is missing: {path.relative_to(root).as_posix()}",
+        )
+
+    delivery = state["objects"].get("delivery")
+    if delivery is None or delivery["kind"] != "delivery" or delivery["status"] not in {
+        "draft", "verified",
+    }:
+        fail("collaboration delivery draft must exist before acceptance validation")
+    if delivery["dependencies"].get(manuscript_id) != manuscript["version"]:
+        fail("collaboration delivery must bind the current manuscript version")
+    delivery_record = None
+    if delivery["status"] == "verified":
+        records = [
+            event
+            for event in state["processed_events"].values()
+            if event["kind"] == "record_delivery"
+            and event["object_id"] == delivery["id"]
+            and event["version"] == delivery["version"]
+            and event["sha256"] == delivery["sha256"]
+        ]
+        if len(records) != 1:
+            fail("verified delivery must have exactly one current record_delivery event")
+        delivery_record = records[0]
+    return {
+        "version": 2,
+        "state": state,
+        "score_path": score_path,
+        "matrix_path": matrix_path,
+        "outline_path": outline_path,
+        "evidence": None,
+        "manuscript": manuscript,
+        "delivery": delivery,
+        "delivery_record": delivery_record,
+    }
+
+
+def _figure_declarations(path: Path, figure_ids: list[str]) -> dict[str, dict[str, str]]:
+    """Parse exact caption and paragraph placement from the approved figure-set bytes."""
+    declarations = {}
+    current = None
+    known = set(figure_ids)
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        heading = re.fullmatch(r"##\s+(.+?)\s*", raw)
+        if heading:
+            current = heading.group(1) if heading.group(1) in known else None
+            if current is not None:
+                declarations[current] = {}
+            continue
+        if re.match(r"^#{1,6}\s", raw):
+            current = None
+            continue
+        if current is None:
+            continue
+        for prefix, field in (("图题:", "caption"), ("图题：", "caption"),
+                              ("插入位置:", "placement"), ("插入位置：", "placement")):
+            if raw.startswith(prefix):
+                value = raw[len(prefix):].strip()
+                if value and field not in declarations[current]:
+                    declarations[current][field] = value
+    return declarations
+
+
+def validate_v2_bindings(
+        root: Path,
+        context: dict,
+        chapters: list,
+        figures: list,
+        outputs: dict,
+) -> None:
+    """Bind v2 manifest artifacts to the exact approved collaboration objects."""
+    state = context["state"]
+    outline = _one_state_object(state, "outline", "outline")
+    chapter_ids = outline["metadata"]["chapter_order"]
+    if len(chapters) != len(chapter_ids):
+        fail("acceptance manifest chapters differ from approved outline")
+    for chapter_entry, chapter_id in zip(chapters, chapter_ids):
+        chapter = state["objects"].get(chapter_id)
+        if (
+            not isinstance(chapter_entry, dict)
+            or chapter is None
+            or chapter["kind"] != "chapter"
+            or chapter["status"] != "approved"
+            or chapter_entry.get("path") != chapter["path"]
+        ):
+            fail("acceptance manifest chapters differ from approved outline")
+
+    manuscript = context["manuscript"]
+    if (
+        outputs.get("merged") != manuscript["path"]
+        or outputs.get("merged_sha256") != manuscript["sha256"]
+    ):
+        fail("acceptance manifest merged draft differs from approved manuscript")
+
+    figure_set = _one_state_object(state, "figure_set", "figure set")
+    figure_ids = figure_set["metadata"]["figure_ids"]
+    if figure_set["metadata"]["mode"] == "none":
+        if figures:
+            fail("approved no-figure decision requires an empty manifest figure list")
+    else:
+        if len(figures) != len(figure_ids):
+            fail("approved figure set differs from acceptance manifest")
+        declarations = _figure_declarations(
+            project_path(root, figure_set["path"], "figure-set review"), figure_ids
+        )
+        for figure_id, figure_entry in zip(figure_ids, figures):
+            figure = state["objects"].get(figure_id)
+            declared = declarations.get(figure_id, {})
+            if (
+                not isinstance(figure_entry, dict)
+                or figure is None
+                or figure["kind"] != "figure"
+                or not figure_is_approved(state, figure_id, figure_set)
+                or figure_entry.get("render") != figure["path"]
+                or figure_entry.get("render_sha256") != figure["sha256"]
+                or figure_entry.get("caption") != declared.get("caption")
+                or not declared.get("placement")
+            ):
+                fail("approved figure set differs from acceptance manifest")
+
+    record = context["delivery_record"]
+    if record is None:
+        return
+    if record["payload"]["manuscript_sha256"] != manuscript["sha256"]:
+        fail("record_delivery manuscript digest differs from approved manuscript")
+    for kind in ("docx", "pdf"):
+        recorded = record["payload"]["outputs"][kind]
+        if recorded["path"] != outputs.get(kind):
+            fail(f"record_delivery {kind} path differs from acceptance manifest")
+        path = project_path(root, recorded["path"], f"record_delivery {kind}")
+        require_file(path, f"missing {kind.upper()} delivery")
+        if sha256(path) != recorded["sha256"]:
+            fail(f"record_delivery {kind} digest differs from current output")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         fail("acceptance verifier requires one project directory")
@@ -678,8 +1120,8 @@ def main() -> None:
     require_keys(manifest, {"version", "points", "required_terms", "pipeline", "chapters", "point_chapters", "figures", "outputs", "pdf"}, "acceptance manifest")
     if not isinstance(manifest, dict) or not is_json_integer(manifest.get("version")):
         fail("acceptance manifest integer fields must use JSON integers")
-    if manifest.get("version") != 1:
-        fail("acceptance manifest version is unsupported")
+    if manifest.get("version") not in (1, 2):
+        fail("unsupported acceptance manifest version")
 
     points = manifest.get("points")
     terms = manifest.get("required_terms")
@@ -695,7 +1137,6 @@ def main() -> None:
         fail("acceptance manifest required terms are invalid")
     if not all(isinstance(value, dict) for value in (pipeline, point_chapters, outputs, pdf_contract)) or not isinstance(chapters, list) or not isinstance(figures, list):
         fail("acceptance manifest structure is invalid")
-    require_keys(pipeline, {"status", "score_table", "matrix", "outline", "completed_stage", "human_gates", "machine_gates", "stage_evidence"}, "acceptance manifest pipeline")
     require_keys(outputs, {"merged", "merged_sha256", "docx", "pdf"}, "acceptance manifest outputs")
     require_keys(pdf_contract, {"min_pages", "max_pages", "page_size"}, "acceptance manifest pdf")
     if len(terms) != len(set(terms)):
@@ -704,50 +1145,19 @@ def main() -> None:
         fail("acceptance manifest point_chapters keys must equal point IDs")
     if not valid_digest(outputs.get("merged_sha256")):
         fail("acceptance manifest merged digest is invalid")
-
-    human_gates = pipeline.get("human_gates")
-    machine_gates = pipeline.get("machine_gates")
-    evidence = pipeline.get("stage_evidence")
-    integer_scalars = (pipeline.get("completed_stage"), pdf_contract.get("min_pages"), pdf_contract.get("max_pages"))
-    if (not all(is_json_integer(value) for value in integer_scalars)
-            or not isinstance(human_gates, list)
-            or not all(is_json_integer(value) for value in human_gates)
-            or not isinstance(machine_gates, list)
-            or not all(is_json_integer(value) for value in machine_gates)
-            or (isinstance(evidence, list)
-                and any(isinstance(entry, dict) and not is_json_integer(entry.get("stage")) for entry in evidence))):
+    if not all(is_json_integer(value) for value in (
+        pdf_contract.get("min_pages"), pdf_contract.get("max_pages")
+    )):
         fail("acceptance manifest integer fields must use JSON integers")
-
-    if pipeline.get("completed_stage") != 9 or human_gates != [2, 5, 8] or machine_gates != [0, 3, 6, 7]:
-        fail("acceptance manifest pipeline/gate contract is invalid")
-    if not isinstance(evidence, list) or [entry.get("stage") for entry in evidence if isinstance(entry, dict)] != list(range(10)):
-        fail("acceptance manifest must declare stage 0 through 9 evidence")
-    for entry in evidence:
-        require_keys(entry, {"stage", "path"}, "acceptance manifest stage evidence")
-    evidence_paths = [entry["path"] for entry in evidence]
-    if len(evidence_paths) != len(set(evidence_paths)):
-        fail("acceptance manifest stage evidence paths must be unique")
-    for entry in evidence:
-        path = project_path(root, entry.get("path"), f"stage {entry.get('stage')} evidence")
-        require_file(path, f"required pipeline evidence is missing for stage {entry.get('stage')}: {entry.get('path')}")
-
-    status_path = project_path(root, pipeline.get("status"), "pipeline status")
-    score_path = project_path(root, pipeline.get("score_table"), "score table")
-    matrix_path = project_path(root, pipeline.get("matrix"), "matrix")
-    outline_path = project_path(root, pipeline.get("outline"), "outline")
-    for path in (status_path, score_path, matrix_path, outline_path):
-        require_file(path, f"required pipeline evidence is missing: {path.relative_to(root).as_posix()}")
-    status = status_path.read_text(encoding="utf-8")
-    if not re.search(r"当前阶段[：:]\s*9\s*[（(]?完成", status):
-        fail("pipeline status does not record stage 9 complete")
-    gate_line = next((line for line in status.splitlines() if "流程门" in line), "")
-    recorded_gates = {int(number) for number in re.findall(r"\d+", gate_line)}
-    for gate in [0, 2, 3, 5, 6, 7, 8]:
-        if gate not in recorded_gates:
-            fail(f"pipeline status is missing gate {gate} evidence")
-    human_count = re.search(r"人工介入[：:]\s*(\d+)\s*次", status)
-    if human_count is None or int(human_count.group(1)) != 3:
-        fail("pipeline status must record exactly three human interventions")
+    context = (
+        validate_pipeline_v1(root, pipeline)
+        if manifest["version"] == 1
+        else validate_pipeline_v2(root, pipeline)
+    )
+    evidence = context["evidence"]
+    score_path = context["score_path"]
+    matrix_path = context["matrix_path"]
+    outline_path = context["outline_path"]
 
     score_rows = list(markdown_rows(score_path.read_text(encoding="utf-8")))
     matrix_rows = list(markdown_rows(matrix_path.read_text(encoding="utf-8")))
@@ -795,20 +1205,23 @@ def main() -> None:
         if point not in outline or not re.search(rf"(?m)^\s*{re.escape(str(number))}\.\s+.*{re.escape(point)}", outline):
             fail(f"outline is missing primary chapter mapping: {point} -> {number}")
 
+    if manifest["version"] == 2:
+        validate_v2_bindings(root, context, chapters, figures, outputs)
+
     merged_path = project_path(root, outputs.get("merged"), "merged draft")
     docx_path = project_path(root, outputs.get("docx"), "DOCX output")
     pdf_path = project_path(root, outputs.get("pdf"), "PDF output")
     canonical_merged = (root / "合并稿.md").resolve()
     if outputs.get("merged") != "合并稿.md" or merged_path.resolve() != canonical_merged:
         fail("outputs.merged must be the canonical project-root 合并稿.md")
-    if project_path(root, evidence[7].get("path"), "stage 7 evidence").resolve() != canonical_merged:
+    if evidence is not None and project_path(root, evidence[7].get("path"), "stage 7 evidence").resolve() != canonical_merged:
         fail("stage 7 evidence must be the canonical project-root 合并稿.md")
     delivery_root = (root / "导出").resolve()
     if docx_path.parent.resolve() != delivery_root or docx_path.suffix.lower() != ".docx":
         fail("DOCX output must be a .docx directly under 导出/")
     if pdf_path.parent.resolve() != delivery_root or pdf_path.suffix.lower() != ".pdf":
         fail("PDF output must be a .pdf directly under 导出/")
-    if project_path(root, evidence[9].get("path"), "stage 9 evidence").resolve() != docx_path.resolve():
+    if evidence is not None and project_path(root, evidence[9].get("path"), "stage 9 evidence").resolve() != docx_path.resolve():
         fail("stage 9 evidence must be the declared DOCX output")
     require_file(merged_path, "missing merged draft")
     require_file(docx_path, "missing DOCX delivery")
@@ -853,11 +1266,17 @@ def main() -> None:
           "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
           "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"}
     for figure_index, (_, render, caption, render_payload, width, height, render_pixels) in enumerate(validated_figures):
+        allowed_descriptions = figure_description_candidates(merged, caption)
         matches = []
         for drawing in document.findall(".//w:drawing", ns):
             docpr = drawing.find(".//wp:docPr", ns)
             cnvpr = drawing.find(".//pic:cNvPr", ns)
-            if docpr is not None and cnvpr is not None and docpr.get("descr") == caption and cnvpr.get("descr") == caption:
+            if (
+                docpr is not None
+                and cnvpr is not None
+                and docpr.get("descr") in allowed_descriptions
+                and cnvpr.get("descr") == docpr.get("descr")
+            ):
                 matches.append(drawing)
         if len(matches) != 1:
             fail("DOCX expected diagram caption/description is missing")
@@ -916,10 +1335,6 @@ def main() -> None:
         for value in [*points, *terms, *(figure[2] for figure in validated_figures)]:
             if normalized(value) not in compact:
                 fail(f"{label} markitdown output is missing required text: {value}")
-    for label, text in extracted:
-        require_ordered_source_coverage(label, text, source_blocks)
-        require_ordered_export_coverage(label, text, source_blocks)
-
     metadata = subprocess.run(["pdfinfo", str(pdf_path)], text=True, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, check=False)
     if metadata.returncode:
@@ -930,6 +1345,14 @@ def main() -> None:
     if page_match is None or int(page_match.group(1)) <= 0:
         fail("PDF delivery must contain at least one page")
     pages = int(page_match.group(1))
+    for label, text in extracted:
+        require_ordered_source_coverage(label, text, source_blocks)
+        require_ordered_export_coverage(
+            label,
+            text,
+            source_blocks,
+            pdf_page_count=pages if label == "PDF" else None,
+        )
     minimum, maximum = pdf_contract.get("min_pages"), pdf_contract.get("max_pages")
     if not is_json_integer(minimum) or not is_json_integer(maximum) or minimum < 1 or maximum < minimum or not minimum <= pages <= maximum:
         fail("PDF delivery page count violates acceptance manifest constraints")

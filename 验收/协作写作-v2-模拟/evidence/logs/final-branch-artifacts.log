@@ -1,0 +1,254 @@
+............
+----------------------------------------------------------------------
+Ran 12 tests in 3.416s
+
+OK
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier accepted v2-draft
+PASS: verifier rejected v2-recorded-stale-manifest
+PASS: verifier accepted v2-final
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected v2-downgrade
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier accepted ai-image-jpg
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier accepted ai-image-docx-converted-png
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected ai-image-corrupt-jpg
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected ai-image-docx-mismatch
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier accepted appkit-fallback
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected system-render-both-fail
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-mismatch
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-missing
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-duplicate
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-quoted-duplicate
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-single-key-only
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-double-key-only
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-quoted-value
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-tag-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-anchor-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-explicit-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-merge-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-alias-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-extra-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-opening-space
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-closing-space
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-fake-closing
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-name-comment
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-name-at
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-empty-description
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected source-version-reordered
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-missing-dependency
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-duplicate-id
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-wrong-source-root
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-third-party-url
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-gitlab-url
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-ssh-url
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-scp-locator
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-bare-host
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-www-host
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-invented-gh-clone
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-purpose-url
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-unapproved-hint
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected manifest-wrong-wps-minimum
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected lowercase-readme
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected lowercase-skill-title
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected capitalized-skill-id
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected duplicate-skill-id
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected extended-frontmatter
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected missing-acceptance-manifest
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected missing-pipeline-evidence
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected stale-exports
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected stale-exports-with-digest
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected reversed-merged
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected duplicated-merged-paragraph
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unicode-hiragana
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unicode-hangul
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unicode-extended-han
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unicode-detail-combining-mark
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unicode-detail-emoji-zwj-vs
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected pre-body-export
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected malicious-heading-export
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected extra-export-short
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected extra-export-emoji
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected deleted-export-body
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected repointed-merged
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected figure-geometry-digest
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected figure-source-svg-old-png
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected svg-edge-far-from-nodes
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected svg-edge-endpoints-swapped
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected duplicate-manifest-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-version-float
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-completed-stage-bool
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-human-gate-float
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-machine-gate-bool
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-evidence-stage-float
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-min-pages-bool
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected invalid-integer-max-pages-float
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unknown-manifest-key
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected nullable-renderer
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected duplicate-chapter
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected matrix-count
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected stage-incomplete
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected outline-mapping
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected unresolved-placeholder
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected diagram-overlap
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected implicit-demo
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-d63abe7492
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-45f364e4e6
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-de3754b7a8
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-ed91d9e9b5
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-39757a6472
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-de6461d309
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-059c1990ea
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-f81894bf73
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected superwriter-623d262eb0
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected stale-managed
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected dependency-tamper
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected wps-runtime
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected wps-vendor
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected missing-dependency
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected discoverable-backup
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected missing-backup
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected diagram-count
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected diagram-binding
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected diagram-reverse-binding
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected png-signature
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected png-crc
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected png-dimensions
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected png-invalid-combination
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected png-adam7
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-application
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-media
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-unrelated-media
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-caption
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-relationship
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-bad-png
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected docx-text
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected pdf-creator
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier accepted pdf-pages
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected pdf-size
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected pdf-text
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: verifier rejected missing-command
+PASS: verifier rejects malformed native acceptance artifacts with explicit diagnostics

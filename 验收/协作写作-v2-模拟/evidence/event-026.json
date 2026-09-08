@@ -1,0 +1,31 @@
+{
+  "id": "synthetic-026-put_object",
+  "kind": "put_object",
+  "object_id": "chapter-02",
+  "version": 1,
+  "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:26",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "chapter-02",
+      "kind": "chapter",
+      "path": "章节/02-异常验收.md",
+      "version": 1,
+      "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+      "dependencies": {
+        "approach": 2,
+        "outline": 2
+      },
+      "status": "draft",
+      "metadata": {
+        "required_material_ids": [
+          "measurement"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-039-advance",
+  "kind": "advance",
+  "object_id": null,
+  "version": null,
+  "sha256": null,
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:39",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "stage": "manuscript"
+  }
+}

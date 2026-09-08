@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-010-approve",
+  "kind": "approve",
+  "object_id": "approach",
+  "version": 2,
+  "sha256": "6c025796ff9c6837323569342f9a7c8ff8010098e2cad8ecabe0b3129789475f",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:10",
+    "text": "synthetic-test 确认当前方案及补材获取安排。"
+  },
+  "payload": {}
+}

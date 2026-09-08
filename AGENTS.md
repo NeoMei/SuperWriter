@@ -1,0 +1,38 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+SuperWriter is a technical proposal writing skill. `SKILL.md` defines its workflow; `references/` holds templates and JSON contracts. `scripts/` contains dependency checks, SVG rendering, and delivery validation. `install.sh` installs skill mirrors into Agents, Claude, and Codex. `tests/` contains regression suites; `验收/` contains simulated customer workspaces, illustrations, and DOCX/PDF examples. Design documents live in `docs/`.
+
+## Build, Test, and Development Commands
+
+Run commands from the repository root. There is no application build or development server.
+
+- `bash install.sh`: install configured dependencies and host mirrors; modifies host skill directories and the Codex routing file.
+- `bash scripts/verify.sh`: check dependencies, installed mirrors, routing, and workflow contracts; requires a configured installation.
+- `python3 -m unittest discover -s tests -p 'test_*.py'`: run Python regression tests.
+- `bash tests/test_install.sh`: test transactional installation, rollback, and path safety.
+- `bash tests/test_verify_artifacts.sh`: test artifact acceptance and malformed-output rejection.
+- `bash scripts/verify.sh --acceptance-dir /absolute/path/to/customer/project`: validate a completed delivery.
+
+Rendering tests require macOS AppKit tools. Delivery checks also require the tools listed in `README.md`, including `markitdown`, `pdfinfo`, `file`, and `unzip`.
+
+## Coding Style & Naming Conventions
+
+Follow existing formatting: four-space Python indentation, two-space Bash/JavaScript indentation, Python `snake_case`, and uppercase shell configuration variables. Quote shell paths, including Chinese names and spaces. Keep Bash scripts strict with `set -euo pipefail`. No repository-wide formatter or linter is configured. Preserve the public name `SuperWriter` and internal skill ID `superwriter`; update related contracts together.
+
+## Testing Guidelines
+
+Python tests use `unittest`, `test_*.py` files, and `test_*` methods. Add regression cases for changed behavior, especially rejected inputs, rollback, and artifact integrity. No numeric coverage threshold is configured. Run affected suites and report environment-dependent failures separately from passing checks.
+
+## Commit & Pull Request Guidelines
+
+History mixes imperative summaries with `feat:`, `fix:`, and `docs:` prefixes; prefer these prefixes for focused changes. PRs should explain the problem, resulting behavior, affected contracts, and validation commands/results. Link relevant issues or design documents; include rendered evidence when changing document output.
+
+## Agent & Configuration Rules
+
+When `.codegraph/` exists, use `codegraph explore "symbol or file"` before searching or reading code. Otherwise skip CodeGraph.
+
+Bid-writing requests first inspect both `流水线状态.md` and `协作状态.json`. New projects use protocol v2 stages `intake / approach / outline / chapters / illustrations / manuscript / delivery`; approach, outline, every chapter, figure set or explicit no-figure decision, and manuscript require explicit current-version user approval. Delivery is machine verified, with layout approval only when a layout object exists. Actual legacy projects continue under `references/legacy-v1`; migration requires an explicit user decision and never invents approvals. Restrict tools and subagents to the current customer's workspace.
+
+Configure dependency sources with `WPSCOMPOSER_SKILL_SOURCE`, `SUPERWRITER_AGENTS_SKILLS_ROOT`, and `SUPERWRITER_OPENCODE_SKILLS_ROOT`; never commit private customer material.

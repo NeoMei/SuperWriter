@@ -1,0 +1,13 @@
+{
+  "schema_version": 2,
+  "project_id": "synthetic-collaborative-writing",
+  "revision": 0,
+  "stage": "intake",
+  "active_object_id": null,
+  "objects": {},
+  "materials": {},
+  "decisions": [],
+  "approvals": [],
+  "processed_events": {},
+  "invalidations": {}
+}

@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-032-request_changes",
+  "kind": "request_changes",
+  "object_id": "figure-01",
+  "version": 1,
+  "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:32",
+    "text": "synthetic-test 将提交审阅前的标签改为“修改后重提”，明确修改后的回路语义。"
+  },
+  "payload": {
+    "comment": "将提交审阅前的标签改为“修改后重提”，明确修改后的回路语义。"
+  }
+}

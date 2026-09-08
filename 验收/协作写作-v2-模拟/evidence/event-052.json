@@ -1,0 +1,26 @@
+{
+  "id": "synthetic-052-put_object",
+  "kind": "put_object",
+  "object_id": "delivery",
+  "version": 2,
+  "sha256": "37d94634810964fe723b99ea615f540b4339cd851b43f0e142c09369de645446",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:52",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "delivery",
+      "kind": "delivery",
+      "path": "交付/验收报告.md",
+      "version": 2,
+      "sha256": "37d94634810964fe723b99ea615f540b4339cd851b43f0e142c09369de645446",
+      "dependencies": {
+        "manuscript": 3
+      },
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

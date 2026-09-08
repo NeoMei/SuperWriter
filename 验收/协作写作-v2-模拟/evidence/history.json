@@ -1,0 +1,97 @@
+[
+  {
+    "label": "initial",
+    "revision": 0,
+    "state": "evidence/00-initial.json"
+  },
+  {
+    "label": "preference-recorded-not-approved",
+    "revision": 1,
+    "state": "evidence/01-preference-recorded-not-approved.json"
+  },
+  {
+    "label": "approach-confirmed",
+    "revision": 10,
+    "state": "evidence/02-approach-confirmed.json"
+  },
+  {
+    "label": "outline-confirmed",
+    "revision": 17,
+    "state": "evidence/03-outline-confirmed.json"
+  },
+  {
+    "label": "chapter1-revised-approved",
+    "revision": 24,
+    "state": "evidence/04-chapter1-revised-approved.json"
+  },
+  {
+    "label": "chapters-approved",
+    "revision": 28,
+    "state": "evidence/05-chapters-approved.json"
+  },
+  {
+    "label": "ready-for-figure",
+    "revision": 29,
+    "state": "evidence/06-ready-for-figure.json"
+  },
+  {
+    "label": "figure-v1-changes-requested",
+    "revision": 32,
+    "state": "evidence/07-figure-v1-changes-requested.json"
+  },
+  {
+    "label": "figure-v2-approved",
+    "revision": 35,
+    "state": "evidence/08-figure-v2-approved.json"
+  },
+  {
+    "label": "figure-set-pending-review",
+    "revision": 37,
+    "state": "evidence/09-figure-set-pending-review.json"
+  },
+  {
+    "label": "figure-set-approved",
+    "revision": 38,
+    "state": "evidence/10-figure-set-approved.json"
+  },
+  {
+    "label": "manuscript-v1-changes-requested",
+    "revision": 42,
+    "state": "evidence/11-manuscript-v1-changes-requested.json"
+  },
+  {
+    "label": "manuscript-v2-pending-review",
+    "revision": 44,
+    "state": "evidence/12-manuscript-v2-pending-review.json"
+  },
+  {
+    "label": "manuscript-v2-approved",
+    "revision": 45,
+    "state": "evidence/13-manuscript-v2-approved.json"
+  },
+  {
+    "label": "delivery-draft-before-native-generation",
+    "revision": 47,
+    "state": "evidence/14-delivery-draft-before-native-generation.json"
+  },
+  {
+    "label": "manuscript-v3-wps-figure-approved",
+    "revision": 51,
+    "state": "evidence/15-manuscript-v3-wps-figure-approved.json"
+  },
+  {
+    "label": "delivery-v2-rebound-to-manuscript-v3",
+    "revision": 52,
+    "state": "evidence/16-delivery-v2-rebound-to-manuscript-v3.json"
+  },
+  {
+    "label": "manuscript-v4-native-numbering-approved",
+    "revision": 61,
+    "state": "evidence/17-manuscript-v4-native-numbering-approved.json"
+  },
+  {
+    "label": "delivery-v3-rebound-to-manuscript-v4",
+    "revision": 62,
+    "state": "evidence/18-delivery-v3-rebound-to-manuscript-v4.json"
+  }
+]

@@ -80,6 +80,26 @@ require_file() {
 require_file "$SRC/SKILL.md"
 require_file "$SRC/scripts/render_svg.py"
 require_file "$SRC/scripts/render_svg_macos.js"
+SUPERWRITER_RUNTIME_FILES=(
+  scripts/render_svg.py
+  scripts/render_svg_macos.js
+  scripts/collaboration/__init__.py
+  scripts/collaboration/model.py
+  scripts/collaboration/store.py
+  scripts/collaboration/workflow.py
+  scripts/collaboration/migration.py
+  scripts/collaboration_state.py
+  scripts/review_server.py
+  scripts/review_assets/index.html
+  scripts/review_assets/review.js
+  scripts/review_assets/review.css
+  scripts/verify_workflow.py
+  scripts/verify_acceptance.py
+)
+for runtime_file in "${SUPERWRITER_RUNTIME_FILES[@]}"; do
+  require_file "$SRC/$runtime_file"
+done
+python3 -B "$SRC/scripts/verify_workflow.py" --source-root "$SRC" >/dev/null
 python3 -B "$SRC/scripts/check_dependencies.py" \
   --manifest "$SRC/references/依赖清单.json" \
   --agents-root "$AGENTS_SKILLS_ROOT" \
@@ -281,8 +301,13 @@ for index in "${!host_roots[@]}"; do
   mkdir -p "$stage_new/superwriter/scripts"
   cp "$SRC/SKILL.md" "$stage_new/superwriter/SKILL.md"
   cp -R "$SRC/references" "$stage_new/superwriter/references"
-  cp "$SRC/scripts/render_svg.py" "$stage_new/superwriter/scripts/render_svg.py"
-  cp "$SRC/scripts/render_svg_macos.js" "$stage_new/superwriter/scripts/render_svg_macos.js"
+  for runtime_file in "${SUPERWRITER_RUNTIME_FILES[@]}"; do
+    mkdir -p "$(dirname "$stage_new/superwriter/$runtime_file")"
+    cp "$SRC/$runtime_file" "$stage_new/superwriter/$runtime_file"
+  done
+  for runtime_file in "${SUPERWRITER_RUNTIME_FILES[@]}"; do
+    require_file "$stage_new/superwriter/$runtime_file"
+  done
 
   for dependency_index in "${!DEPENDENCIES[@]}"; do
     skill="${DEPENDENCIES[$dependency_index]}"
@@ -324,9 +349,9 @@ cat >> "$route_stage" <<'BLOCK'
 <!-- pipeline:superwriter:start -->
 # SuperWriter 路由
 
-- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 SuperWriter 阶段 0（先读/建流水线状态.md）
+- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 SuperWriter（先读流水线状态.md 与协作状态.json）
 - 预授权技能（视为已获指令可直接调用）：markitdown、grilling、grill-me、grill-with-docs、to-spec、domain-modeling、obsidian-excalidraw、ai-image-to-ppt、WPSComposer、superwriter 自身
-- 阶段推进规则：阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收
+- 阶段推进规则：新版使用 intake / approach / outline / chapters / illustrations / manuscript / delivery；方案、大纲、每章、配图集合或无图决定及合稿须明确确认。旧项目按 legacy-v1 执行；迁移须用户确认，不补造确认记录。导出使用 WPSComposer 并完成实际文件验收。
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用
 <!-- pipeline:superwriter:end -->
 BLOCK

@@ -1,0 +1,15 @@
+{
+  "kind": "synthetic-test",
+  "interface": "real Chrome via installed review server",
+  "figure_set_version": 1,
+  "figure_version": 2,
+  "revision_after_preference": 38,
+  "figure_set_status": "pending_review",
+  "figure_set_approvals": 0,
+  "observations": [
+    "Current PNG displays modified label 修改后重提",
+    "Exact caption and paragraph placement displayed together with chapter-01 text",
+    "Preference click stored one decision without approval"
+  ],
+  "screenshot": "Emitted inline in current Codex conversation; no file screenshot API used."
+}

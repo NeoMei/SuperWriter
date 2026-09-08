@@ -1,0 +1,17 @@
+{
+  "kind": "synthetic-test",
+  "check": "final-v4-native-visual",
+  "pdf_pages": 1,
+  "page_size": "A4",
+  "visual": [
+    "Rendered entire final PDF page: chapter headings no duplicate numeric prefix, caption 图 1 审阅记录确认循环, image legible, all body text inside page margins, no clipping/overlap",
+    "Actual WPS window titled 协作审阅试点技术方案.docx opened; screenshot shows expected title, first chapter and current figure/caption",
+    "Closed only inspected document using Command+W; no save prompt; unrelated WPS documents remained open"
+  ],
+  "pdf_render": "evidence/pdf-render-v4/page-1.png",
+  "wps_screenshot": "Emitted inline via CUA in current conversation, not persisted as separate screenshot",
+  "hashes": {
+    "协作审阅试点技术方案.docx": "b590f474e252b51d6b1e0c0d6c6dc654a8b7bebdf0e225b3b6a63e28b6fc2fd1",
+    "协作审阅试点技术方案.pdf": "7e5edaf80983fd7d651e66a0ef60f1d171201dde000e1517db2ad553dc9b2175"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "synthetic-025-upsert_material",
+  "kind": "upsert_material",
+  "object_id": null,
+  "version": null,
+  "sha256": null,
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:25",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "material": {
+      "id": "measurement",
+      "description": "模拟测量记录",
+      "purpose": "核验记录字段，不用于效果承诺",
+      "affected_objects": [
+        "chapter-02"
+      ],
+      "critical": true,
+      "source": "当前模拟项目材料/补充测量材料.md",
+      "acquisition_method": "由模拟负责人提供项目内测试表",
+      "acquisition_status": "acquired",
+      "verification_status": "verified",
+      "resolution": ""
+    }
+  }
+}

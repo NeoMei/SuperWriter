@@ -1,0 +1,56 @@
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+PASS: installed legacy reference resolution and v1 continuation contracts
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied
+PASS: install is path-safe, marker-safe, and transactional across all hosts and routes

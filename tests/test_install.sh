@@ -131,6 +131,17 @@ run_install() {
     bash "$REPO_ROOT/install.sh"
 }
 
+copy_superwriter_runtime() {
+  local destination="$1"
+  mkdir -p "$destination/scripts"
+  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
+    "$REPO_ROOT/scripts/render_svg_macos.js" "$REPO_ROOT/scripts/collaboration_state.py" \
+    "$REPO_ROOT/scripts/review_server.py" "$REPO_ROOT/scripts/verify_workflow.py" \
+    "$REPO_ROOT/scripts/verify_acceptance.py" "$destination/scripts/"
+  cp -R "$REPO_ROOT/scripts/collaboration" "$destination/scripts/collaboration"
+  cp -R "$REPO_ROOT/scripts/review_assets" "$destination/scripts/review_assets"
+}
+
 run_install_from() {
   local source_root="$1"
   HOME="$TEST_HOME" \
@@ -145,8 +156,20 @@ assert_basic_install() {
   for host in "${HOSTS[@]}"; do
     skills_root="$TEST_HOME/$host/skills"
     assert_file "$skills_root/superwriter/SKILL.md"
+    python3 -B "$REPO_ROOT/tests/test_legacy_entry.py" "$skills_root/superwriter"
     assert_file "$skills_root/superwriter/scripts/render_svg.py"
     assert_file "$skills_root/superwriter/scripts/render_svg_macos.js"
+    assert_file "$skills_root/superwriter/scripts/collaboration/model.py"
+    assert_file "$skills_root/superwriter/scripts/collaboration/store.py"
+    assert_file "$skills_root/superwriter/scripts/collaboration/workflow.py"
+    assert_file "$skills_root/superwriter/scripts/collaboration/migration.py"
+    assert_file "$skills_root/superwriter/scripts/collaboration_state.py"
+    assert_file "$skills_root/superwriter/scripts/review_server.py"
+    assert_file "$skills_root/superwriter/scripts/review_assets/index.html"
+    assert_file "$skills_root/superwriter/scripts/review_assets/review.js"
+    assert_file "$skills_root/superwriter/scripts/review_assets/review.css"
+    assert_file "$skills_root/superwriter/scripts/verify_workflow.py"
+    assert_file "$skills_root/superwriter/scripts/verify_acceptance.py"
     for skill in "${DEPENDENCIES[@]}" obsidian-excalidraw; do
       assert_file "$skills_root/$skill/SKILL.md"
     done
@@ -160,10 +183,14 @@ assert_basic_install() {
     fail "expected one exact Codex routing end marker"
   grep -Fxq '# SuperWriter 路由' "$agents_file" || \
     fail "expected the public project name in the SuperWriter route heading"
-  grep -Fq '自动进入 SuperWriter 阶段 0' "$agents_file" || \
+  grep -Fq '自动进入 SuperWriter（先读流水线状态.md 与协作状态.json）' "$agents_file" || \
     fail "expected the public project name in the SuperWriter route instructions"
   grep -Fq 'WPSComposer、superwriter 自身' "$agents_file" || \
     fail "expected the SuperWriter route to preserve the lowercase internal skill id"
+  grep -Fq 'intake / approach / outline / chapters / illustrations / manuscript / delivery' "$agents_file" || \
+    fail "expected protocol-v2 stages in the SuperWriter route"
+  ! grep -Fq '人工确认点仅门 2 / 门 5 / 门 8' "$agents_file" || \
+    fail "protocol-v2 route must not retain old-only approval gates"
   grep -q 'keep-this-line' "$agents_file" || fail "expected existing Codex instructions to remain"
   ! grep -q 'stale routing block' "$agents_file" || fail "expected stale routing block to be replaced"
 }
@@ -186,11 +213,70 @@ new_fixture baseline
 run_install
 run_install
 assert_basic_install
+installed_skill="$TEST_HOME/.codex/skills/superwriter"
+(
+  cd "$CASE_ROOT"
+  python3 "$installed_skill/scripts/collaboration_state.py" --help >/dev/null
+  python3 "$installed_skill/scripts/review_server.py" --help >/dev/null
+  python3 "$installed_skill/scripts/verify_workflow.py" --source-root "$installed_skill" >/dev/null
+)
+python3 -B - "$installed_skill" "$REPO_ROOT" <<'PY'
+from pathlib import Path
+import sys
+installed, repository = map(Path, sys.argv[1:])
+for path in (installed / "scripts").rglob("*"):
+    if path.is_file():
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        assert str(repository / "tests") not in text
+        assert str(repository / "docs") not in text
+PY
+route_file="$TEST_HOME/.codex/AGENTS.md"
+cp "$route_file" "$CASE_ROOT/current-route.md"
+python3 -B - "$route_file" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+needle = "- 阶段推进规则：新版使用 intake / approach / outline / chapters / illustrations / manuscript / delivery；方案、大纲、每章、配图集合或无图决定及合稿须明确确认。旧项目按 legacy-v1 执行；迁移须用户确认，不补造确认记录。导出使用 WPSComposer 并完成实际文件验收。"
+assert needle in text
+path.write_text(
+    text.replace(needle, "- 阶段推进规则：人工确认点仅门 2 / 门 5 / 门 8"),
+    encoding="utf-8",
+)
+PY
+expect_failure "legacy-only gates in protocol-v2 route" env \
+  HOME="$TEST_HOME" \
+  SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
+  SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
+  WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
+  bash "$REPO_ROOT/scripts/verify.sh"
+[[ "$LAST_FAILURE_OUTPUT" == *"protocol-v2 stages"* ]] || \
+  fail "legacy-only route did not fail the protocol-v2 route check"
+cp "$CASE_ROOT/current-route.md" "$route_file"
 HOME="$TEST_HOME" \
   SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" \
   SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" \
   WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" \
   bash "$REPO_ROOT/scripts/verify.sh"
+
+# Runtime closure failures happen before any host or route mutation.
+for missing_runtime in scripts/collaboration/model.py scripts/review_assets/review.js; do
+  new_fixture "missing-runtime-${missing_runtime##*/}"
+  seed_existing_hosts
+  incomplete_source="$CASE_ROOT/SuperWriter"
+  mkdir -p "$incomplete_source"
+  cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$incomplete_source/"
+  cp -R "$REPO_ROOT/references" "$incomplete_source/references"
+  copy_superwriter_runtime "$incomplete_source"
+  rm "$incomplete_source/$missing_runtime"
+  before_state="$(snapshot_tree "$TEST_HOME")"
+  expect_failure "missing SuperWriter runtime $missing_runtime" run_install_from "$incomplete_source"
+  after_state="$(snapshot_tree "$TEST_HOME")"
+  [[ "$LAST_FAILURE_OUTPUT" == *"Missing required skill file"* ]] || \
+    fail "missing runtime diagnostic omitted: $missing_runtime"
+  [ "$before_state" = "$after_state" ] || \
+    fail "missing runtime changed hosts or route: $missing_runtime"
+done
 
 # Dependency preflight must aggregate findings and leave all hosts/routes byte-identical.
 new_fixture aggregate-preflight
@@ -269,8 +355,7 @@ for adjacency_case in manifest-symlink references-symlink; do
   external_source="$CASE_ROOT/external/SuperWriter"
   mkdir -p "$version_source/scripts" "$external_source/references"
   cp "$REPO_ROOT/install.sh" "$version_source/install.sh"
-  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-    "$REPO_ROOT/scripts/render_svg_macos.js" "$version_source/scripts/"
+  copy_superwriter_runtime "$version_source"
   cp "$REPO_ROOT/SKILL.md" "$external_source/SKILL.md"
   cp -R "$REPO_ROOT/references/." "$external_source/references/"
   cp "$REPO_ROOT/SKILL.md" "$version_source/SKILL.md"
@@ -366,8 +451,7 @@ for version_case in mismatch missing duplicate quoted-duplicate single-key-only 
   version_source="$CASE_ROOT/SuperWriter"
   mkdir -p "$version_source/scripts"
   cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$version_source/"
-  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-    "$REPO_ROOT/scripts/render_svg_macos.js" "$version_source/scripts/"
+  copy_superwriter_runtime "$version_source"
   cp -R "$REPO_ROOT/references" "$version_source/references"
   python3 -B - "$version_source/SKILL.md" "$version_case" <<'PY'
 from pathlib import Path
@@ -443,8 +527,7 @@ for aggregate_case in source-version schema manifest-pruned; do
   aggregate_source="$CASE_ROOT/SuperWriter"
   mkdir -p "$aggregate_source/scripts"
   cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$aggregate_source/"
-  cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-    "$REPO_ROOT/scripts/render_svg_macos.js" "$aggregate_source/scripts/"
+  copy_superwriter_runtime "$aggregate_source"
   cp -R "$REPO_ROOT/references" "$aggregate_source/references"
   if [ "$aggregate_case" = source-version ]; then
     python3 -B - "$aggregate_source/SKILL.md" <<'PY'
@@ -549,8 +632,7 @@ new_fixture default-sibling-wps
 mkdir -p "$CASE_ROOT/SuperWriter/scripts"
 cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
-cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-  "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+copy_superwriter_runtime "$CASE_ROOT/SuperWriter"
 
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
@@ -572,8 +654,7 @@ worktree_root="$CASE_ROOT/SuperWriter/.worktrees/release"
 mkdir -p "$worktree_root/scripts"
 cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$worktree_root/"
 cp "$REPO_ROOT/scripts/verify.sh" "$worktree_root/scripts/verify.sh"
-cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-  "$REPO_ROOT/scripts/render_svg_macos.js" "$worktree_root/scripts/"
+copy_superwriter_runtime "$worktree_root"
 cp -R "$REPO_ROOT/references" "$worktree_root/references"
 mv "$WPS_REPO" "$CASE_ROOT/WPSComposer"
 WPS_REPO="$CASE_ROOT/WPSComposer"
@@ -594,8 +675,7 @@ new_fixture legacy-sibling-wps
 mkdir -p "$CASE_ROOT/SuperWriter/scripts"
 cp "$REPO_ROOT/install.sh" "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$CASE_ROOT/SuperWriter/"
 cp "$REPO_ROOT/scripts/verify.sh" "$CASE_ROOT/SuperWriter/scripts/verify.sh"
-cp "$REPO_ROOT/scripts/check_dependencies.py" "$REPO_ROOT/scripts/render_svg.py" \
-  "$REPO_ROOT/scripts/render_svg_macos.js" "$CASE_ROOT/SuperWriter/scripts/"
+copy_superwriter_runtime "$CASE_ROOT/SuperWriter"
 
 cp -R "$REPO_ROOT/references" "$CASE_ROOT/SuperWriter/references"
 mv "$WPS_REPO" "$CASE_ROOT/WpsComposer"

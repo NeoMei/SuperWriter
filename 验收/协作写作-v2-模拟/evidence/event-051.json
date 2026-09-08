@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-051-approve",
+  "kind": "approve",
+  "object_id": "manuscript",
+  "version": 3,
+  "sha256": "35f4c14c2ebf9faaeed79c471a62d26995f1fa9dd7b4dad55752bf9627606f0a",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:51",
+    "text": "synthetic-test 确认仅将同一配图改为 WPSComposer 公共 figure 指令，并采用规范路径 合并稿.md。"
+  },
+  "payload": {}
+}

@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-028-approve",
+  "kind": "approve",
+  "object_id": "chapter-02",
+  "version": 1,
+  "sha256": "8830444d4a7a7491c19265f2d94302ac9f61453736f9080215db17aebbf291cb",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:28",
+    "text": "synthetic-test 确认第二章，材料仅用于记录方法示例。"
+  },
+  "payload": {}
+}

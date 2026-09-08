@@ -1,0 +1,29 @@
+{
+  "id": "synthetic-019-put_object",
+  "kind": "put_object",
+  "object_id": "chapter-01",
+  "version": 1,
+  "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:19",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "chapter-01",
+      "kind": "chapter",
+      "path": "章节/01-审阅流程.md",
+      "version": 1,
+      "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+      "dependencies": {
+        "approach": 2,
+        "outline": 2
+      },
+      "status": "draft",
+      "metadata": {
+        "required_material_ids": []
+      }
+    }
+  }
+}

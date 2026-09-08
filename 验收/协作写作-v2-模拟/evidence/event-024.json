@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-024-approve",
+  "kind": "approve",
+  "object_id": "chapter-01",
+  "version": 2,
+  "sha256": "2dfadfdb92dda9959b68bddf96d88898e4e01e995add1365553a50815c52d3b6",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:24",
+    "text": "synthetic-test 确认修订后的第一章。"
+  },
+  "payload": {}
+}

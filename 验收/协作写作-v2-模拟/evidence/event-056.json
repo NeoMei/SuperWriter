@@ -1,0 +1,33 @@
+{
+  "id": "synthetic-056-put_object",
+  "kind": "put_object",
+  "object_id": "figure-set",
+  "version": 2,
+  "sha256": "55a7ae11c51bca9d1d03cbc644090ca1e577dff35fcc7ebc18c55894c0294205",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:56",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "figure-set",
+      "kind": "figure_set",
+      "path": "配图/配图集审阅.md",
+      "version": 2,
+      "sha256": "55a7ae11c51bca9d1d03cbc644090ca1e577dff35fcc7ebc18c55894c0294205",
+      "dependencies": {
+        "chapter-01": 2,
+        "chapter-02": 1,
+        "figure-01": 3
+      },
+      "status": "draft",
+      "metadata": {
+        "figure_ids": [
+          "figure-01"
+        ],
+        "mode": "generated"
+      }
+    }
+  }
+}

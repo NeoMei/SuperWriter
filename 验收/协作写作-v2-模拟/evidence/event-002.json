@@ -1,0 +1,24 @@
+{
+  "id": "synthetic-002-put_object",
+  "kind": "put_object",
+  "object_id": "brief",
+  "version": 1,
+  "sha256": "8124f524e4f939b7bbfa3e8f54d7908f24291993a2cfd093684798b851c402da",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:2",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "brief",
+      "kind": "brief",
+      "path": "目标与材料分析.md",
+      "version": 1,
+      "sha256": "8124f524e4f939b7bbfa3e8f54d7908f24291993a2cfd093684798b851c402da",
+      "dependencies": {},
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

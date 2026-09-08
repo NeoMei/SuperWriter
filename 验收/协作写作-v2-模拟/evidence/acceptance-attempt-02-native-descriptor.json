@@ -1,0 +1,13 @@
+{
+  "attempt": 2,
+  "scope": "synthetic-test validation-only",
+  "manifest_state_revision": 62,
+  "exit_code": 1,
+  "stderr": "FAIL: DOCX expected diagram caption/description is missing\n",
+  "diagnosis": "actual public WPS directive writes stable id fig:review-cycle to docPr/cNvPr descr; frozen verifier compared descr to visible caption",
+  "actual_docx_descriptors": [
+    "fig:review-cycle"
+  ],
+  "visible_caption": "图 1 审阅记录确认循环",
+  "state_changed": false
+}

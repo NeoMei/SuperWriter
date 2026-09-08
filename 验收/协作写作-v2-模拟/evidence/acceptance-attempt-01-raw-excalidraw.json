@@ -1,0 +1,9 @@
+{
+  "attempt": 1,
+  "scope": "synthetic-test validation-only",
+  "manifest_state_revision": 62,
+  "exit_code": 1,
+  "stderr": "FAIL: native Excalidraw source is missing its JSON block\n",
+  "diagnosis": "manifest referenced raw .excalidraw; verifier public source contract requires .excalidraw.md wrapper",
+  "state_changed": false
+}

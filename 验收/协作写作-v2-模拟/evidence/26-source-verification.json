@@ -1,0 +1,24 @@
+[
+  {
+    "name": "verify-source-final",
+    "command": [
+      "bash",
+      "scripts/verify.sh"
+    ],
+    "exit_code": 0,
+    "stdout": "PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw\nPASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied\n",
+    "stderr": ""
+  },
+  {
+    "name": "verify-acceptance-final",
+    "command": [
+      "bash",
+      "scripts/verify.sh",
+      "--acceptance-dir",
+      "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点"
+    ],
+    "exit_code": 0,
+    "stdout": "PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw\nPASS: explicit acceptance manifest and artifacts at /Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点 are satisfied\n",
+    "stderr": ""
+  }
+]

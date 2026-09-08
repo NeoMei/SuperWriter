@@ -1,0 +1,25 @@
+{
+  "id": "synthetic-063-record_delivery",
+  "kind": "record_delivery",
+  "object_id": "delivery",
+  "version": 3,
+  "sha256": "c1943cd782c6fd3e23c0ebb5c4dcaccaf1a2fff896f4ea087d3865fa88bf705e",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:63",
+    "text": "synthetic-test machine receipt after complete native acceptance PASS at revision 62; not real user acceptance"
+  },
+  "payload": {
+    "manuscript_sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5",
+    "outputs": {
+      "docx": {
+        "path": "导出/协作审阅试点技术方案.docx",
+        "sha256": "b590f474e252b51d6b1e0c0d6c6dc654a8b7bebdf0e225b3b6a63e28b6fc2fd1"
+      },
+      "pdf": {
+        "path": "导出/协作审阅试点技术方案.pdf",
+        "sha256": "7e5edaf80983fd7d651e66a0ef60f1d171201dde000e1517db2ad553dc9b2175"
+      }
+    }
+  }
+}

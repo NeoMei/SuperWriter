@@ -1,133 +1,85 @@
 # SuperWriter
 
-SuperWriter 是面向技术标、应标文件和技术方案的多阶段写作 skill。它把招标文件解析、评分点覆盖、客户访谈、章节写作、配图、终审和 WPS 原生导出组织为一条可追踪、可验收的流水线。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.1.0`；协作流程协议为 v2。
 
-> 对外项目名为 `SuperWriter`；为兼容 Agent Skills 发现、既有安装目录和路由，内部技能 ID 保持 `superwriter`。
+## 七阶段流程
 
-## 核心契约
+`intake → approach → outline → chapters → illustrations → manuscript → delivery`
 
-- 阶段 0 负责启动预处理，阶段 1–9 负责业务交付。
-- 七个流程门为 0、2、3、5、6、7、8；门未通过不得推进。
-- 只有门 2、5、8 等待人工确认，其余机器门自动检查并继续。
-- 应答矩阵锁定后，章节结构变化必须先回溯矩阵。
-- 素材缺口登记并保留占位，不中断整条写作流水线。
-- 子代理和工具只能读取当前客户工作区，禁止跨客户引用素材。
+- intake 解析招标文件、评分表、应答矩阵和材料，机器自查后继续。
+- approach、outline、每章、figure_set（含明确无图决定）和 manuscript 都绑定当前 version、SHA-256、revision 与真实用户证据，明确批准后推进。
+- chapters 按大纲逐章审阅；当前章未确认时不提前起草下一章。
+- delivery 仅在存在 layout 对象时要求版式确认；最终完成状态由实际 DOCX/PDF 验收后的 agent `record_delivery` 事件写成 `verified`。
+- 只有 `acquired + verified` 的材料能直接支持事实；指定联系人不代表授权发送消息。
+- HTML 审阅页可选，与 CLI 共用 `协作状态.json`；停用网页不改变审批规则。
 
-## 交付流程
+启动时同时检查 `流水线状态.md` 与 `协作状态.json`。空工作区初始化 v2；已有 `协作状态.json` 的项目恢复 v2；只有旧状态或旧产物的项目按 `references/legacy-v1/` 继续。迁移必须先展示只读预览并取得用户明确决定，迁移只登记草稿，不导入确认。
 
-```text
-0 招标文件与评分表解析
-1 素材入库与标签
-2 应标深访（人工确认）
-3 大纲与矩阵锁定
-4 分章写作
-5 章节核查与补素材（人工确认）
-6 AI 配图（默认 ai-image-to-ppt / 退化 Excalidraw）
-7 合并稿与覆盖核查
-8 终稿审定（人工确认）
-9 WPSComposer 导出 DOCX / PDF 并验收
-```
-
-项目验收由 `验收清单.json` 驱动。验证器会核对流水线证据、评分点和章节映射、合并稿与 DOCX/PDF 的双向正文覆盖、配图存在性与图文对应（默认 ai-image-to-ppt JPG / 退化 Excalidraw+SVG+PNG 图像链），以及输出格式和页数约束。
-
-SVG 栅格化统一调用 `scripts/render_svg.py`：先尝试 macOS `sips`，当系统版本无法解码 SVG 时自动回退到 `osascript -l JavaScript` 驱动的 AppKit。两条路径均为 macOS 系统能力，不需要 PyMuPDF、浏览器或其他第三方渲染器。
+详细操作见 [SKILL.md](SKILL.md)，核查项见 [references/门禁清单.md](references/%E9%97%A8%E7%A6%81%E6%B8%85%E5%8D%95.md)，讨论与事件证据规则见 [references/协作讨论规则.md](references/%E5%8D%8F%E4%BD%9C%E8%AE%A8%E8%AE%BA%E8%A7%84%E5%88%99.md)。
 
 ## 依赖
 
 - Python 3
-- `markitdown`、`pdfinfo`、`file`、`unzip`，以及 macOS 系统的 `sips`、`osascript`/AppKit
 - WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
-- 已安装的第三方 skills：`grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
+- 交付检查所需的 `markitdown`、`pdfinfo`、`file`、`unzip`，以及 macOS `sips`、`osascript`/AppKit
+- 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
-| 依赖 | 所有权 | 默认源目录 | 覆盖变量 | 安装指引 |
-| --- | --- | --- | --- | --- |
-| WPSComposer | SuperWriter 第一方运行时 | 同级 `WPSComposer/skills/WPSComposer` 或 `WpsComposer/skills/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE` | 安装官方 WPSComposer `0.7.2` 或更高版本 |
-| `grilling` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `grill-me` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `grill-with-docs` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `to-spec` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `domain-modeling` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `ai-image-to-ppt` | 第三方 skill | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
-| `obsidian-excalidraw` | 第三方 skill | `~/.opencode/skills` | `SUPERWRITER_OPENCODE_SKILLS_ROOT` | 通过可信 skill 管理器安装 |
+第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：
 
-第三方 skill 不属于 SuperWriter 发布物，不随本仓库内置或发布；请从你信任的 skill 管理器安装。机器可读的完整契约见 [`references/依赖清单.json`](references/%E4%BE%9D%E8%B5%96%E6%B8%85%E5%8D%95.json)。
+| 依赖 | 默认源 | 覆盖变量 |
+| --- | --- | --- |
+| WPSComposer | 同级 `WPSComposer/skills/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE` |
+| Agents skills | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` |
+| obsidian-excalidraw | `~/.opencode/skills` | `SUPERWRITER_OPENCODE_SKILLS_ROOT` |
 
 ## 安装
 
 ```bash
-git clone https://github.com/NeoMei/SuperWriter.git
-cd SuperWriter
-
-# WPSComposer 不在同级目录时，显式指定 skill 源目录
 WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
+SUPERWRITER_AGENTS_SKILLS_ROOT=/path/to/agents/skills \
+SUPERWRITER_OPENCODE_SKILLS_ROOT=/path/to/opencode/skills \
   bash install.sh
 ```
 
-安装器以事务方式同步到以下三个宿主：
+安装器预检完整 SuperWriter 运行时和依赖，再以事务方式同步到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`，并更新 Codex 路由。任一必需状态模块、审阅资源或验证入口缺失时，安装在修改宿主前失败；提交阶段失败会回滚。
 
-- `~/.agents/skills`
-- `~/.claude/skills`
-- `~/.codex/skills`
-
-同时写入 Codex `AGENTS.md` 路由块并镜像依赖 skills。安装前会拒绝危险 HOME、源目标重叠、宿主路径冲突和不完整的 WPSComposer runtime；中途失败会回滚已经提交的宿主。
-
-安装器会在创建、备份或修改任何宿主路径前执行依赖预检。多个依赖同时缺失时，它会一次聚合报告所有缺失项、默认源目录及覆盖变量，然后在不修改三个宿主目录和 `AGENTS.md` 的情况下退出。它不会静默下载第三方依赖。
-
-如果依赖 skills 不在默认位置，可用以下变量指定其来源：
+已安装后从 skill 根调用工具，不假设客户目录含有仓库脚本：
 
 ```bash
-SUPERWRITER_AGENTS_SKILLS_ROOT=/path/to/agents/skills \
-SUPERWRITER_OPENCODE_SKILLS_ROOT=/path/to/opencode/skills \
-WPSCOMPOSER_SKILL_SOURCE=/path/to/WPSComposer/skills/WPSComposer \
-  bash install.sh
+export SUPERWRITER_SKILL_ROOT="$HOME/.codex/skills/superwriter"
+python3 "$SUPERWRITER_SKILL_ROOT/scripts/verify_workflow.py" --source-root "$SUPERWRITER_SKILL_ROOT"
+python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project /absolute/customer/project
+python3 "$SUPERWRITER_SKILL_ROOT/scripts/review_server.py" --help
 ```
 
 ## 验证
 
 ```bash
-# 静态安装、三宿主镜像、路由、阶段/门禁契约与备份隔离
 bash scripts/verify.sh
-
-# 验证一个已完成标段的原生交付物
-bash scripts/verify.sh --acceptance-dir /absolute/path/to/客户名/标段名
-
-# 仓库回归测试
-python3 tests/test_dependency_contract.py
-python3 tests/test_render_svg.py
-python3 tests/test_verify_acceptance.py
+python3 scripts/verify_workflow.py --source-root .
+python3 scripts/verify_workflow.py --project /absolute/customer/project
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 bash tests/test_install.sh
-bash tests/test_verify_artifacts.sh
 ```
 
-### 查询当前 SuperWriter 版本
+交付时先用当前 revision 的 v2 清单运行 `verify_acceptance.py`；PASS 后记录实际 delivery，再原子刷新清单到新 revision 并重跑验证。验证器不会自动批准内容或完成 delivery。
 
-以下只读命令会查询当前仓库 `SKILL.md` frontmatter 中的 `version`，不依赖 GNU 专用参数，也不修改文件：
+### 查询当前 SuperWriter 版本
 
 ```bash
 awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ { sub(/^version:[[:space:]]*/, ""); print; exit }' "./SKILL.md"
 ```
 
-查询已安装的 skill 时，将命令末尾的 `"./SKILL.md"` 替换为相应宿主路径：
+查询已安装副本时，将 `"./SKILL.md"` 换成：
 
 - `"$HOME/.agents/skills/superwriter/SKILL.md"`
 - `"$HOME/.claude/skills/superwriter/SKILL.md"`
 - `"$HOME/.codex/skills/superwriter/SKILL.md"`
 
-示例验收材料和报告位于 `验收/`。完整阶段定义见 [SKILL.md](SKILL.md)，模板与机器契约位于 `references/`。
+## 版本边界
 
-## 版本记录
-
-### Unreleased
-
-- 为阶段 0–9 增加内容特定的互动反馈，仅门 2 / 5 / 8 停等人工确认。
-- 配图默认改用 ai-image-to-ppt JPG/PNG，并保留 Excalidraw + SVG + PNG 的可编辑退化路径。
+v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。仓库中的 Unreleased 更改尚未包含在 `v0.1.0` 发布标签。
 
 ### v0.1.0 (2026-08-20)
 
-- 当前发布版本为 SuperWriter `0.1.0`，明确对外名称与内部 skill ID。
-- 声明 WPSComposer `0.7.2` 最低版本和七个第三方 skill 依赖。
-- 增加机器可读依赖契约以及聚合、非变更式安装前预检契约。
-
-## 当前状态
-
-截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。该版本已完成多轮独立审查，以及安装事务与路径安全加固、通用验收清单、Unicode 有序正文覆盖、原生 Excalidraw 图像链和 WPS 原生 DOCX/PDF 验收；仓库测试、静态验证与示例标段验收均通过。上述 Unreleased 变更尚未包含在 `v0.1.0` 标签中。
+截至 2026-08-20，SuperWriter `0.1.0` 已发布到 GitHub：[SuperWriter 0.1.0 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.1.0)。当前七阶段协作能力属于后续 Unreleased 源码。

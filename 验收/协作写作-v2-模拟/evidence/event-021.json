@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-021-request_changes",
+  "kind": "request_changes",
+  "object_id": "chapter-01",
+  "version": 1,
+  "sha256": "168bcb92b8a817c8458684a77391886495f2a45312d228b37a82c36f04d9c2a0",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:21",
+    "text": "synthetic-test 请具体写出每章起草、自查、修改确认步骤；全文统一术语。"
+  },
+  "payload": {
+    "comment": "请具体写出每章起草、自查、修改确认步骤；全文统一术语。"
+  }
+}

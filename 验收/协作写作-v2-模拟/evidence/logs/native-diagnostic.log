@@ -1,0 +1,46 @@
+START execute 1788799426.111111
+ERROR execute MacOSLongformExecutorError MacOSLongformExecutorError('Execution aborted by WPS JSAPI (RESOURCE_HASH_MISMATCH)')
+FINAL NATIVE_GENERATION_FAILED Native WPS long-form generation failed
+WPS registration recovery: /Users/neomei/Library/Containers/com.kingsoft.wpsoffice.mac/Data/tmp/.wpscomposer-runtime/registration-recovery
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/diagnose_native_delivery.py", line 23, in wrapper
+    result=_original(self,*a,**kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/platform_runtime.py", line 295, in execute
+    return execute_longform_plan(derived, self.executor, deadline=deadline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/pipeline.py", line 146, in execute_longform_plan
+    return executor.execute(build.plan, resources, deadline=deadline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/macos_executor.py", line 205, in execute
+    raise primary_error from None
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/macos_executor.py", line 182, in execute
+    outcome = self._build_outcome(
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/macos_executor.py", line 464, in _build_outcome
+    raise MacOSLongformExecutorError(
+skills.WPSComposer.scripts.longform.macos_executor.MacOSLongformExecutorError: Execution aborted by WPS JSAPI (RESOURCE_HASH_MISMATCH)
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/diagnose_native_delivery.py", line 39, in <module>
+    main()
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/diagnose_native_delivery.py", line 32, in main
+    print(generate(str(project/'合稿.md'),format='docx',preset='proposal',output=str(project/'导出/协作审阅试点技术方案.docx'),timeout=180),flush=True)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/orchestrator.py", line 186, in generate
+    outcome = _generate_longform_outcome(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/orchestrator.py", line 43, in _generate_longform_outcome
+    return generate_longform(
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/platform_runtime.py", line 397, in generate_longform
+    return run_longform_lifecycle(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/lifecycle.py", line 236, in run_longform_lifecycle
+    current_outcome = execute(())
+                      ^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/lifecycle.py", line 193, in execute
+    outcome = _call_stage(
+              ^^^^^^^^^^^^
+  File "/Users/neomei/.local/share/WPSComposer/skills/WPSComposer/scripts/longform/lifecycle.py", line 89, in _call_stage
+    raise LongformLifecycleError(code, message) from None
+skills.WPSComposer.scripts.longform.lifecycle.LongformLifecycleError: Native WPS long-form generation failed

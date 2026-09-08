@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-035-approve",
+  "kind": "approve",
+  "object_id": "figure-01",
+  "version": 2,
+  "sha256": "25b93a48a7652ddb2f1257337fc53a735c049c2cf18ffed3ffd5f21f3584a8b5",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:35",
+    "text": "synthetic-test 确认当前 v2 矢量流程图，标签为“修改后重提”。"
+  },
+  "payload": {}
+}

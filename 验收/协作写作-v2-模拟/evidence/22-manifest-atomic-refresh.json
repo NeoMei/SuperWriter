@@ -1,0 +1,8 @@
+{
+  "scope": "synthetic-test atomic manifest receipt refresh",
+  "old_revision": 62,
+  "new_revision": 63,
+  "only_pipeline_state_revision_changed": true,
+  "before_sha256": "f14a65968f00a9058e3a3e5c96a5bd1c7a5b6663f915060bd121fafa107deca3",
+  "after_sha256": "adacca27a79a9dfe4e12a3c9a3c0246c83da18f28d9fce51ed2f7000e595979e"
+}

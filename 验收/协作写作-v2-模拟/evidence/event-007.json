@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-007-request_changes",
+  "kind": "request_changes",
+  "object_id": "approach",
+  "version": 1,
+  "sha256": "6f53618f5fba64161a6ca4f2fd67ce6dca1de10e8f02e8843ea4c1121be46fae",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:7",
+    "text": "synthetic-test 突出证据边界，采用审阅记录这一统一术语。"
+  },
+  "payload": {
+    "comment": "突出证据边界，采用审阅记录这一统一术语。"
+  }
+}

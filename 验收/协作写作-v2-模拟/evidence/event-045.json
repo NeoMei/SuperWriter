@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-045-approve",
+  "kind": "approve",
+  "object_id": "manuscript",
+  "version": 2,
+  "sha256": "d03ce9484ab1927c6cf01aa95823ee3ab3ef63a077ae401406129adedeccdd10",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:45",
+    "text": "synthetic-test 确认删除冗余过渡后的当前完整合稿。"
+  },
+  "payload": {}
+}

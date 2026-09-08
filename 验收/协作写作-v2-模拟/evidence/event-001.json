@@ -1,0 +1,16 @@
+{
+  "id": "synthetic-001-record_preference",
+  "kind": "record_preference",
+  "object_id": null,
+  "version": null,
+  "sha256": null,
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:1",
+    "text": "synthetic-test 记录写作偏好；该偏好不构成方案批准。"
+  },
+  "payload": {
+    "scope": "project",
+    "text": "正式、具体"
+  }
+}

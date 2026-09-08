@@ -75,90 +75,13 @@ description="$(awk '/^description:/{print; exit}' "$SOURCE_SKILL")"
 case "$description" in "description: Use when "*) ;; *) fail "skill description must contain only a Use when trigger" ;; esac
 case "$description" in *阶段*|*门禁*|*人工*|*产出*|*流水线*) fail "skill description must not describe the workflow" ;; esac
 
-python3 -B - "$SOURCE_SKILL" "$SOURCE_GATES" "$SOURCE_STAGES" <<'PY'
-from pathlib import Path
-import json, re, sys
-def fail(message):
-    print(f"FAIL: {message}", file=sys.stderr); raise SystemExit(1)
-def reject_duplicate_keys(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result: raise ValueError(f"duplicate key: {key}")
-        result[key] = value
-    return result
-skill = Path(sys.argv[1]).read_text(encoding="utf-8")
-gates = Path(sys.argv[2]).read_text(encoding="utf-8")
-try: stage_contract = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys)
-except (OSError, ValueError) as exc: fail(f"stage interaction contract is invalid: {exc}")
-if (not isinstance(stage_contract, dict)
-        or type(stage_contract.get("version")) is not int
-        or not isinstance(stage_contract.get("stages"), list)
-        or any(not isinstance(item, dict)
-               or type(item.get("stage")) is not int
-               or (item.get("gate") is not None and item.get("gate") != "delivery"
-                   and type(item.get("gate")) is not int)
-               for item in stage_contract.get("stages", []))):
-    fail("stage interaction contract integer fields must use JSON integers")
-stages = list(re.finditer(r"^\*\*阶段 (\d+) ([^*]+)\*\*", skill, re.M))
-if [int(item.group(1)) for item in stages] != list(range(10)):
-    fail("expected stage 0 preprocessing plus business stages 1-9")
-if "**阶段 0 启动预处理**" not in skill: fail("stage 0 must be startup preprocessing")
-if "**阶段 1 素材入库**" not in skill: fail("stage 1 must begin the nine business stages")
-headings = re.findall(r"^## 门 (\d+) ([^\n]+?) \[interaction=(machine|human)\]$", gates, re.M)
-expected_interactions = [(0, "machine"), (2, "human"), (3, "machine"), (5, "human"), (6, "machine"), (7, "machine"), (8, "human")]
-if [(int(number), interaction) for number, _, interaction in headings] != expected_interactions:
-    fail("gate interaction metadata is invalid")
-if [int(number) for number, _, _ in headings] != [0, 2, 3, 5, 6, 7, 8]:
-    fail("expected exactly seven process gates: 0/2/3/5/6/7/8")
-if "## 交付验收（阶段 9 导出）" not in gates:
-    fail("stage 9 export must be delivery acceptance, not a gate")
-actions = re.findall(r"^\[门 (\d+)·interaction=(machine|human)\]", skill, re.M)
-if [(int(number), interaction) for number, interaction in actions] != expected_interactions:
-    fail("skill gate action metadata is invalid")
-expected_stages = [
-    {"stage": 0, "interaction": "machine", "action": "continue", "gate": 0, "interactive_feedback": True},
-    {"stage": 1, "interaction": "machine", "action": "continue", "gate": None},
-    {"stage": 2, "interaction": "human", "action": "wait", "gate": 2, "interactive_feedback": True},
-    {"stage": 3, "interaction": "machine", "action": "continue", "gate": 3, "interactive_feedback": True},
-    {"stage": 4, "interaction": "machine", "action": "continue", "gate": None, "interactive_feedback": True},
-    {"stage": 5, "interaction": "human", "action": "wait", "gate": 5, "interactive_feedback": True},
-    {"stage": 6, "interaction": "machine", "action": "continue", "gate": 6, "interactive_feedback": True},
-    {"stage": 7, "interaction": "machine", "action": "continue", "gate": 7, "interactive_feedback": True},
-    {"stage": 8, "interaction": "human", "action": "wait", "gate": 8, "interactive_feedback": True},
-    {"stage": 9, "interaction": "machine", "action": "continue", "gate": "delivery", "interactive_feedback": True},
-]
-if stage_contract != {"version": 1, "stages": expected_stages}:
-    fail("stage interaction contract is invalid")
-if "阶段契约.json` 是每阶段 `interaction` 与 `action` 的唯一执行语义" not in skill:
-    fail("skill must declare stage metadata as the sole execution contract")
-wait = re.compile(
-    r"等待用户|等候用户|等用户|停下|暂停[^。；\n]*(?:用户|客户|确认|同意)|"
-    r"询问用户|请用户|请示客户|"
-    r"(?:征得|取得|获得)[^。；\n]{0,12}(?:用户|客户)[^。；\n]{0,12}(?:同意|确认|许可)"
-)
-for index, match in enumerate(stages):
-    stage = int(match.group(1))
-    end = stages[index + 1].start() if index + 1 < len(stages) else len(skill)
-    if stage not in {2, 5, 8} and wait.search(skill[match.start():end]):
-        print(f"WARNING: stage {stage} prose resembles a wait; machine metadata still requires continuation", file=sys.stderr)
-for required in (
-    "[门 0·interaction=machine]：核对评分点总数与原文一致，全覆盖无遗漏报警。",
-    "[门 3·interaction=machine]：核对大纲与应答矩阵章节映射一致后锁定矩阵；此后章节变更必须回溯矩阵。",
-    "评分点总数抽查",
-):
-    if required not in skill: fail(f"skill gate contract is missing: {required}")
-for required in (
-    "## 门 0 矩阵全覆盖 [interaction=machine]",
-    "## 门 3 大纲与矩阵一致性 [interaction=machine]",
-    "评分点总数抽查已纳入门 2 客户确认清单",
-):
-    if required not in gates: fail(f"gate checklist contract is missing: {required}")
-PY
+python3 -B "$SOURCE_DIR/scripts/verify_workflow.py" --source-root "$SOURCE_DIR" >/dev/null
 
-grep -Fq '门 2 客户确认清单' "$SOURCE_DIR/references/应答矩阵模板.md" || fail "matrix template must place score-point sampling in gate 2"
+grep -Fq 'outline 审阅时核对大纲与矩阵的一致性' "$SOURCE_DIR/references/应答矩阵模板.md" || fail "matrix template must bind outline review to the response matrix"
 route_file="$HOME_ROOT/.codex/AGENTS.md"
 [ -f "$route_file" ] || fail "Codex route file is missing"
-grep -Fq '阶段 0 为启动预处理；阶段 1–9 为九个业务阶段；流程门仅 0 / 2 / 3 / 5 / 6 / 7 / 8；人工确认点仅门 2 / 门 5 / 门 8；导出为交付验收' "$route_file" || fail "Codex route must mirror the stage and gate contract"
+grep -Fq 'intake / approach / outline / chapters / illustrations / manuscript / delivery' "$route_file" || fail "Codex route must mirror protocol-v2 stages"
+! grep -Fq '人工确认点仅门 2 / 门 5 / 门 8' "$route_file" || fail "Codex route retains legacy-only approval gates"
 python3 -B - "$route_file" <<'PY'
 from pathlib import Path
 import sys
@@ -188,7 +111,20 @@ def manifest(root):
     return result
 source, agents, opencode, wps = map(Path, sys.argv[1:5]); hosts = list(map(Path, sys.argv[5:]))
 dependencies = ["grilling", "grill-me", "grill-with-docs", "to-spec", "domain-modeling", "ai-image-to-ppt"]
-superwriter_files = ["SKILL.md", "scripts/render_svg.py", "scripts/render_svg_macos.js", "references/响应策略表.md", "references/应答矩阵模板.md", "references/素材打标规范.md", "references/门禁清单.md", "references/阶段契约.json", "references/验收清单模板.json", "references/依赖清单.json"]
+superwriter_files = [
+    path.relative_to(source).as_posix()
+    for path in sorted((source / "references").rglob("*"))
+    if path.is_file()
+] + [
+    "SKILL.md", "scripts/render_svg.py", "scripts/render_svg_macos.js",
+    "scripts/collaboration/__init__.py", "scripts/collaboration/model.py",
+    "scripts/collaboration/store.py", "scripts/collaboration/workflow.py",
+    "scripts/collaboration/migration.py",
+    "scripts/collaboration_state.py", "scripts/review_server.py",
+    "scripts/review_assets/index.html", "scripts/review_assets/review.js",
+    "scripts/review_assets/review.css",
+    "scripts/verify_workflow.py", "scripts/verify_acceptance.py",
+]
 
 def module_path(module):
     stem = wps.joinpath(*module.split("."))
@@ -259,6 +195,10 @@ expected_superwriter = {"references": ("dir", ""), "scripts": ("dir", "")}
 for rel in superwriter_files:
     path = source / rel
     if not path.is_file(): fail(f"SuperWriter source manifest entry is missing: {rel}")
+    parent = Path(rel).parent
+    while parent != Path("."):
+        expected_superwriter[parent.as_posix()] = ("dir", "")
+        parent = parent.parent
     expected_superwriter[rel] = ("file", hashlib.sha256(path.read_bytes()).hexdigest())
 for rel in wps_runtime:
     if not (wps / rel).is_file(): fail(f"required WPSComposer runtime asset is missing: {rel}")

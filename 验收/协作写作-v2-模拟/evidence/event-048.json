@@ -1,0 +1,15 @@
+{
+  "id": "synthetic-048-request_changes",
+  "kind": "request_changes",
+  "object_id": "manuscript",
+  "version": 2,
+  "sha256": "d03ce9484ab1927c6cf01aa95823ee3ab3ef63a077ae401406129adedeccdd10",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:48",
+    "text": "synthetic-test WPSComposer 长文公开接口要求将图片包装为 :::figure；保持正文、图片、图题和插入位置不变。"
+  },
+  "payload": {
+    "comment": "WPSComposer 长文公开接口要求将图片包装为 :::figure；保持正文、图片、图题和插入位置不变。"
+  }
+}

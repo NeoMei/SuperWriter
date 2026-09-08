@@ -1,0 +1,44 @@
+{
+  "title": "审阅记录确认循环",
+  "theme": "soft",
+  "direction": "LR",
+  "nodes": [
+    {
+      "id": "draft",
+      "label": "章节起草",
+      "role": "client"
+    },
+    {
+      "id": "selfcheck",
+      "label": "内容自查",
+      "role": "service"
+    },
+    {
+      "id": "review",
+      "label": "提交审阅",
+      "role": "service"
+    },
+    {
+      "id": "confirm",
+      "label": "当前版本确认",
+      "role": "store"
+    }
+  ],
+  "edges": [
+    {
+      "from": "draft",
+      "to": "selfcheck",
+      "label": "检查依据"
+    },
+    {
+      "from": "selfcheck",
+      "to": "review",
+      "label": "修改后重提"
+    },
+    {
+      "from": "review",
+      "to": "confirm",
+      "label": "明确同意"
+    }
+  ]
+}

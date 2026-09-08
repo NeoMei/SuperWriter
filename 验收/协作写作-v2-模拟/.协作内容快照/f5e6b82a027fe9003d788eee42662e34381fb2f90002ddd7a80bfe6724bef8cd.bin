@@ -1,0 +1,4 @@
+# 交付验收记录（synthetic-test）
+
+当前对象是独立 delivery 草稿。WPSComposer 将从已确认合稿生成 DOCX，再从该 DOCX 转换 PDF。
+本文件不代表验收通过；只有实际验证 PASS 后的 agent record_delivery 事件才能完成交付。

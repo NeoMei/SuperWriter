@@ -1,0 +1,94 @@
+{
+  "version": 2,
+  "points": [
+    "P01",
+    "P02"
+  ],
+  "required_terms": [
+    "审阅记录",
+    "WPSComposer"
+  ],
+  "pipeline": {
+    "workflow_version": 2,
+    "state": "协作状态.json",
+    "state_revision": 62,
+    "manuscript_object_id": "manuscript"
+  },
+  "chapters": [
+    {
+      "number": "1",
+      "path": "章节/01-审阅流程.md",
+      "points": [
+        "P01"
+      ]
+    },
+    {
+      "number": "2",
+      "path": "章节/02-异常验收.md",
+      "points": [
+        "P02"
+      ]
+    }
+  ],
+  "point_chapters": {
+    "P01": "1",
+    "P02": "2"
+  },
+  "figures": [
+    {
+      "source": "配图/审阅记录确认循环.excalidraw.md",
+      "render_source": "配图/审阅记录确认循环.svg",
+      "render": "配图/审阅记录确认循环.png",
+      "caption": "图 1 审阅记录确认循环",
+      "source_sha256": "c8c868a6d9d0853817ef15a13b88dc0c38d8a6772d43fb0fb5c05bbd10ea9f47",
+      "render_source_sha256": "390c205f4099f9b8eb4294be602682b63dc28ae1d8183b650a9c7797edde74b8",
+      "render_sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+      "nodes": [
+        {
+          "id": "draft",
+          "label": "章节起草"
+        },
+        {
+          "id": "selfcheck",
+          "label": "内容自查"
+        },
+        {
+          "id": "review",
+          "label": "提交审阅"
+        },
+        {
+          "id": "confirm",
+          "label": "当前版本确认"
+        }
+      ],
+      "edges": [
+        {
+          "from": "draft",
+          "to": "selfcheck",
+          "label": "检查依据"
+        },
+        {
+          "from": "selfcheck",
+          "to": "review",
+          "label": "修改后重提"
+        },
+        {
+          "from": "review",
+          "to": "confirm",
+          "label": "明确同意"
+        }
+      ]
+    }
+  ],
+  "outputs": {
+    "merged": "合并稿.md",
+    "merged_sha256": "14603d7049b791cf4cd0e02fb25548ca657a3e8de5ef409c458d33733f813ed5",
+    "docx": "导出/协作审阅试点技术方案.docx",
+    "pdf": "导出/协作审阅试点技术方案.pdf"
+  },
+  "pdf": {
+    "min_pages": 1,
+    "max_pages": 5,
+    "page_size": "A4"
+  }
+}

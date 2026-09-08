@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-017-approve",
+  "kind": "approve",
+  "object_id": "outline",
+  "version": 2,
+  "sha256": "dff1dc743fddc28e75923ee92a83caf584ffc7aeeee78d0a13e79a6c62340bd0",
+  "channel": "chat",
+  "evidence": {
+    "reference": "synthetic-test:17",
+    "text": "synthetic-test 确认当前两章大纲。"
+  },
+  "payload": {}
+}

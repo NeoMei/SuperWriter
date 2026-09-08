@@ -1,0 +1,93 @@
+{
+  "scope": "synthetic-test final retention-fix runtime validation; existing receipt only",
+  "state_revision": 63,
+  "delivery_status": "verified",
+  "record_delivery_event_ids": [
+    "synthetic-063-record_delivery"
+  ],
+  "runtime_hashes": {
+    "scripts/verify_acceptance.py": {
+      "source_sha256": "220ce93abc44706aa725de733ba4556cca8ee6370d6e5434a6f89605b9d0d5ce",
+      "installed_sha256": "220ce93abc44706aa725de733ba4556cca8ee6370d6e5434a6f89605b9d0d5ce",
+      "equal": true
+    },
+    "scripts/collaboration_state.py": {
+      "source_sha256": "f4a1b86903a7cadfa6493957030c99b5b1699a6facbfc1592c6f15b7f837125d",
+      "installed_sha256": "f4a1b86903a7cadfa6493957030c99b5b1699a6facbfc1592c6f15b7f837125d",
+      "equal": true
+    },
+    "scripts/collaboration/model.py": {
+      "source_sha256": "aa44280e46807ea45682927f6d3fe2e3b3457a2dc155efffc9cb3ec01aab2482",
+      "installed_sha256": "aa44280e46807ea45682927f6d3fe2e3b3457a2dc155efffc9cb3ec01aab2482",
+      "equal": true
+    },
+    "scripts/collaboration/store.py": {
+      "source_sha256": "8918a0e986d0bb47b48f2fc163f42e0660396a27f50ab2e3d3c2c100ccaf13e0",
+      "installed_sha256": "8918a0e986d0bb47b48f2fc163f42e0660396a27f50ab2e3d3c2c100ccaf13e0",
+      "equal": true
+    },
+    "scripts/collaboration/workflow.py": {
+      "source_sha256": "458610f4889881cd486b69bae7c4afc68dc0ebbac84e7726b8537a27b28b513b",
+      "installed_sha256": "458610f4889881cd486b69bae7c4afc68dc0ebbac84e7726b8537a27b28b513b",
+      "equal": true
+    },
+    "scripts/collaboration/migration.py": {
+      "source_sha256": "75984fc19333b4325aefa5376b5e8ec782e130f0fcfbedd40d2cb7b5e0c00974",
+      "installed_sha256": "75984fc19333b4325aefa5376b5e8ec782e130f0fcfbedd40d2cb7b5e0c00974",
+      "equal": true
+    },
+    "scripts/verify_workflow.py": {
+      "source_sha256": "07f1ab687227b36248d18378a6421d8c95dacb47ba0b4aa614249b1c88444914",
+      "installed_sha256": "07f1ab687227b36248d18378a6421d8c95dacb47ba0b4aa614249b1c88444914",
+      "equal": true
+    }
+  },
+  "checks": [
+    {
+      "name": "installed-canonical",
+      "command": [
+        "python3",
+        "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/scripts/verify_acceptance.py",
+        "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: explicit acceptance manifest and artifacts at /Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/.superpowers/sdd/2026-09-07-superwriter-collaborative-writing/task-8-scratch/模拟客户-协作审阅试点 are satisfied\n",
+      "stderr": ""
+    },
+    {
+      "name": "installed-durable",
+      "command": [
+        "python3",
+        "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-task8-home-s19npjd0/.codex/skills/superwriter/scripts/verify_acceptance.py",
+        "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/验收/协作写作-v2-模拟"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: explicit acceptance manifest and artifacts at /Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/验收/协作写作-v2-模拟 are satisfied\n",
+      "stderr": ""
+    },
+    {
+      "name": "source-static",
+      "command": [
+        "bash",
+        "scripts/verify.sh"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw\nPASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied\n",
+      "stderr": ""
+    },
+    {
+      "name": "source-durable",
+      "command": [
+        "bash",
+        "scripts/verify.sh",
+        "--acceptance-dir",
+        "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/验收/协作写作-v2-模拟"
+      ],
+      "exit_code": 0,
+      "stdout": "PASS: SuperWriter source version 0.1.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw\nPASS: explicit acceptance manifest and artifacts at /Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-collaborative-writing/验收/协作写作-v2-模拟 are satisfied\n",
+      "stderr": ""
+    }
+  ],
+  "native_regenerated": false,
+  "new_receipt_recorded": false
+}
