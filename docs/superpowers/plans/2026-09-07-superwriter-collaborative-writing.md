@@ -152,7 +152,7 @@ obj['status'] = 'approved'
 ```
 
 - [x] 重跑测试至通过；增加 fixture 的 schema 校验及未知字段/重复键/布尔版本拒绝测试。`approve` 验证合法渠道和非空证据，不允许通过更新普通对象字段直接写出 approved。
-- [ ] 审查已通过；待作者身份配置后提交：`git add scripts/collaboration tests/test_collaboration_model.py tests/collaboration_fixtures.py references/协作状态模板.json`，`git commit -m "feat: add versioned collaboration approval model"`。
+- [x] 审查已通过；实现已随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 2: 持久状态、内容漂移与恢复
 
@@ -196,7 +196,7 @@ with state_lock(root):
 ```
 
 - [x] 生成可读 `流水线状态.md`。JSON 成功而视图写入失败时，以 JSON 为准，下次恢复重建视图；不得回滚已成功的确认。测试故障注入、只读磁盘错误以及 CLI 从中文空格路径运行。重跑 model/store 测试至通过。
-- [ ] 审查通过，待作者身份配置后提交本任务三个文件，提交信息 `feat: persist recoverable collaboration state`。
+- [x] 实现已审查通过，随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 3: 七阶段推进、补材与逐章确认
 
@@ -232,7 +232,7 @@ for chapter_id in outline['metadata']['chapter_order']:
 ```
 
 - [x] 在上述草稿建议之前补齐材料检查；为无阻塞和有阻塞分别断言。共识模板写明目标、读者、硬要求、主线、论证、文风、篇幅、材料决定与交付标准；讨论规则落实设计第 2/4/5 节，禁用一长串通用问题。覆盖方案→大纲→两章→配图→合稿→delivery 的完整状态测试。
-- [x] 运行 `python3 -m unittest discover -s tests -p 'test_collaboration_*.py' -v` 至通过，审查已通过；待真实 Git 作者身份配置后提交 `feat: enforce collaborative writing progression`。
+- [x] 运行 `python3 -m unittest discover -s tests -p 'test_collaboration_*.py' -v` 至通过，审查已通过；实现已随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 4: 可选 HTML 展示和正式审阅提交
 
@@ -267,7 +267,7 @@ async function submitEvent(event, revision, token) {
 ```
 
 - [x] 页面用 `textContent` 展示正文与意见，不将客户材料作为可执行 HTML；图像只从注册的当前客户对象读取。服务器提供前版与现版的明确比较，不依赖浏览器内存生成历史。记录初始对象和每个审阅版本的内容快照到项目内，快照写入纳入 store 事务前置步骤：快照完成才能保存引用它的状态，失败可留未引用快照但不能丢历史。
-- [x] 使用真实浏览器测试：点击偏好不推进→提交修改→Agent 修订→旧标签页确认被拒→刷新后确认新版本→关闭/重启仍能读回。将截图与状态输出保存在模拟项目证据目录；不得由 Agent 自己点击模拟确认冒充用户真实批准。审查已通过；待真实 Git 作者身份配置后提交 `feat: add optional browser review for writing`。
+- [x] 使用真实浏览器测试：点击偏好不推进→提交修改→Agent 修订→旧标签页确认被拒→刷新后确认新版本→关闭/重启仍能读回。将截图与状态输出保存在模拟项目证据目录；不得由 Agent 自己点击模拟确认冒充用户真实批准。审查已通过；实现已随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 5: 旧项目识别、迁移及双版本验证
 
@@ -299,7 +299,7 @@ if not decision.get('reference') or not decision.get('text'):
 ```
 
 - [x] `verify_workflow.py` 对 v1/v2 分别验证契约和状态，不将缺少状态文件的旧项目当 v2。增加 `--source-root DIR`（静态契约）、`--project DIR`（确认链）两个明确入口；v2 项目若提交 v1 验收清单必须拒绝降级。重跑 migration/contract 测试通过。
-- [x] 审查已通过；待真实 Git 作者身份配置后提交 `feat: support explicit legacy workflow migration`。
+- [x] 审查已通过；实现已随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 6: 新技能、宿主路由和完整安装
 
@@ -317,7 +317,7 @@ if not decision.get('reference') or not decision.get('text'):
 
 - [x] 安装器显式复制 `scripts/collaboration/`、CLI、review server/assets 和验证入口；运行时不依赖 tests/docs 或作者机器绝对路径。`verify.sh` 将固定旧阶段检查替换为 `verify_workflow.py --source-root`，保持完整文件镜像核对。AGENTS 从主目录现有内容复制到本分支后只更新新流程段，主目录原文件不改。引用原 brainstorming 方法但不自动转入软件实现计划或 issue 发布。
 - [x] 在临时宿主安装后，从已安装路径执行 CLI 与服务端导入 smoke test；缺失新资源触发回滚。Python 契约和 Bash 安装测试已通过，任务独立审查已通过。
-- [ ] 待真实 Git 作者身份配置后提交 `feat: install collaborative writing skill and routing`。
+- [x] 实现已审查通过，随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 7: 交付物与有效审阅链联合验收
 
@@ -348,7 +348,7 @@ if version == 1 and (root / '协作状态.json').exists():
 
 - [x] 更新 Bash 夹具复制全部新增运行时/assets，防止 `git archive HEAD` 漏掉工作树代码。保留原示例 v1 产物作为兼容用例，在临时目录生成 v2 对照夹具；不得给仓库旧产物补造历史用户确认。
 - [x] `python3 -m unittest discover -s tests -p 'test_*acceptance.py' -v` 和 `bash tests/test_verify_artifacts.sh` 已通过；最终严格性修复通过独立复审。
-- [ ] 待真实 Git 作者身份配置后提交 `feat: verify collaboration approvals with native deliverables`。
+- [x] 实现已审查通过，随汇总提交 `28ea3a4` 保存并合入本地 `main`。
 
 ### Task 8: 实际协作演示、分支审查与交接
 
@@ -373,7 +373,7 @@ git diff --check
 最后一个验收路径由当前模拟项目真实绝对路径替换。宿主验证必须在用户授权的安装范围或已配置的隔离宿主执行；不能将测试夹具安装冒充用户宿主更新。只改计划时不运行这些测试。
 
 - [x] 整个分支独立审查及最终 retained-outline 回归复审已通过；各任务独立审查发现的问题已回到对应任务修复并针对性复测。报告分别列出实现、自动测试、HTML 实际操作、真实用户确认、WPS 文件验收、宿主安装、Git 提交/推送状态。未授权时不发布、不推送、不合并。
-- [ ] 完成证据后提交 `docs: record collaborative writing acceptance`；未达到的验收项明确保留待完成，禁止为凑齐清单捏造结果。
+- [x] 验收证据已随汇总提交 `28ea3a4` 保存；后续交接记录另行提交，未把模拟批准报告为真实用户验收。
 
 ## 执行顺序与审查
 
@@ -394,4 +394,4 @@ git diff --check
 | 旧项目迁移与宿主路由 | 5、6、7 |
 | 真实原生文件和全分支验证 | 7、8 |
 
-Git 作者身份仍缺失，仅影响提交，不阻断编辑、测试和证据准备。
+2026-09-08：用户确认本地合并，并确认作者 NeoMei <128385656+NeoMei@users.noreply.github.com>。仅配置本仓库；此前受身份阻塞的各任务汇总为提交 `28ea3a4`，已快进合入本地 `main`。原任务补丁与审查记录已备份；未推送或发布。

@@ -50,7 +50,7 @@ V2_STAGES = [
 def write_legacy_refs(source: Path) -> None:
     legacy = source / "references/legacy-v1"
     legacy.mkdir(parents=True)
-    snapshot = ROOT / ".superpowers/sdd/2026-09-07-superwriter-collaborative-writing/legacy-source"
+    snapshot = ROOT / "references/legacy-v1"
     for name in ("SKILL.md", "阶段契约.json", "门禁清单.md", "验收清单模板.json", "source.json"):
         (legacy / name).write_bytes((snapshot / name).read_bytes())
 

@@ -40,3 +40,7 @@
 最后的 retained-outline 回归修复只更新 collaboration model。再次刷新隔离镜像后，上述四项检查仍全部 PASS；verifier 摘要保持不变，当前 model 的安装与源 SHA-256 均为 `aa44280e46807ea45682927f6d3fe2e3b3457a2dc155efffc9cb3ec01aab2482`，其余运行时闭包也逐文件一致。状态仍为 revision 63，且没有新增 receipt 或重生成原生文件。日志见模拟包 `evidence/logs/final-retention-*.log`，结构化结果见 `evidence/31-final-retention-verification.json`；该模型修复已通过最终独立复审。
 
 仓库级 Python、安装和 artifact 测试由父任务统一执行并保留最终日志。本文件只记录 Task 8 亲自观察到的环境、隔离安装、原生生成、原生打开检查和模拟项目机器验收。真实用户没有参与本次模拟审阅；真实宿主没有安装；没有提交、推送、发布或合并。
+
+## 后续本地集成
+
+以上环境表记录模拟验收当时的状态。2026-09-08 用户确认作者信息后，已仅配置本仓库 Git 作者并把 `28ea3a4` 合入本地 `main`；真实宿主仍未更新，未推送或发布。最终合并验证与测试夹具可移植性修复见 `docs/acceptance/collaborative-writing-report.md`。
