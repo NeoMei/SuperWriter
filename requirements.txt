@@ -1,5 +1,5 @@
 markitdown[docx,pdf]>=0.1.4,<0.2
 fonttools>=4,<5
 Pillow>=10.1,<13
-PyMuPDF>=1.24,<2
+PyMuPDF>=1.24.3,<2
 resvg-py>=0.4,<0.6

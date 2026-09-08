@@ -406,7 +406,7 @@ def extracted_text(label: str, path: Path) -> str:
     try:
         result = subprocess.run(
             ["markitdown", str(path)], text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", check=False,
+            stderr=subprocess.PIPE, encoding="utf-8", errors="replace", check=False,
             env=child_environment,
         )
     except OSError:

@@ -94,6 +94,19 @@ class AcceptanceImageContractTest(unittest.TestCase):
         ):
             self.assertEqual(extracted_text("DOCX", Path("中文.docx")), "中文内容\n")
 
+    def test_markitdown_warnings_do_not_become_document_text(self):
+        from unittest import mock
+        from verify_acceptance import extracted_text
+        real_run = subprocess.run
+
+        def probe(_command, **kwargs):
+            return real_run([sys.executable, "-c",
+                "import sys; print('dependency warning', file=sys.stderr); print('正文')"],
+                **kwargs)
+
+        with mock.patch("verify_acceptance.subprocess.run", side_effect=probe):
+            self.assertEqual(extracted_text("PDF", Path("doc.pdf")), "正文\n")
+
     def test_missing_markitdown_has_a_stable_diagnostic(self):
         from unittest import mock
         from verify_acceptance import extracted_text

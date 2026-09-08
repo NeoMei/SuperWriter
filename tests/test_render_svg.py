@@ -26,6 +26,16 @@ def load_helper():
     return module
 
 
+def load_acceptance_helpers():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        from svg_geometry_compare import masked_svg_pixels_match
+        from verify_acceptance import normalized_pixels, pixels_match
+    finally:
+        sys.path.pop(0)
+    return masked_svg_pixels_match, normalized_pixels, pixels_match
+
+
 def png_chunk(kind: bytes, data: bytes) -> bytes:
     return (
         struct.pack(">I", len(data))
@@ -45,31 +55,45 @@ def valid_png() -> bytes:
 
 
 class RenderSvgTest(unittest.TestCase):
-    def test_bundled_cjk_fallback_renders_without_system_fonts(self):
-        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
-            self.skipTest("requires resvg-py and PyMuPDF")
+    def _normalized_render_pair(self, source: Path):
         module = load_helper()
-
-        payload = module._resvg_renderer(V2_SAMPLE, skip_system_fonts=True)
+        _, normalized_pixels, _ = load_acceptance_helpers()
+        payload = module._resvg_renderer(source, skip_system_fonts=True)
 
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "fallback.png"
             output.write_bytes(payload)
             self.assertTrue(module._valid_png(output))
-            sys.path.insert(0, str(ROOT / "scripts"))
-            try:
-                from svg_geometry_compare import masked_svg_pixels_match
-                from verify_acceptance import normalized_pixels
-            finally:
-                sys.path.pop(0)
             rendered = normalized_pixels(payload, "fallback", Path(temporary), "fallback")
             approved = normalized_pixels(
-                V2_SAMPLE.with_suffix(".png").read_bytes(),
+                source.with_suffix(".png").read_bytes(),
                 "approved",
                 Path(temporary),
                 "approved",
             )
-            self.assertTrue(masked_svg_pixels_match(V2_SAMPLE, rendered, approved))
+        return rendered, approved
+
+    def test_bundled_cjk_fallback_preserves_legacy_acceptance_without_system_fonts(self):
+        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
+            self.skipTest("requires resvg-py and PyMuPDF")
+        masked_svg_pixels_match, _, pixels_match = load_acceptance_helpers()
+
+        rendered, approved = self._normalized_render_pair(SAMPLE)
+
+        self.assertTrue(
+            pixels_match(rendered, approved)
+            or masked_svg_pixels_match(SAMPLE, rendered, approved)
+        )
+
+    def test_bundled_cjk_fallback_supports_v2_geometry_without_system_fonts(self):
+        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
+            self.skipTest("requires resvg-py and PyMuPDF")
+        masked_svg_pixels_match, _, pixels_match = load_acceptance_helpers()
+
+        rendered, approved = self._normalized_render_pair(V2_SAMPLE)
+
+        self.assertFalse(pixels_match(rendered, approved))
+        self.assertTrue(masked_svg_pixels_match(V2_SAMPLE, rendered, approved))
 
     def test_resvg_receives_a_private_bundled_cjk_font_file(self):
         module = load_helper()
