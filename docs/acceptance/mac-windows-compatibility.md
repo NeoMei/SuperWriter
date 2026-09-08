@@ -28,7 +28,18 @@ SVG 使用 PyMuPDF 内置中文字形作为系统字体缺失时的回退，通�
 4. GitHub Actions 在 `macos-latest` 与 `windows-latest` 分别运行 Python 3.10、3.13 的相同回归套件。CI 使用已有 WPS 输出夹具检查本插件验收能力，不启动或验证 WPSComposer 后端。
 5. `core.autocrlf=true` 检出检验覆盖冻结旧版文件和内容快照。
 
-已完成 `core.autocrlf=true` 的临时检出检查：四个冻结 legacy-v1 文件摘要及 19 个内容快照字节完全一致。未修改的既有 v2 完整交付项目临时副本通过验收，安装后 CLI 与真实 HTTP 服务烟测通过。完整产物验收 shell 套件已通过；Python 3.10 的一轮完整回归通过 234 项（跳过 1 项 Windows 专属测试）。最终候选在 macOS / Python 3.13 上运行 239 项测试，通过 237 项，跳过 2 项 Windows 原生目录联接测试。原生双平台 CI 结果待分支运行后补充。
+已完成 `core.autocrlf=true` 的临时检出检查：四个冻结 legacy-v1 文件摘要及 19 个内容快照字节完全一致。未修改的既有 v2 完整交付项目临时副本通过验收，安装后 CLI 与真实 HTTP 服务烟测通过。完整产物验收 shell 套件通过，本地 macOS / Python 3.10 最终回归运行 244 项，通过 242 项，跳过 2 项 Windows 专属测试。
+
+代码提交 `4c233bb41ed1c190ff2d3f01356639ce0f4e6e02` 的[原生双平台 CI](https://github.com/NeoMei/SuperWriter/actions/runs/34214883035)于 2026-09-08 全部通过：
+
+| 原生环境 | 测试总数 | 通过 | 按平台跳过 | 结果 |
+| --- | ---: | ---: | ---: | --- |
+| macOS / Python 3.10 | 244 | 242 | 2 | 通过 |
+| macOS / Python 3.13 | 244 | 242 | 2 | 通过 |
+| Windows / Python 3.10 | 244 | 241 | 3 | 通过 |
+| Windows / Python 3.13 | 244 | 241 | 3 | 通过 |
+
+macOS 跳过 Windows 原生目录联接测试；Windows 跳过 POSIX 权限拒绝、Unix 信号回滚及普通符号链接祖先目录测试。Windows 原生目录联接重装与祖先目录逃逸的对应测试实际运行并通过。Windows 安装烟测调用 PowerShell 包装入口，随后执行已安装 CLI 和真实 HTTP 审阅服务。
 
 浅色文字缺失、索引 PNG 透明度、无效 ICC、窄字符编码和目录别名均有拒绝/等价性回归。目录联接通过 Win32 API 创建，不经命令解释器；重装保留外部联接，不递归复制其目标。安装父目录解析到 HOME 外或两个宿主解析到同一目录时，在写入前拒绝。
 
