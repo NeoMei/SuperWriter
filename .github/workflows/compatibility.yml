@@ -35,3 +35,7 @@ jobs:
         run: python scripts/verify_workflow.py --source-root .
       - name: Run Python regression suites
         run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Run complete artifact acceptance suite
+        if: matrix.os == 'macos-latest' && matrix.python == '3.13'
+        shell: bash
+        run: bash tests/test_verify_artifacts.sh
