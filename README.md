@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.2`；协作流程协议为 v2。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.3`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -104,6 +104,16 @@ python3 -c "from pathlib import Path; print(next(s for s in Path('SKILL.md').rea
 ## 版本边界
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### v0.2.3 (2026-09-08)
+
+[SuperWriter 0.2.3 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.3)
+
+- 安装器仅替换受管理的 skill 条目，保留其他 skill 的并发修改及宿主目录身份。
+- 同一 HOME 的安装使用原生文件锁串行执行；路由发布与回滚保护并发修改，发生恢复冲突时保留备份并报告路径。
+- 完整产物验收加入 macOS CI；保留 macOS / Windows × Python 3.10 / 3.13 原生回归。
+- 版本检查统一读取版本常量，保留 SKILL 与依赖清单的严格交叉校验。
+- 修复范围与验证记录见 [技术债修复记录](docs/acceptance/2026-09-08-technical-debt.md)。
 
 ### v0.2.2 (2026-09-08)
 
