@@ -4,6 +4,7 @@ from contextlib import redirect_stderr
 import importlib.util
 import io
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -25,7 +26,42 @@ def load_checker():
     return module
 
 
+def expected_install_command(agents: Path, opencode: Path, wps: Path) -> str:
+    if os.name == "nt":
+        def quote(path: Path) -> str:
+            return "'" + str(path).replace("'", "''") + "'"
+
+        return (
+            f"$env:WPSCOMPOSER_SKILL_SOURCE = {quote(wps)} ; "
+            f"$env:SUPERWRITER_AGENTS_SKILLS_ROOT = {quote(agents)} ; "
+            f"$env:SUPERWRITER_OPENCODE_SKILLS_ROOT = {quote(opencode)} ; "
+            "python .\\install.py"
+        )
+    return (
+        f"WPSCOMPOSER_SKILL_SOURCE={shlex.quote(str(wps))} "
+        f"SUPERWRITER_AGENTS_SKILLS_ROOT={shlex.quote(str(agents))} "
+        f"SUPERWRITER_OPENCODE_SKILLS_ROOT={shlex.quote(str(opencode))} "
+        "python install.py"
+    )
+
+
 class DependencyContractTest(unittest.TestCase):
+    def test_windows_failure_guidance_is_copyable_powershell(self):
+        module = load_checker()
+        report = module.format_failure(
+            ["missing"],
+            {},
+            Path(r"C:\Users\A&B\agents skills"),
+            Path(r"C:\Users\A&B\opencode's skills"),
+            Path(r"C:\Users\A&B\WPSComposer"),
+            platform_name="nt",
+        )
+        self.assertIn("$env:WPSCOMPOSER_SKILL_SOURCE = 'C:\\Users\\A&B\\WPSComposer'", report)
+        self.assertIn("$env:SUPERWRITER_AGENTS_SKILLS_ROOT = 'C:\\Users\\A&B\\agents skills'", report)
+        self.assertIn("$env:SUPERWRITER_OPENCODE_SKILLS_ROOT = 'C:\\Users\\A&B\\opencode''s skills'", report)
+        self.assertIn("python .\\install.py", report)
+        self.assertNotIn("WPSCOMPOSER_SKILL_SOURCE=", report)
+
     def complete_sources(self, root: Path) -> tuple[Path, Path]:
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         agents = root / "agents"
@@ -49,7 +85,7 @@ class DependencyContractTest(unittest.TestCase):
     ) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
-                "python3", *python_options, str(ROOT / "scripts" / "check_dependencies.py"),
+                sys.executable, *python_options, str(ROOT / "scripts" / "check_dependencies.py"),
                 "--manifest", str(manifest or ROOT / "references" / "依赖清单.json"),
                 "--agents-root", str(agents),
                 "--opencode-root", str(opencode),
@@ -57,24 +93,21 @@ class DependencyContractTest(unittest.TestCase):
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
 
     def complete_wps_capability(self, wps: Path) -> None:
-        probe = wps / "scripts" / "macos_probe"
-        probe.mkdir(parents=True)
-        (probe / "generation.py").write_text(
-            "def generate_macos():\n    pass\n", encoding="utf-8"
+        wps.mkdir(parents=True, exist_ok=True)
+        (wps / "SKILL.md").write_text(
+            "---\nname: WPSComposer\n---\n\n# WPS Composer\n", encoding="utf-8"
         )
-        (probe / "conversion.py").write_text(
-            "def convert_macos():\n    pass\n", encoding="utf-8"
-        )
-        (wps / "SKILL.md").write_text("# WPSComposer\n", encoding="utf-8")
 
     def test_dependency_manifest_matches_release_contract(self):
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["schema_version"], 1)
-        self.assertEqual(manifest["superwriter_version"], "0.2.1")
+        self.assertEqual(manifest["superwriter_version"], "0.2.2")
         by_id = {item["id"]: item for item in manifest["dependencies"]}
         self.assertEqual(set(by_id), {
             "WPSComposer", "grilling", "grill-me", "grill-with-docs",
@@ -94,8 +127,8 @@ class DependencyContractTest(unittest.TestCase):
     def test_skill_and_readme_publish_the_same_versions_and_dependency_ids(self):
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("version: 0.2.1", skill)
-        self.assertIn("v0.2.1 (2026-09-08)", readme)
+        self.assertIn("version: 0.2.2", skill)
+        self.assertIn("v0.2.2 (2026-09-08)", readme)
         self.assertIn("WPSComposer `0.7.2`", skill)
         manifest = json.loads((ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8"))
         for dependency in manifest["dependencies"]:
@@ -114,18 +147,22 @@ class DependencyContractTest(unittest.TestCase):
     def test_readme_documents_a_portable_version_query(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("查询当前 SuperWriter 版本", readme)
-        self.assertIn(
-            "awk '$0 == \"---\" { boundary++; next } boundary == 1 && "
-            "/^version:[[:space:]]*/ { sub(/^version:[[:space:]]*/, \"\"); "
-            "print; exit }' \"./SKILL.md\"",
-            readme,
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from pathlib import Path; print(next(s for s in Path('SKILL.md').read_text(encoding='utf-8').splitlines() if s.startswith('version:')))",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
         )
-        for installed_skill in [
-            "$HOME/.agents/skills/superwriter/SKILL.md",
-            "$HOME/.claude/skills/superwriter/SKILL.md",
-            "$HOME/.codex/skills/superwriter/SKILL.md",
-        ]:
-            self.assertIn(installed_skill, readme)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "version: 0.2.2")
+        self.assertIn(".codex/skills/superwriter/SKILL.md", readme)
 
     def test_checker_reports_every_missing_dependency_without_mutating_sources(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -138,7 +175,7 @@ class DependencyContractTest(unittest.TestCase):
             before = sorted(path.relative_to(root) for path in root.rglob("*"))
             result = subprocess.run(
                 [
-                    "python3", str(ROOT / "scripts" / "check_dependencies.py"),
+                    sys.executable, str(ROOT / "scripts" / "check_dependencies.py"),
                     "--manifest", str(ROOT / "references" / "依赖清单.json"),
                     "--agents-root", str(agents),
                     "--opencode-root", str(opencode),
@@ -146,6 +183,8 @@ class DependencyContractTest(unittest.TestCase):
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
             )
             self.assertEqual(result.returncode, 2, result.stderr)
@@ -167,12 +206,7 @@ class DependencyContractTest(unittest.TestCase):
                     f"{dependency_id}", result.stderr
                 )
                 self.assertIn(f"expected path: {expected_path}", result.stderr)
-            expected_command = (
-                f"WPSCOMPOSER_SKILL_SOURCE={shlex.quote(str(wps))} "
-                f"SUPERWRITER_AGENTS_SKILLS_ROOT={shlex.quote(str(agents))} "
-                f"SUPERWRITER_OPENCODE_SKILLS_ROOT={shlex.quote(str(opencode))} "
-                "bash install.sh"
-            )
+            expected_command = expected_install_command(agents, opencode, wps)
             self.assertIn(expected_command, result.stderr)
             self.assertIn("No host files were changed", result.stderr)
             after = sorted(path.relative_to(root) for path in root.rglob("*"))
@@ -209,9 +243,9 @@ class DependencyContractTest(unittest.TestCase):
                 result = self.run_checker(
                     agents, opencode, wps, python_options=python_options
                 )
-                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
                 self.assertIn("version metadata is unavailable", result.stderr)
-                self.assertIn("capability contract accepted", result.stderr)
+                self.assertIn("No host files were changed", result.stderr)
 
     def test_exact_repo_shape_ignores_unrelated_parent_plugin(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -226,9 +260,9 @@ class DependencyContractTest(unittest.TestCase):
             wps = unrelated / "skills" / "WPSComposer"
             self.complete_wps_capability(wps)
             result = self.run_checker(agents, opencode, wps)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertIn("version metadata is unavailable", result.stderr)
-            self.assertIn("capability contract accepted", result.stderr)
+            self.assertIn("No host files were changed", result.stderr)
 
     def test_valid_pyproject_survives_damaged_plugin_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -269,47 +303,30 @@ class DependencyContractTest(unittest.TestCase):
             self.assertNotIn("0.7.1", result.stderr)
             self.assertNotIn("0.7.2,", result.stderr)
 
-    def test_wps_capability_requires_ast_entrypoints_and_relative_import_closure(self):
+    def test_wps_public_contract_requires_exact_skill_identity_and_version(self):
         mutations = {
-            "empty-stub": ("generation.py", "# empty stub\n"),
-            "syntax-error": ("conversion.py", "def convert_macos(:\n    pass\n"),
-            "missing-entrypoint": ("generation.py", "def generate_other():\n    pass\n"),
-            "missing-relative-module": (
-                "generation.py",
-                "from .missing_runtime import helper\n\ndef generate_macos():\n    pass\n",
-            ),
+            "no-frontmatter": "# WPSComposer\n",
+            "wrong-name": "---\nname: other\n---\n# WPS Composer\n",
+            "duplicate-name": "---\nname: WPSComposer\nname: WPSComposer\n---\n",
         }
-        for case, (relative, payload) in mutations.items():
+        for case, payload in mutations.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 agents, opencode = self.complete_sources(root)
-                wps = root / "standalone-WPSComposer"
-                self.complete_wps_capability(wps)
-                (wps / "scripts" / "macos_probe" / relative).write_text(
-                    payload, encoding="utf-8"
+                repository = root / "WPSComposer"
+                plugin = repository / ".codex-plugin" / "plugin.json"
+                plugin.parent.mkdir(parents=True)
+                plugin.write_text(
+                    json.dumps({"name": "wps-composer", "version": "0.8.1"}),
+                    encoding="utf-8",
                 )
+                wps = repository / "skills" / "WPSComposer"
+                wps.mkdir(parents=True)
+                (wps / "SKILL.md").write_text(payload, encoding="utf-8")
                 result = self.run_checker(agents, opencode, wps)
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                self.assertIn("WPSComposer runtime capability contract is invalid", result.stderr)
+                self.assertIn("WPSComposer public skill contract is invalid", result.stderr)
                 self.assertIn("No host files were changed", result.stderr)
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            agents, opencode = self.complete_sources(root)
-            wps = root / "standalone-WPSComposer"
-            self.complete_wps_capability(wps)
-            probe = wps / "scripts" / "macos_probe"
-            (probe / "generation.py").write_text(
-                "from . import helper\n\ndef generate_macos():\n    pass\n",
-                encoding="utf-8",
-            )
-            (probe / "helper.py").write_text(
-                "from .missing_transitive import value\n", encoding="utf-8"
-            )
-            result = self.run_checker(agents, opencode, wps)
-            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            self.assertIn("WPSComposer runtime capability contract is invalid", result.stderr)
-            self.assertIn("generation.py", result.stderr)
 
     def test_untrusted_manifest_tokens_are_never_echoed(self):
         malicious_id = "\n\x1b[31mINJECTED-ID"
@@ -390,7 +407,12 @@ class DependencyContractTest(unittest.TestCase):
                 else:
                     external = root / "external.json"
                     external.write_text("{}", encoding="utf-8")
-                    manifest_path.symlink_to(external)
+                    try:
+                        manifest_path.symlink_to(external)
+                    except OSError as exc:
+                        raise unittest.SkipTest(
+                            "ordinary symlink creation is unavailable"
+                        ) from exc
                 agents = root / "agents"
                 opencode = root / "opencode"
                 agents.mkdir()
@@ -435,12 +457,7 @@ class DependencyContractTest(unittest.TestCase):
             opencode.mkdir()
             result = self.run_checker(agents, opencode, wps)
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-            expected_command = (
-                f"WPSCOMPOSER_SKILL_SOURCE={shlex.quote(str(wps))} "
-                f"SUPERWRITER_AGENTS_SKILLS_ROOT={shlex.quote(str(agents))} "
-                f"SUPERWRITER_OPENCODE_SKILLS_ROOT={shlex.quote(str(opencode))} "
-                "bash install.sh"
-            )
+            expected_command = expected_install_command(agents, opencode, wps)
             self.assertIn(expected_command, result.stderr)
             manifest = json.loads(
                 (ROOT / "references" / "依赖清单.json").read_text(encoding="utf-8")
@@ -467,12 +484,21 @@ class DependencyContractTest(unittest.TestCase):
                 wps = root / "WPSComposer"
                 restore_modes: list[Path] = []
                 if case == "link-errors":
-                    agents.symlink_to(agents.name)
-                    opencode_peer = root / "opencode-peer"
-                    opencode.symlink_to(opencode_peer.name)
-                    opencode_peer.symlink_to(opencode.name)
-                    wps.symlink_to("missing-WPSComposer")
+                    try:
+                        agents.symlink_to(agents.name)
+                        opencode_peer = root / "opencode-peer"
+                        opencode.symlink_to(opencode_peer.name)
+                        opencode_peer.symlink_to(opencode.name)
+                        wps.symlink_to("missing-WPSComposer")
+                    except OSError as exc:
+                        raise unittest.SkipTest(
+                            "ordinary symlink creation is unavailable"
+                        ) from exc
                 else:
+                    if os.name == "nt":
+                        raise unittest.SkipTest(
+                            "chmod(0) does not make directories unreadable on Windows"
+                        )
                     for source in (agents, opencode, wps):
                         source.mkdir()
                         source.chmod(0)
@@ -491,9 +517,10 @@ class DependencyContractTest(unittest.TestCase):
                     "obsidian-excalidraw",
                 ):
                     self.assertIn(dependency_id, result.stderr)
+                install_entrypoint = "python .\\install.py" if os.name == "nt" else "python install.py"
                 for expected in (
                     "WPSCOMPOSER_SKILL_SOURCE", "SUPERWRITER_AGENTS_SKILLS_ROOT",
-                    "SUPERWRITER_OPENCODE_SKILLS_ROOT", "bash install.sh",
+                    "SUPERWRITER_OPENCODE_SKILLS_ROOT", install_entrypoint,
                     "No host files were changed",
                 ):
                     self.assertIn(expected, result.stderr)

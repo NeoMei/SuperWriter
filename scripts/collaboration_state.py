@@ -10,11 +10,13 @@ import stat
 import sys
 
 if __package__:
+    from .collaboration.console import configure_utf8_stdio
     from .collaboration.migration import inspect_legacy, migrate_legacy
     from .collaboration.model import CollaborationError, strict_json_loads
     from .collaboration.store import commit_event, initialize, load_state
     from .collaboration.workflow import next_action
 else:
+    from collaboration.console import configure_utf8_stdio
     from collaboration.migration import inspect_legacy, migrate_legacy
     from collaboration.model import CollaborationError, strict_json_loads
     from collaboration.store import commit_event, initialize, load_state
@@ -96,6 +98,7 @@ def _read_decision(project: Path, path: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     args = _parser().parse_args(argv)
     try:
         if args.command == "init":

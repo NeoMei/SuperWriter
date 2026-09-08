@@ -301,10 +301,13 @@ class CollaborationMigrationTest(unittest.TestCase):
     def test_preview_rejects_symlinks_in_legacy_allowlist(self):
         with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside:
             root = Path(directory)
-            (root / "流水线状态.md").write_text("阶段 1", encoding="utf-8")
-            (Path(outside) / "secret.md").write_text("secret", encoding="utf-8")
+            (root / "流水线状态.md").write_bytes("阶段 1".encode("utf-8"))
+            (Path(outside) / "secret.md").write_bytes(b"secret")
             (root / "章节").mkdir()
-            (root / "章节/escaped.md").symlink_to(Path(outside) / "secret.md")
+            try:
+                (root / "章节/escaped.md").symlink_to(Path(outside) / "secret.md")
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlinks unavailable on this Windows account: {error}")
 
             with self.assertRaisesRegex(CollaborationError, "symlink"):
                 inspect_legacy(root)

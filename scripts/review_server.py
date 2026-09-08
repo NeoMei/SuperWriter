@@ -13,9 +13,11 @@ import sys
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 if __package__:
+    from .collaboration.console import configure_utf8_stdio
     from .collaboration.model import CollaborationError, strict_json_loads
     from .collaboration.store import commit_event, load_state, read_content_snapshot
 else:
+    from collaboration.console import configure_utf8_stdio
     from collaboration.model import CollaborationError, strict_json_loads
     from collaboration.store import commit_event, load_state, read_content_snapshot
 
@@ -430,6 +432,7 @@ def create_server(root: Path, port: int = 0) -> HTTPServer:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Serve an optional SuperWriter review page")
     parser.add_argument("--project", required=True, type=Path)
     parser.add_argument("--port", type=int, default=0)

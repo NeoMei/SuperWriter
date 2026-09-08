@@ -35,9 +35,8 @@ class PdfFigureDependencyTest(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    fitz is not None and all(shutil.which(command) for command in
-                             ("sips", "osascript", "markitdown", "pdfinfo")),
-    "native PDF acceptance requires PyMuPDF and macOS delivery tools",
+    fitz is not None and shutil.which("markitdown"),
+    "native PDF acceptance requires PyMuPDF and MarkItDown",
 )
 class PdfFigureAcceptanceTest(unittest.TestCase):
     def setUp(self):
@@ -60,7 +59,7 @@ class PdfFigureAcceptanceTest(unittest.TestCase):
     def verify(self):
         return subprocess.run(
             [sys.executable, "-B", str(ROOT / "scripts/verify_acceptance.py"),
-             str(self.project)], capture_output=True, text=True,
+            str(self.project)], capture_output=True, text=True, encoding="utf-8",
         )
 
     def change_pdf(self, change):

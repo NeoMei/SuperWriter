@@ -8,14 +8,14 @@ SuperWriter is a technical proposal writing skill. `SKILL.md` defines its workfl
 
 Run commands from the repository root. There is no application build or development server.
 
-- `bash install.sh`: install configured dependencies and host mirrors; modifies host skill directories and the Codex routing file.
-- `bash scripts/verify.sh`: check dependencies, installed mirrors, routing, and workflow contracts; requires a configured installation.
-- `python3 -m unittest discover -s tests -p 'test_*.py'`: run Python regression tests.
+- `python install.py`: install configured dependency references and host mirrors on macOS/Windows; modifies host skill directories and the Codex routing file. `bash install.sh` and `./install.ps1` are wrappers.
+- `python scripts/verify.py`: check dependencies, installed mirrors, routing, and workflow contracts; requires a configured installation.
+- `python -m unittest discover -s tests -p 'test_*.py'`: run Python regression tests (macOS may use `python3`).
 - `bash tests/test_install.sh`: test transactional installation, rollback, and path safety.
 - `bash tests/test_verify_artifacts.sh`: test artifact acceptance and malformed-output rejection.
-- `bash scripts/verify.sh --acceptance-dir /absolute/path/to/customer/project`: validate a completed delivery.
+- `python scripts/verify.py --acceptance-dir <absolute-project-path>`: validate a completed delivery.
 
-Rendering tests require macOS AppKit tools. Delivery checks also require the tools listed in `README.md`, including `markitdown`, `pdfinfo`, `file`, and `unzip`. PDF illustration and native longform checks require PyMuPDF in the verifier's Python environment (`python3 -m pip install PyMuPDF`); the verifier does not install it automatically.
+Cross-platform verification dependencies are listed in `requirements.txt`. Install them into the verifier's Python environment before running image/PDF suites; verification does not install packages automatically. Use native Windows Python/PowerShell and macOS Python for platform checks. Windows shell-specific legacy tests may be skipped explicitly; portable installation rollback, state contention, rendering and acceptance tests must still run. WPSComposer's OS/backend implementation is owned by its own project; SuperWriter checks its public dependency contract only.
 
 ## Coding Style & Naming Conventions
 

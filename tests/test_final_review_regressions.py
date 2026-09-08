@@ -35,7 +35,7 @@ def put(root, state, object_id, kind, dependencies, metadata=None, content=None,
     content = content or f"# {object_id}\n"
     target = root / path
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(content, encoding="utf-8")
+    target.write_bytes(content.encode("utf-8"))
     obj = {"id": object_id, "kind": kind, "path": path, "version": version,
            "sha256": hashlib.sha256(content.encode()).hexdigest(), "dependencies": dependencies,
            "metadata": metadata or {}, "status": "draft"}

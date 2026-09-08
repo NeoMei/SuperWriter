@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 import argparse
-import ast
 import json
+import os
 import re
 import shlex
 import sys
 from pathlib import Path
 from typing import Any
+
+try:
+    from collaboration.console import configure_utf8_stdio
+except ImportError:
+    from scripts.collaboration.console import configure_utf8_stdio
 
 try:
     import tomllib as toml_parser
@@ -33,7 +38,7 @@ EXPECTED_EXTERNAL = {
 EXPECTED_ORDER = ("WPSComposer", *EXPECTED_EXTERNAL)
 EXPECTED_IDS = set(EXPECTED_ORDER)
 WPS_MINIMUM_VERSION = "0.7.2"
-SUPERWRITER_VERSION = "0.2.1"
+SUPERWRITER_VERSION = "0.2.2"
 SUPERWRITER_FRONTMATTER = (
     "---",
     "name: superwriter",
@@ -109,8 +114,8 @@ def validate_manifest(data: dict) -> list[str]:
         findings.append("top-level keys must be exactly schema_version, superwriter_version, dependencies")
     if data.get("schema_version") != 1 or type(data.get("schema_version")) is not int:
         findings.append("schema_version must be integer 1")
-    if data.get("superwriter_version") != "0.2.1":
-        findings.append("superwriter_version must be 0.2.1")
+    if data.get("superwriter_version") != "0.2.2":
+        findings.append("superwriter_version must be 0.2.2")
 
     dependencies = data.get("dependencies")
     if not isinstance(dependencies, list):
@@ -345,81 +350,24 @@ def read_wps_version(skill_dir: Path) -> str | None:
     return next(iter(versions)) if len(versions) == 1 else None
 
 
-def _is_within(path: Path, root: Path) -> bool:
-    return path == root or root in path.parents
-
-
-def _local_module_file(skill_dir: Path, module: tuple[str, ...]) -> tuple[Path, bool] | None:
-    """Resolve one lexical local module without allowing a symlink escape."""
-    lexical = skill_dir.joinpath(*module)
-    candidates = ((lexical.with_suffix(".py"), False), (lexical / "__init__.py", True))
+def _has_public_wps_skill_contract(skill_dir: Path) -> bool:
+    """Validate only the public WPSComposer skill identity."""
     try:
-        resolved_root = skill_dir.resolve(strict=True)
-    except OSError:
-        return None
-    for candidate, is_package in candidates:
-        if not candidate.is_file():
-            continue
-        try:
-            resolved = candidate.resolve(strict=True)
-        except OSError:
-            continue
-        if _is_within(resolved, resolved_root):
-            return candidate, is_package
-    return None
-
-
-def _parse_python_module(path: Path) -> ast.Module | None:
+        lines = (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    if not lines or lines[0] != "---":
+        return False
     try:
-        source = path.read_bytes().decode("utf-8")
-        return ast.parse(source, filename="<WPSComposer module>")
-    except (OSError, UnicodeError, SyntaxError, ValueError):
-        return None
-
-
-def _validate_wps_entrypoint_closure(
-    skill_dir: Path, entry_module: tuple[str, ...], entrypoint: str
-) -> bool:
-    """Statically validate an export and every declared local relative import."""
-    pending = [entry_module]
-    visited: set[tuple[str, ...]] = set()
-    while pending:
-        module = pending.pop()
-        if module in visited:
-            continue
-        visited.add(module)
-        resolved = _local_module_file(skill_dir, module)
-        if resolved is None:
-            return False
-        path, is_package = resolved
-        tree = _parse_python_module(path)
-        if tree is None:
-            return False
-        if module == entry_module and not any(
-            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and node.name == entrypoint
-            for node in tree.body
-        ):
-            return False
-
-        package = module if is_package else module[:-1]
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom) or node.level == 0:
-                continue
-            if node.level > len(package):
-                return False
-            base = package[: len(package) - node.level + 1]
-            if node.module:
-                targets = [base + tuple(node.module.split("."))]
-            else:
-                if any(alias.name == "*" for alias in node.names):
-                    return False
-                targets = [base + tuple(alias.name.split(".")) for alias in node.names]
-            for target in targets:
-                if not target or _local_module_file(skill_dir, target) is None:
-                    return False
-                pending.append(target)
-    return True
+        boundary = lines[1:].index("---") + 1
+    except ValueError:
+        return False
+    names = [
+        line.partition(":")[2].strip()
+        for line in lines[1:boundary]
+        if line.startswith("name:")
+    ]
+    return names == ["WPSComposer"]
 
 
 def _safe_path_text(path: Path) -> str:
@@ -466,11 +414,8 @@ def _inspectable_source_root(root: Path) -> Path | None:
     resolved = root.resolve(strict=True)
     if not resolved.is_dir():
         raise OSError("dependency source root is not a directory")
-    iterator = resolved.iterdir()
-    try:
-        next(iterator, None)
-    finally:
-        iterator.close()
+    with os.scandir(resolved) as entries:
+        next(entries, None)
     return resolved
 
 
@@ -492,31 +437,17 @@ def _inspect_one_dependency(
                 )
             )
             return findings, warnings
-        required_capabilities = (
-            (
-                ("scripts", "macos_probe", "generation"),
-                "scripts/macos_probe/generation.py",
-                "generate_macos",
-            ),
-            (
-                ("scripts", "macos_probe", "conversion"),
-                "scripts/macos_probe/conversion.py",
-                "convert_macos",
-            ),
-        )
-        for module, label, entrypoint in required_capabilities:
-            if not _validate_wps_entrypoint_closure(inspected_wps, module, entrypoint):
-                findings.append(
-                    _runtime_finding(
-                        dependency_id,
-                        "WPSComposer runtime capability contract is invalid: "
-                        f"{label} must be UTF-8 Python with top-level {entrypoint} "
-                        "and a complete local relative-import closure",
-                        agents_root,
-                        opencode_root,
-                        wps_source,
-                    )
+        if not _has_public_wps_skill_contract(inspected_wps):
+            findings.append(
+                _runtime_finding(
+                    dependency_id,
+                    "WPSComposer public skill contract is invalid: SKILL.md frontmatter "
+                    "must declare exactly one name: WPSComposer",
+                    agents_root,
+                    opencode_root,
+                    wps_source,
                 )
+            )
         repository_roots = _find_wps_repository_roots(inspected_wps)
         metadata_errors = [
             item["__error__"]
@@ -542,9 +473,14 @@ def _inspect_one_dependency(
         }
         if not repository_roots:
             if not metadata_errors:
-                warnings.append(
-                    "WPSComposer version metadata is unavailable; capability contract accepted "
-                    "because SKILL.md and required scripts/macos_probe export entrypoints are present"
+                findings.append(
+                    _runtime_finding(
+                        dependency_id,
+                        "WPSComposer version metadata is unavailable",
+                        agents_root,
+                        opencode_root,
+                        wps_source,
+                    )
                 )
             return findings, warnings
         if len(versions) > 1:
@@ -645,6 +581,8 @@ def format_failure(
     agents_root: Path,
     opencode_root: Path,
     wps_source: Path,
+    *,
+    platform_name: str = os.name,
 ) -> str:
     # Keep the public interface stable, but never derive failure guidance from
     # untrusted manifest strings or a possibly incomplete dependency array.
@@ -672,11 +610,18 @@ def format_failure(
         ("SUPERWRITER_AGENTS_SKILLS_ROOT", agents_root),
         ("SUPERWRITER_OPENCODE_SKILLS_ROOT", opencode_root),
     )
-    install_command = " ".join(
-        f"{environment}={shlex.quote(_safe_path_text(path))}"
-        for environment, path in install_values
-    )
-    lines.append(f"Install command: {install_command} bash install.sh")
+    if platform_name == "nt":
+        assignments = " ; ".join(
+            f"$env:{environment} = '{_safe_path_text(path).replace(chr(39), chr(39) * 2)}'"
+            for environment, path in install_values
+        )
+        lines.append(f"Install command (PowerShell): {assignments} ; python .\\install.py")
+    else:
+        install_command = " ".join(
+            f"{environment}={shlex.quote(_safe_path_text(path))}"
+            for environment, path in install_values
+        )
+        lines.append(f"Install command: {install_command} python install.py")
     lines.append("No host files were changed.")
     return "\n".join(lines)
 
@@ -756,7 +701,7 @@ def _run_preflight(args: argparse.Namespace) -> int:
     for warning in warnings:
         print(f"WARNING: {warning}", file=sys.stderr)
     external = ", ".join(EXPECTED_EXTERNAL)
-    version = read_wps_version(args.wps_source) or "capability-only"
+    version = read_wps_version(args.wps_source) or "unknown"
     print(
         f"PASS: SuperWriter source version {source_version} matches dependency manifest; "
         f"WPSComposer {version}; external skills: {external}"
@@ -780,6 +725,7 @@ def _all_sources_uninspectable(
 
 
 def main() -> int:
+    configure_utf8_stdio()
     args = _parser().parse_args()
     try:
         return _run_preflight(args)

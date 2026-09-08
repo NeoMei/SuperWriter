@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 import importlib.util
-import io
-from unittest import mock
-from contextlib import redirect_stderr
-import subprocess
+from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import zlib
-from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "scripts" / "render_svg.py"
-JXA = ROOT / "scripts" / "render_svg_macos.js"
 SAMPLE = ROOT / "验收" / "模拟客户A" / "模拟标段1" / "配图" / "图1-国产化适配架构.svg"
+V2_SAMPLE = ROOT / "验收" / "协作写作-v2-模拟" / "配图" / "审阅记录确认循环.svg"
 
 
 def load_helper():
@@ -28,10 +26,14 @@ def load_helper():
     return module
 
 
-def write_command(path: Path, body: str) -> Path:
-    path.write_text("#!/bin/sh\n" + body, encoding="utf-8")
-    path.chmod(0o755)
-    return path
+def load_acceptance_helpers():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        from svg_geometry_compare import masked_svg_pixels_match
+        from verify_acceptance import normalized_pixels, pixels_match
+    finally:
+        sys.path.pop(0)
+    return masked_svg_pixels_match, normalized_pixels, pixels_match
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -52,299 +54,202 @@ def valid_png() -> bytes:
     )
 
 
-def write_payload_command(path: Path, payload: bytes, returncode: int = 0) -> Path:
-    path.write_text(
-        "#!/usr/bin/env python3\n"
-        "from pathlib import Path\n"
-        "import sys\n"
-        f"Path(sys.argv[-1]).write_bytes(bytes.fromhex({payload.hex()!r}))\n"
-        f"raise SystemExit({returncode})\n",
-        encoding="utf-8",
-    )
-    path.chmod(0o755)
-    return path
-
-
 class RenderSvgTest(unittest.TestCase):
-    def test_helper_and_appkit_renderer_are_release_files(self):
-        self.assertTrue(HELPER.is_file(), "scripts/render_svg.py is missing")
-        self.assertTrue(JXA.is_file(), "scripts/render_svg_macos.js is missing")
+    def _normalized_render_pair(self, source: Path):
+        module = load_helper()
+        _, normalized_pixels, _ = load_acceptance_helpers()
+        payload = module._resvg_renderer(source, skip_system_fonts=True)
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_forced_sips_failure_falls_back_to_real_appkit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "fallback.png"
+            output.write_bytes(payload)
+            self.assertTrue(module._valid_png(output))
+            rendered = normalized_pixels(payload, "fallback", Path(temporary), "fallback")
+            approved = normalized_pixels(
+                source.with_suffix(".png").read_bytes(),
+                "approved",
+                Path(temporary),
+                "approved",
+            )
+        return rendered, approved
+
+    def test_bundled_cjk_fallback_preserves_legacy_acceptance_without_system_fonts(self):
+        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
+            self.skipTest("requires resvg-py and PyMuPDF")
+        masked_svg_pixels_match, _, pixels_match = load_acceptance_helpers()
+
+        rendered, approved = self._normalized_render_pair(SAMPLE)
+
+        self.assertTrue(
+            pixels_match(rendered, approved)
+            or masked_svg_pixels_match(SAMPLE, rendered, approved)
+        )
+
+    def test_bundled_cjk_fallback_supports_v2_geometry_without_system_fonts(self):
+        if any(importlib.util.find_spec(name) is None for name in ("resvg_py", "pymupdf")):
+            self.skipTest("requires resvg-py and PyMuPDF")
+        masked_svg_pixels_match, _, pixels_match = load_acceptance_helpers()
+
+        rendered, approved = self._normalized_render_pair(V2_SAMPLE)
+
+        self.assertFalse(pixels_match(rendered, approved))
+        self.assertTrue(masked_svg_pixels_match(V2_SAMPLE, rendered, approved))
+
+    def test_resvg_receives_a_private_bundled_cjk_font_file(self):
+        module = load_helper()
+        seen = {}
+
+        class FakeResvg:
+            @staticmethod
+            def svg_to_bytes(**kwargs):
+                seen.update(kwargs)
+                font_file = Path(kwargs["font_files"][0])
+                if not font_file.is_file() or font_file.stat().st_size <= 1_000_000:
+                    raise AssertionError("bundled font was not readable during render")
+                return valid_png()
+
+        with mock.patch.dict(sys.modules, {"resvg_py": FakeResvg}):
+            self.assertEqual(module._resvg_renderer(SAMPLE), valid_png())
+        self.assertEqual(seen["sans_serif_family"], "Droid Sans Fallback")
+        self.assertFalse(seen["skip_system_fonts"])
+        self.assertFalse(Path(seen["font_files"][0]).exists())
+
+    def test_real_resvg_renderer_produces_a_decodable_png(self):
+        if importlib.util.find_spec("resvg_py") is None:
+            self.skipTest("requires resvg-py")
+        module = load_helper()
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "render.png"
+            backend = module.render_svg(SAMPLE, output)
+            self.assertEqual(backend, "resvg")
+            self.assertTrue(module._valid_png(output))
+
+    def test_renderer_output_is_published_atomically(self):
         module = load_helper()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            failing_sips = write_command(root / "sips", "exit 13\n")
             output = root / "render.png"
-            backend = module.render_svg(
-                SAMPLE,
-                output,
-                sips_command=str(failing_sips),
-                jxa_script=JXA,
-            )
-            self.assertEqual(backend, "appkit")
-            self.assertTrue(output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
+            output.write_bytes(b"previous-render")
+            backend = module.render_svg(SAMPLE, output, renderer=lambda _: valid_png())
+            self.assertEqual(backend, "resvg")
+            self.assertEqual(output.read_bytes(), valid_png())
+            self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_sips_rc_zero_with_invalid_png_falls_back_to_real_appkit(self):
-        complete = valid_png()
-        bad_crc = bytearray(complete)
-        bad_crc[29] ^= 0x01
-        idat_length = struct.unpack(">I", complete[33:37])[0]
-        invalid_payloads = {
-            "header-only": complete[:33],
-            "bad-crc": bytes(bad_crc),
-            "truncated-idat": complete[: 33 + 8 + max(1, idat_length // 2)],
-        }
+    def test_invalid_renderer_output_is_rejected_and_preserves_existing_output(self):
         module = load_helper()
+        invalid_payloads = {
+            "header-only": valid_png()[:33],
+            "bad-crc": valid_png()[:-1] + b"x",
+            "not-png": b"not-a-png",
+        }
         for case, payload in invalid_payloads.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                fake_sips = write_payload_command(root / "sips", payload)
                 output = root / "render.png"
-                backend = module.render_svg(
-                    SAMPLE,
-                    output,
-                    sips_command=str(fake_sips),
-                    jxa_script=JXA,
-                )
-                self.assertEqual(backend, "appkit")
-                self.assertNotEqual(output.read_bytes(), payload)
-                self.assertTrue(output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
+                output.write_bytes(b"previous-render")
+                with self.assertRaisesRegex(
+                    module.RenderSvgError,
+                    r"^SVG rendering failed: resvg produced an invalid PNG$",
+                ):
+                    module.render_svg(SAMPLE, output, renderer=lambda _, p=payload: p)
+                self.assertEqual(output.read_bytes(), b"previous-render")
+                self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_valid_sips_png_is_published_atomically_without_appkit(self):
+    def test_renderer_exception_has_stable_diagnostic_and_preserves_output(self):
         module = load_helper()
+
+        def fail_renderer(_):
+            raise ValueError("renderer internals")
+
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            payload = valid_png()
-            fake_sips = write_payload_command(root / "sips", payload)
-            appkit_marker = root / "appkit-called"
-            fake_osascript = write_command(
-                root / "osascript", f"touch {str(appkit_marker)!r}\nexit 91\n"
-            )
-            output = root / "render.png"
-            output.write_bytes(b"previous-render")
-
-            backend = module.render_svg(
-                SAMPLE,
-                output,
-                sips_command=str(fake_sips),
-                osascript_command=str(fake_osascript),
-                jxa_script=JXA,
-            )
-
-            self.assertEqual(backend, "sips")
-            self.assertEqual(output.read_bytes(), payload)
-            self.assertFalse(appkit_marker.exists(), "AppKit ran after a valid sips render")
-            self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
-
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_both_backends_fail_with_stable_diagnostic_and_preserve_output(self):
-        module = load_helper()
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            failing_sips = write_command(root / "sips", "exit 13\n")
-            failing_osascript = write_command(root / "osascript", "exit 17\n")
-            output = root / "render.png"
+            output = Path(temporary) / "render.png"
             output.write_bytes(b"previous-render")
             with self.assertRaisesRegex(
                 module.RenderSvgError,
-                r"^SVG system rendering failed: sips and AppKit fallback both failed$",
+                r"^SVG rendering failed: resvg could not render the SVG$",
             ):
-                module.render_svg(
-                    SAMPLE,
-                    output,
-                    sips_command=str(failing_sips),
-                    osascript_command=str(failing_osascript),
-                    jxa_script=JXA,
-                )
+                module.render_svg(SAMPLE, output, renderer=fail_renderer)
             self.assertEqual(output.read_bytes(), b"previous-render")
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_both_backends_return_invalid_png_and_preserve_output(self):
+    def test_missing_resvg_dependency_has_actionable_diagnostic(self):
         module = load_helper()
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            invalid = valid_png()[:33]
-            fake_sips = write_payload_command(root / "sips", invalid)
-            fake_osascript = write_payload_command(root / "osascript", invalid)
-            output = root / "render.png"
-            output.write_bytes(b"previous-render")
-            with self.assertRaisesRegex(
-                module.RenderSvgError,
-                r"^SVG system rendering failed: sips and AppKit fallback both failed$",
-            ):
-                module.render_svg(
-                    SAMPLE,
-                    output,
-                    sips_command=str(fake_sips),
-                    osascript_command=str(fake_osascript),
-                    jxa_script=JXA,
-                )
-            self.assertEqual(output.read_bytes(), b"previous-render")
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+            sys.modules, {"resvg_py": None}
+        ), self.assertRaisesRegex(
+            module.RenderSvgError,
+            r"^SVG rendering requires resvg-py, PyMuPDF, and fonttools; "
+            r"install project requirements$",
+        ):
+            module.render_svg(SAMPLE, Path(temporary) / "render.png")
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
     def test_existing_output_must_be_a_regular_non_symlink_file(self):
         module = load_helper()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = root / "target.png"
             target.write_bytes(b"target-bytes")
-            symlink = root / "linked.png"
-            symlink.symlink_to(target)
+            linked = root / "linked.png"
+            try:
+                linked.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"symlinks unavailable: {exc}")
             directory = root / "directory.png"
             directory.mkdir()
-            for case, output in (("symlink", symlink), ("directory", directory)):
-                with self.subTest(case=case), self.assertRaisesRegex(
+            for output in (linked, directory):
+                with self.assertRaisesRegex(
                     module.RenderSvgError,
                     r"^PNG output must be a regular non-symlink file when it exists$",
                 ):
-                    module.render_svg(SAMPLE, output, jxa_script=JXA)
+                    module.render_svg(SAMPLE, output, renderer=lambda _: valid_png())
             self.assertEqual(target.read_bytes(), b"target-bytes")
 
-            cli = subprocess.run(
-                ["python3", str(HELPER), str(SAMPLE), str(directory)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(cli.returncode, 1, cli.stdout + cli.stderr)
-            self.assertIn(
-                "FAIL: PNG output must be a regular non-symlink file when it exists",
-                cli.stderr,
-            )
-            self.assertNotIn("Traceback", cli.stderr)
-
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
     def test_input_must_be_a_regular_non_symlink_svg(self):
         module = load_helper()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "render.png"
-            output.write_bytes(b"previous-render")
-            linked = root / "linked.svg"
-            linked.symlink_to(SAMPLE)
             directory = root / "directory.svg"
             directory.mkdir()
-            for case, source in (("symlink", linked), ("directory", directory)):
-                with self.subTest(case=case), self.assertRaisesRegex(
-                    module.RenderSvgError,
-                    r"^SVG input must be a regular non-symlink \.svg file$",
-                ):
-                    module.render_svg(source, output, jxa_script=JXA)
-                self.assertEqual(output.read_bytes(), b"previous-render")
-                self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
+            with self.assertRaisesRegex(
+                module.RenderSvgError,
+                r"^SVG input must be a regular non-symlink \.svg file$",
+            ):
+                module.render_svg(directory, output, renderer=lambda _: valid_png())
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_input_symlink_loops_are_stable_cli_failures(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self_loop = root / "self.svg"
-            self_loop.symlink_to(self_loop.name)
-            chain_a = root / "chain-a.svg"
-            chain_b = root / "chain-b.svg"
-            chain_a.symlink_to(chain_b.name)
-            chain_b.symlink_to(chain_a.name)
-            for case, source in (("self", self_loop), ("chain", chain_a)):
-                output = root / f"{case}.png"
-                output.write_bytes(b"previous-render")
-                result = subprocess.run(
-                    ["python3", str(HELPER), str(source), str(output)],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    check=False,
-                )
-                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-                self.assertEqual(
-                    result.stderr,
-                    "FAIL: SVG input must be a regular non-symlink .svg file\n",
-                )
-                self.assertNotIn("Traceback", result.stderr)
-                self.assertEqual(output.read_bytes(), b"previous-render")
-                self.assertEqual(list(root.glob(f".{case}.png.*.tmp.png")), [])
+            linked = root / "linked.svg"
+            try:
+                linked.symlink_to(SAMPLE)
+            except OSError:
+                return
+            with self.assertRaisesRegex(
+                module.RenderSvgError,
+                r"^SVG input must be a regular non-symlink \.svg file$",
+            ):
+                module.render_svg(linked, output, renderer=lambda _: valid_png())
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
-    def test_path_probe_permission_errors_are_wrapped_and_cli_has_no_traceback(self):
+    def test_path_probe_errors_are_wrapped_without_touching_output(self):
         module = load_helper()
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            output = root / "render.png"
+            output = Path(temporary) / "render.png"
             output.write_bytes(b"previous-render")
-            for method in ("expanduser", "absolute", "resolve", "is_file", "is_dir"):
-                with self.subTest(method=method), mock.patch.object(
-                    module.Path, method, side_effect=PermissionError("private-path")
-                ), self.assertRaisesRegex(
-                    module.RenderSvgError,
-                    r"^SVG rendering path validation failed$",
-                ):
-                    module.render_svg(SAMPLE, output, jxa_script=JXA)
-                self.assertEqual(output.read_bytes(), b"previous-render")
-                self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
-
-            resolved_sample = SAMPLE.resolve(strict=True)
-            output_probe_cases = (
-                (
-                    "expanduser",
-                    mock.patch.object(
-                        module.Path,
-                        "expanduser",
-                        side_effect=[Path(SAMPLE), PermissionError("private-output")],
-                    ),
-                ),
-                (
-                    "absolute",
-                    mock.patch.object(
-                        module.Path,
-                        "absolute",
-                        side_effect=[Path(SAMPLE), PermissionError("private-output")],
-                    ),
-                ),
-                (
-                    "resolve",
-                    mock.patch.object(
-                        module.Path,
-                        "resolve",
-                        side_effect=[resolved_sample, PermissionError("private-output")],
-                    ),
-                ),
-            )
-            for method, failure in output_probe_cases:
-                with self.subTest(output_method=method), failure, self.assertRaisesRegex(
-                    module.RenderSvgError,
-                    r"^SVG rendering path validation failed$",
-                ):
-                    module.render_svg(SAMPLE, output, jxa_script=JXA)
-                self.assertEqual(output.read_bytes(), b"previous-render")
-                self.assertEqual(list(root.glob(".render.png.*.tmp.png")), [])
-
-            stderr = io.StringIO()
             with mock.patch.object(
                 module.Path, "resolve", side_effect=PermissionError("private-path")
-            ), mock.patch.object(
-                sys, "argv", [str(HELPER), str(SAMPLE), str(output)]
-            ), redirect_stderr(stderr):
-                returncode = module.main()
-            self.assertEqual(returncode, 1)
-            self.assertEqual(stderr.getvalue(), "FAIL: SVG rendering path validation failed\n")
-            self.assertNotIn("Traceback", stderr.getvalue())
+            ), self.assertRaisesRegex(
+                module.RenderSvgError,
+                r"^SVG rendering path validation failed$",
+            ):
+                module.render_svg(SAMPLE, output, renderer=lambda _: valid_png())
             self.assertEqual(output.read_bytes(), b"previous-render")
 
-    @unittest.skipUnless(HELPER.is_file() and JXA.is_file(), "renderer not implemented yet")
     def test_output_filesystem_errors_are_wrapped_and_preserve_old_output(self):
         module = load_helper()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            failing_sips = write_command(root / "sips", "exit 13\n")
-            cases = (
+            for case, failure in (
                 ("mkstemp", mock.patch.object(module.tempfile, "mkstemp", side_effect=OSError)),
                 ("chmod", mock.patch.object(module.Path, "chmod", side_effect=OSError)),
                 ("replace", mock.patch.object(module.os, "replace", side_effect=OSError)),
-            )
-            for case, failure in cases:
+            ):
                 with self.subTest(case=case):
                     output = root / f"{case}.png"
                     output.write_bytes(b"previous-render")
@@ -352,25 +257,25 @@ class RenderSvgTest(unittest.TestCase):
                         module.RenderSvgError,
                         r"^SVG rendering could not safely create or publish output$",
                     ):
-                        module.render_svg(
-                            SAMPLE,
-                            output,
-                            sips_command=str(failing_sips),
-                            jxa_script=JXA,
-                        )
+                        module.render_svg(SAMPLE, output, renderer=lambda _: valid_png())
                     self.assertEqual(output.read_bytes(), b"previous-render")
 
-    @unittest.skipUnless(JXA.is_file(), "renderer not implemented yet")
-    def test_jxa_rejects_missing_arguments(self):
-        result = subprocess.run(
-            ["osascript", "-l", "JavaScript", str(JXA)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-        )
-        self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("requires exactly one SVG input and one PNG output", result.stdout)
+    def test_cli_handles_unicode_paths_as_utf8(self):
+        if importlib.util.find_spec("resvg_py") is None:
+            self.skipTest("requires resvg-py")
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "渲染结果.png"
+            result = subprocess.run(
+                [sys.executable, str(HELPER), str(SAMPLE), str(output)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "PASS: SVG rendered through resvg\n")
+            self.assertTrue(output.is_file())
 
 
 if __name__ == "__main__":

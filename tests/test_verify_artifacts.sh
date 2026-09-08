@@ -10,8 +10,8 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 # package base available to child verifiers; no packages are installed here.
 SUPERWRITER_TEST_PYTHON_USER_BASE="$(python3 -B -c 'import site; print(site.USER_BASE)')"
 export PYTHONUSERBASE="$SUPERWRITER_TEST_PYTHON_USER_BASE"
-python3 -B -c 'import fitz' || {
-  echo "Artifact tests require PyMuPDF in the invoking Python environment" >&2
+python3 -B -c 'import fitz, PIL, resvg_py' || {
+  echo "Artifact tests require the Python packages from requirements.txt" >&2
   exit 1
 }
 
@@ -25,6 +25,7 @@ fresh_fixture() {
   mkdir -p "$fixture"
   git -C "$REPO_ROOT" archive HEAD | tar -x -C "$fixture"
   cp "$REPO_ROOT/scripts/verify.sh" "$fixture/scripts/verify.sh"
+  cp "$REPO_ROOT/scripts/verify.py" "$fixture/scripts/verify.py"
   cp "$REPO_ROOT/scripts/check_dependencies.py" "$fixture/scripts/check_dependencies.py"
   cp "$REPO_ROOT/scripts/verify_acceptance.py" "$fixture/scripts/verify_acceptance.py"
   cp "$REPO_ROOT/scripts/verify_workflow.py" "$fixture/scripts/verify_workflow.py"
@@ -34,8 +35,11 @@ fresh_fixture() {
   cp -R "$REPO_ROOT/scripts/collaboration" "$fixture/scripts/collaboration"
   cp -R "$REPO_ROOT/scripts/review_assets" "$fixture/scripts/review_assets"
   cp "$REPO_ROOT/scripts/render_svg.py" "$fixture/scripts/render_svg.py"
+  cp "$REPO_ROOT/scripts/svg_geometry_compare.py" "$fixture/scripts/svg_geometry_compare.py"
   cp "$REPO_ROOT/scripts/render_svg_macos.js" "$fixture/scripts/render_svg_macos.js"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
+  cp "$REPO_ROOT/install.py" "$fixture/install.py"
+  cp "$REPO_ROOT/requirements.txt" "$fixture/requirements.txt"
   cp "$REPO_ROOT/README.md" "$fixture/README.md"
   cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
   cp -R "$REPO_ROOT/references/." "$fixture/references/"
@@ -57,8 +61,7 @@ fresh_fixture() {
   local wps_source="$wps_repo/skills/WPSComposer"
   mkdir -p "$test_home/.codex" "$agents_source" \
     "$opencode_source/obsidian-excalidraw" \
-    "$wps_source/scripts/macos_probe" "$wps_source/scripts/plugins" \
-    "$wps_source/scripts/renderers"
+    "$wps_source"
   printf '%s\n' 'keep-this-line' > "$test_home/.codex/AGENTS.md"
   for skill in grilling grill-me grill-with-docs to-spec domain-modeling ai-image-to-ppt; do
     mkdir -p "$agents_source/$skill"
@@ -67,50 +70,11 @@ fresh_fixture() {
   done
   printf '%s\n' '# obsidian-excalidraw' > "$opencode_source/obsidian-excalidraw/SKILL.md"
   printf '%s\n' 'Excalidraw runtime' > "$opencode_source/obsidian-excalidraw/runtime.txt"
-  printf '%s\n' '# WPSComposer' > "$wps_source/SKILL.md"
-  for runtime in __init__.py \
-    scripts/__init__.py scripts/_base.py scripts/_colors.py scripts/_dispatch.py \
-    scripts/artifact_transport.py scripts/conversion.py scripts/design_presets.py \
-    scripts/document_api.py scripts/document_model.py scripts/formatting.py \
-    scripts/generation_plan.py scripts/heading_numbering.py scripts/layout_templates.py \
-    scripts/math_render.py scripts/md_parser.py scripts/numbering_native.py \
-    scripts/orchestrator.py scripts/pdf.py scripts/quality_checks.py \
-    scripts/recording_composers.py scripts/reference_styles.py scripts/sheet.py \
-    scripts/slide.py scripts/windows_conversion.py scripts/wps_engine.py scripts/writer.py \
-    scripts/macos_probe/__init__.py scripts/macos_probe/__main__.py \
-    scripts/macos_probe/bridge.py scripts/macos_probe/conversion.py \
-    scripts/macos_probe/generation.py scripts/macos_probe/inspection.py \
-    scripts/macos_probe/models.py scripts/macos_probe/runner.py \
-    scripts/macos_probe/runtime.py scripts/macos_probe/templates.py \
-    scripts/plugins/__init__.py scripts/plugins/excalidraw.py \
-    scripts/renderers/__init__.py scripts/renderers/sheet_renderer.py \
-    scripts/renderers/slide_renderer.py scripts/renderers/writer_renderer.py; do
-    mkdir -p "$wps_source/$(dirname "$runtime")"
-    printf '# fixture: %s\n' "$runtime" > "$wps_source/$runtime"
-  done
-  printf '%s\n' 'from . import design_presets' 'from .macos_probe import generation' > \
-    "$wps_source/scripts/orchestrator.py"
-  printf '%s\n' 'from .. import reference_styles, heading_numbering, math_render' > \
-    "$wps_source/scripts/renderers/writer_renderer.py"
-  printf '%s\n' 'from .. import artifact_transport, generation_plan' \
-    'from . import bridge, models, runtime, templates' '' \
-    'def generate_macos():' '    pass' > \
-    "$wps_source/scripts/macos_probe/generation.py"
-  printf '%s\n' 'def convert_macos():' '    pass' > \
-    "$wps_source/scripts/macos_probe/conversion.py"
-  for vendor in \
-    addin/bridge-client.js addin/index.html addin/manifest.xml \
-    addin/presentation.js addin/ribbon.xml addin/spreadsheet.js addin/writer.js \
-    package-lock.json package.json node_modules/wpsjs/package.json \
-    node_modules/wpsjs/src/index.js node_modules/wpsjs/src/lib/debug.js \
-    node_modules/wpsjs/src/lib/debug_publish.js node_modules/wpsjs/src/lib/util.js \
-    node_modules/wpsjs/src/lib/res/etDemo.xlsx \
-    node_modules/wpsjs/src/lib/res/wppDemo.pptx \
-    node_modules/wpsjs/src/lib/res/wpsDemo.docx; do
-    mkdir -p "$wps_repo/macos/wps-jsapi-probe/$(dirname "$vendor")"
-    printf 'fixture vendor asset: %s\n' "$vendor" > \
-      "$wps_repo/macos/wps-jsapi-probe/$vendor"
-  done
+  printf '%s\n' '---' 'name: WPSComposer' '---' '' '# WPS Composer' > \
+    "$wps_source/SKILL.md"
+  mkdir -p "$wps_repo/.codex-plugin"
+  printf '%s\n' '{"name":"wps-composer","version":"0.8.1"}' > \
+    "$wps_repo/.codex-plugin/plugin.json"
 
   HOME="$test_home" \
     SUPERWRITER_AGENTS_SKILLS_ROOT="$agents_source" \
@@ -235,7 +199,15 @@ convert_fixture_to_ai_jpg() {
   local project="$root/验收/模拟客户A/模拟标段1"
   local png="$project/配图/图1-国产化适配架构.png"
   local jpg="$project/配图/图1-国产化适配架构.jpg"
-  /usr/bin/sips -s format jpeg "$png" --out "$jpg" >/dev/null
+  python3 -B - "$png" "$jpg" <<'PY'
+from pathlib import Path
+import sys
+from PIL import Image
+
+source, output = map(Path, sys.argv[1:])
+with Image.open(source) as image:
+    image.convert("RGB").save(output, format="JPEG", quality=95)
+PY
   python3 -B - "$project" "$jpg" <<'PY'
 import hashlib
 import json
@@ -297,7 +269,15 @@ replace_ai_docx_with_png() {
   local jpg="$project/配图/图1-国产化适配架构.jpg"
   local png="$project/配图/embedded-$mode.png"
   if [ "$mode" = converted ]; then
-    /usr/bin/sips -s format png "$jpg" --out "$png" >/dev/null
+    python3 -B - "$jpg" "$png" <<'PY'
+from pathlib import Path
+import sys
+from PIL import Image
+
+source, output = map(Path, sys.argv[1:])
+with Image.open(source) as image:
+    image.convert("RGB").save(output, format="PNG")
+PY
   else
     python3 -B - "$png" <<'PY'
 from pathlib import Path
@@ -511,8 +491,6 @@ PY
 }
 
 baseline="$(fresh_fixture baseline)"
-PYTHONPATH="$baseline-wps-repo/skills" python3 -B -c \
-  'import WPSComposer.scripts.orchestrator; import WPSComposer.scripts.renderers.writer_renderer'
 verify_fixture "$baseline" >/dev/null
 verify_fixture "$baseline" --acceptance-dir "$baseline/验收/模拟客户A/模拟标段1" >/dev/null
 
@@ -590,29 +568,6 @@ replace_ai_docx_with_png "$ai_mismatch_fixture" mismatch
 expect_rejected ai-image-docx-mismatch "FAIL: DOCX embedded diagram pixels differ from the rendered diagram" \
   "$ai_mismatch_fixture" --acceptance-dir "$ai_mismatch_fixture/验收/模拟客户A/模拟标段1"
 
-# Acceptance must fall back to AppKit when the system sips cannot decode SVG,
-# while continuing to use the real sips for PNG normalization.
-fallback_bin="$TEST_ROOT/fallback-bin"
-mkdir -p "$fallback_bin"
-printf '%s\n' '#!/bin/sh' \
-  'for argument in "$@"; do case "$argument" in *.svg) exit 13 ;; esac; done' \
-  'exec /usr/bin/sips "$@"' > "$fallback_bin/sips"
-chmod +x "$fallback_bin/sips"
-fallback_fixture="$(fresh_fixture appkit-fallback)"
-PATH="$fallback_bin:$PATH" expect_accepted appkit-fallback "$fallback_fixture" \
-  --acceptance-dir "$fallback_fixture/验收/模拟客户A/模拟标段1"
-
-both_fail_bin="$TEST_ROOT/both-fail-bin"
-mkdir -p "$both_fail_bin"
-cp "$fallback_bin/sips" "$both_fail_bin/sips"
-printf '%s\n' '#!/bin/sh' 'exit 17' > "$both_fail_bin/osascript"
-chmod +x "$both_fail_bin/sips" "$both_fail_bin/osascript"
-both_fail_fixture="$(fresh_fixture system-render-both-fail)"
-PATH="$both_fail_bin:$PATH" expect_rejected system-render-both-fail \
-  "FAIL: SVG system rendering failed: sips and AppKit fallback both failed" \
-  "$both_fail_fixture" \
-  --acceptance-dir "$both_fail_fixture/验收/模拟客户A/模拟标段1"
-
 for version_case in mismatch missing duplicate quoted-duplicate single-key-only double-key-only quoted-value \
   tag-key anchor-key explicit-key merge-key alias-key extra-key opening-space closing-space \
   fake-closing name-comment name-at empty-description reordered; do
@@ -624,33 +579,33 @@ import sys
 path = Path(sys.argv[1])
 case = sys.argv[2]
 text = path.read_text(encoding="utf-8")
-assert text.count("version: 0.2.1\n") == 1
+assert text.count("version: 0.2.2\n") == 1
 if case == "mismatch":
-    text = text.replace("version: 0.2.1\n", "version: 9.9.9\n", 1)
+    text = text.replace("version: 0.2.2\n", "version: 9.9.9\n", 1)
 elif case == "missing":
-    text = text.replace("version: 0.2.1\n", "", 1)
+    text = text.replace("version: 0.2.2\n", "", 1)
 elif case == "duplicate":
-    text = text.replace("version: 0.2.1\n", "version: 0.2.1\nversion: 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "version: 0.2.2\nversion: 0.2.2\n", 1)
 elif case == "quoted-duplicate":
-    text = text.replace("version: 0.2.1\n", 'version: 0.2.1\n"version": 0.2.1\n', 1)
+    text = text.replace("version: 0.2.2\n", 'version: 0.2.2\n"version": 0.2.2\n', 1)
 elif case == "single-key-only":
-    text = text.replace("version: 0.2.1\n", "'version': 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "'version': 0.2.2\n", 1)
 elif case == "double-key-only":
-    text = text.replace("version: 0.2.1\n", '"version": 0.2.1\n', 1)
+    text = text.replace("version: 0.2.2\n", '"version": 0.2.2\n', 1)
 elif case == "quoted-value":
-    text = text.replace("version: 0.2.1\n", 'version: "0.2.1"\n', 1)
+    text = text.replace("version: 0.2.2\n", 'version: "0.2.2"\n', 1)
 elif case == "tag-key":
-    text = text.replace("version: 0.2.1\n", "!!str version: 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "!!str version: 0.2.2\n", 1)
 elif case == "anchor-key":
-    text = text.replace("version: 0.2.1\n", "&shadow version: 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "&shadow version: 0.2.2\n", 1)
 elif case == "explicit-key":
-    text = text.replace("version: 0.2.1\n", "? version\n: 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "? version\n: 0.2.2\n", 1)
 elif case == "merge-key":
-    text = text.replace("version: 0.2.1\n", "version: 0.2.1\n<<: *defaults\n", 1)
+    text = text.replace("version: 0.2.2\n", "version: 0.2.2\n<<: *defaults\n", 1)
 elif case == "alias-key":
-    text = text.replace("version: 0.2.1\n", "version: 0.2.1\n*version_alias: 0.2.1\n", 1)
+    text = text.replace("version: 0.2.2\n", "version: 0.2.2\n*version_alias: 0.2.2\n", 1)
 elif case == "extra-key":
-    text = text.replace("version: 0.2.1\n", "version: 0.2.1\nlicense: MIT\n", 1)
+    text = text.replace("version: 0.2.2\n", "version: 0.2.2\nlicense: MIT\n", 1)
 elif case == "opening-space":
     text = text.replace("---\n", " ---\n", 1)
 elif case == "closing-space":
@@ -1158,7 +1113,7 @@ expect_rejected diagram-overlap "FAIL: Excalidraw node geometry overlaps" \
 static_only="$(fresh_fixture static-only)"
 mv "$static_only/验收" "$static_only/验收-not-discoverable"
 verify_fixture "$static_only" >/dev/null
-expect_rejected implicit-demo "FAIL: acceptance verification requires --acceptance-dir DIR" \
+expect_rejected implicit-demo "unrecognized arguments:" \
   "$static_only" "$static_only/验收-not-discoverable/模拟客户A/模拟标段1"
 
 # Every installed SuperWriter source file participates in the exact manifest.
@@ -1188,38 +1143,12 @@ dependency_tamper="$(fresh_fixture dependency-tamper)"
 printf '%s\n' tampered > "$dependency_tamper-test-home/.agents/skills/grilling/runtime.txt"
 expect_rejected dependency-tamper "FAIL: managed tree manifest differs" "$dependency_tamper"
 
-wps_runtime="$(fresh_fixture wps-runtime)"
-rm "$wps_runtime-wps-repo/skills/WPSComposer/scripts/reference_styles.py"
-expect_rejected wps-runtime "FAIL: required WPSComposer runtime asset is missing" "$wps_runtime"
-
-wps_vendor="$(fresh_fixture wps-vendor)"
-rm "$wps_vendor-wps-repo/macos/wps-jsapi-probe/addin/writer.js"
-expect_rejected wps-vendor "FAIL: required WPSComposer vendor asset is missing" "$wps_vendor"
-
 missing_dependency="$(fresh_fixture missing-dependency)"
 rm -rf "$missing_dependency-agents-source/grill-me"
 for host in .agents .claude .codex; do
   rm -rf "$missing_dependency-test-home/$host/skills/grill-me"
 done
 expect_rejected missing-dependency "grill-me is missing or incomplete" "$missing_dependency"
-
-# Backup discovery is name/date independent and never permits backup skills in a host root.
-discoverable_backup="$(fresh_fixture discoverable-backup)"
-mkdir -p "$discoverable_backup-test-home/.codex/skills/WPSComposer.saved-by-operator-20991231"
-printf '%s\n' '# stale WPS backup' > \
-  "$discoverable_backup-test-home/.codex/skills/WPSComposer.saved-by-operator-20991231/SKILL.md"
-expect_rejected discoverable-backup "FAIL: discoverable WPSComposer backup remains" "$discoverable_backup"
-
-missing_backup="$(fresh_fixture missing-backup)"
-rm -rf "$missing_backup-test-home/.local/share/superwriter/backups/claude"
-expect_rejected missing-backup "FAIL: recoverable WPSComposer backup is missing for claude" "$missing_backup"
-
-renamed_backups="$(fresh_fixture renamed-backups)"
-for host_name in agents claude codex; do
-  mv "$renamed_backups-test-home/.local/share/superwriter/backups/$host_name/WPSComposer.backup-20260817" \
-    "$renamed_backups-test-home/.local/share/superwriter/backups/$host_name/WPSComposer.saved-arbitrary-$host_name-20991231"
-done
-verify_fixture "$renamed_backups" >/dev/null
 
 diagram_count="$(fresh_fixture diagram-count)"
 python3 - "$diagram_count/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.excalidraw.md" <<'PY'
@@ -1291,7 +1220,7 @@ payload = bytearray(path.read_bytes())
 payload[29] ^= 0x01  # Corrupt the IHDR CRC without changing dimensions.
 path.write_bytes(payload)
 PY
-expect_rejected png-crc "FAIL: rendered architecture diagram is not decodable by sips" "$png_crc" --acceptance-dir "$png_crc/验收/模拟客户A/模拟标段1"
+expect_rejected png-crc "FAIL: rendered architecture diagram is not a decodable image" "$png_crc" --acceptance-dir "$png_crc/验收/模拟客户A/模拟标段1"
 
 png_dimensions="$(fresh_fixture png-dimensions)"
 python3 - "$png_dimensions/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" <<'PY'
@@ -1330,7 +1259,7 @@ path.write_bytes(
     + chunk(b"IEND", b"")
 )
 PY
-expect_rejected png-invalid-combination "FAIL: rendered architecture diagram is not decodable by sips" "$png_invalid_combination" --acceptance-dir "$png_invalid_combination/验收/模拟客户A/模拟标段1"
+expect_rejected png-invalid-combination "FAIL: rendered architecture diagram is not a decodable image" "$png_invalid_combination" --acceptance-dir "$png_invalid_combination/验收/模拟客户A/模拟标段1"
 
 png_adam7="$(fresh_fixture png-adam7)"
 python3 - "$png_adam7/验收/模拟客户A/模拟标段1/配图/图1-国产化适配架构.png" \
@@ -1550,7 +1479,12 @@ PATH="$shim_pdf:$PATH" \
   expect_rejected pdf-text "FAIL: PDF markitdown output is missing required text: 图 1 国产化适配架构" "$pdf_text" --acceptance-dir "$pdf_text/验收/模拟客户A/模拟标段1"
 
 missing_command="$(fresh_fixture missing-command)"
-PATH="/usr/bin:/bin" expect_rejected missing-command "FAIL: required command is unavailable: markitdown" "$missing_command" --acceptance-dir "$missing_command/验收/模拟客户A/模拟标段1"
+missing_command_bin="$TEST_ROOT/missing-command-bin"
+mkdir -p "$missing_command_bin"
+printf '%s\n' '#!/bin/sh' "exec '$(command -v python3)' \"\$@\"" > \
+  "$missing_command_bin/python3"
+chmod +x "$missing_command_bin/python3"
+PATH="$missing_command_bin:/usr/bin:/bin" expect_rejected missing-command "FAIL: DOCX markitdown extraction failed" "$missing_command" --acceptance-dir "$missing_command/验收/模拟客户A/模拟标段1"
 
 if [ "$failures" -ne 0 ]; then
   echo "FAIL: $failures verifier artifact contract case(s) were not enforced" >&2

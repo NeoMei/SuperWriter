@@ -53,6 +53,13 @@ EVENT_KINDS = {
 CHANNELS = {"agent", "chat", "web"}
 APPROVAL_CHANNELS = {"chat", "web"}
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{number}" for number in range(1, 10)),
+    *(f"LPT{number}" for number in range(1, 10)),
+    *(f"COM{number}" for number in "¹²³"),
+    *(f"LPT{number}" for number in "¹²³"),
+}
 
 
 def _error(message: str) -> None:
@@ -134,6 +141,28 @@ def _validate_metadata(kind: str, metadata: object) -> None:
             _error("figure_set mode none cannot contain figure_ids")
 
 
+def _portable_project_path(value: object, label: str) -> PurePosixPath:
+    path = _nonempty(value, label)
+    parsed = PurePosixPath(path)
+    invalid_part = any(
+        part.endswith((" ", "."))
+        or any(character in '<>:"|?*' for character in part)
+        or any(ord(character) < 32 for character in part)
+        or part.split(".", 1)[0].rstrip(" .").upper() in WINDOWS_RESERVED_NAMES
+        for part in parsed.parts
+    )
+    if (
+        parsed.is_absolute()
+        or path.startswith(("//", "\\"))
+        or "\\" in path
+        or ".." in parsed.parts
+        or path in {".", ".."}
+        or invalid_part
+    ):
+        _error(f"{label} must be project-relative and portable")
+    return parsed
+
+
 def _validate_object(value: object, object_id: str | None = None) -> dict:
     obj = _exact_dict(value, OBJECT_FIELDS, "object")
     identifier = _nonempty(obj["id"], "object id")
@@ -141,10 +170,7 @@ def _validate_object(value: object, object_id: str | None = None) -> dict:
         _error("object map key must match object id")
     if obj["kind"] not in OBJECT_KINDS:
         _error("object kind is invalid")
-    path = _nonempty(obj["path"], "object path")
-    parsed = PurePosixPath(path)
-    if parsed.is_absolute() or ".." in parsed.parts or path in {".", ".."}:
-        _error("object path must be project-relative")
+    _portable_project_path(obj["path"], "object path")
     _integer(obj["version"], "object version", 1)
     _digest(obj["sha256"], "object sha256")
     if not isinstance(obj["dependencies"], dict):
@@ -332,10 +358,9 @@ def _event_payload(event: dict) -> None:
             output = _exact_dict(
                 outputs[output_kind], {"path", "sha256"}, f"record_delivery {output_kind}"
             )
-            path = _nonempty(output["path"], f"record_delivery {output_kind} path")
-            parsed = PurePosixPath(path)
-            if parsed.is_absolute() or ".." in parsed.parts or path in {".", ".."}:
-                _error(f"record_delivery {output_kind} path must be project-relative")
+            parsed = _portable_project_path(
+                output["path"], f"record_delivery {output_kind} path"
+            )
             if parsed.suffix.lower() != f".{output_kind}":
                 _error(f"record_delivery {output_kind} path must end in .{output_kind}")
             _digest(output["sha256"], f"record_delivery {output_kind} sha256")

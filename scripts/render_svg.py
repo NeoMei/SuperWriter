@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""Render an SVG to PNG with the macOS sips -> AppKit system chain."""
+"""Render an SVG to PNG through the portable resvg Python binding."""
 
 from __future__ import annotations
 
 import argparse
+import io
 import os
 from pathlib import Path
 import stat
 import struct
-import subprocess
 import sys
 import tempfile
 import zlib
 
 
 class RenderSvgError(RuntimeError):
-    """Raised when the SVG system rendering chain cannot produce a valid PNG."""
+    """Raised when SVG rendering cannot safely produce a valid PNG."""
 
 
 def _valid_png(path: Path) -> bool:
@@ -131,37 +131,61 @@ def _temporary_output(output: Path) -> Path:
     return Path(name)
 
 
-def _run(command: list[str]) -> bool:
+def _resvg_renderer(source: Path, *, skip_system_fonts: bool = False) -> bytes:
     try:
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-        )
-    except OSError:
-        return False
-    return result.returncode == 0
+        from fontTools.ttLib import TTFont
+        import pymupdf
+        import resvg_py
+    except ImportError:
+        raise RenderSvgError(
+            "SVG rendering requires resvg-py, PyMuPDF, and fonttools; "
+            "install project requirements"
+        ) from None
+    try:
+        svg = source.read_text(encoding="utf-8")
+        font = pymupdf.Font("cjk")
+        if not font.buffer:
+            raise ValueError("PyMuPDF CJK fallback font is empty")
+        with tempfile.TemporaryDirectory(prefix="superwriter-cjk-font-") as temporary:
+            font_path = Path(temporary) / "DroidSansFallback.ttf"
+            # PyMuPDF's compact CJK font omits the PostScript name required by
+            # current fontdb/resvg. Complete only that metadata in the private
+            # temporary copy; outlines and metrics remain unchanged.
+            with TTFont(io.BytesIO(font.buffer)) as repaired:
+                for name_id, value in (
+                    (4, "Droid Sans Fallback Regular"),
+                    (6, "DroidSansFallback"),
+                    (16, "Droid Sans Fallback"),
+                    (17, "Regular"),
+                ):
+                    repaired["name"].setName(value, name_id, 3, 1, 0x0409)
+                repaired.save(str(font_path))
+            return resvg_py.svg_to_bytes(
+                svg_string=svg,
+                resources_dir=str(source.parent),
+                # Explicit SVG families such as Arial or PingFang remain first.
+                # The packaged font makes generic CJK fallback deterministic on
+                # hosts that do not install a CJK system font, including CI.
+                skip_system_fonts=skip_system_fonts,
+                font_files=[str(font_path)],
+                sans_serif_family="Droid Sans Fallback",
+            )
+    except (OSError, UnicodeError, ValueError, RuntimeError):
+        raise RenderSvgError(
+            "SVG rendering failed: resvg could not render the SVG"
+        ) from None
 
 
 def render_svg(
     source: Path | str,
     output: Path | str,
     *,
-    sips_command: Path | str = "sips",
-    osascript_command: Path | str = "osascript",
-    jxa_script: Path | str | None = None,
+    renderer=None,
 ) -> str:
-    """Render *source* atomically to *output* and return ``sips`` or ``appkit``."""
+    """Render *source* atomically to *output* and return ``resvg``."""
     try:
         source_path = Path(source).expanduser().absolute()
         output_path = Path(output).expanduser().absolute()
-        script_path = (
-            Path(jxa_script).expanduser().absolute()
-            if jxa_script is not None
-            else Path(__file__).resolve().with_name("render_svg_macos.js")
-        )
-
         try:
             source_mode = os.lstat(source_path).st_mode
         except FileNotFoundError:
@@ -193,9 +217,6 @@ def render_svg(
             )
         output_path = resolved_parent / output_path.name
 
-        script_path = script_path.resolve(strict=True)
-        if not script_path.is_file():
-            raise RenderSvgError("AppKit SVG fallback script is unavailable")
     except RenderSvgError:
         raise
     except (OSError, RuntimeError):
@@ -222,42 +243,31 @@ def render_svg(
         temporary: Path | None = None
         try:
             temporary = _temporary_output(output_path)
-            if _run(
-                [
-                    str(sips_command),
-                    "-s",
-                    "format",
-                    "png",
-                    str(source_path),
-                    "--out",
-                    str(temporary),
-                ]
-            ) and _valid_png(temporary):
-                temporary.chmod(0o644)
-                os.replace(temporary, output_path)
-                temporary = None
-                return "sips"
-
-            temporary.unlink(missing_ok=True)
+            render = renderer if renderer is not None else _resvg_renderer
+            try:
+                payload = render(source_path)
+            except RenderSvgError:
+                raise
+            except Exception:
+                raise RenderSvgError(
+                    "SVG rendering failed: resvg could not render the SVG"
+                ) from None
+            try:
+                temporary.write_bytes(payload)
+            except (OSError, TypeError):
+                if not isinstance(payload, (bytes, bytearray)):
+                    raise RenderSvgError(
+                        "SVG rendering failed: resvg produced an invalid PNG"
+                    ) from None
+                raise
+            if not _valid_png(temporary):
+                raise RenderSvgError(
+                    "SVG rendering failed: resvg produced an invalid PNG"
+                )
+            temporary.chmod(0o644)
+            os.replace(temporary, output_path)
             temporary = None
-            temporary = _temporary_output(output_path)
-            if _run(
-                [
-                    str(osascript_command),
-                    "-l",
-                    "JavaScript",
-                    str(script_path),
-                    str(source_path),
-                    str(temporary),
-                ]
-            ) and _valid_png(temporary):
-                temporary.chmod(0o644)
-                os.replace(temporary, output_path)
-                temporary = None
-                return "appkit"
-            raise RenderSvgError(
-                "SVG system rendering failed: sips and AppKit fallback both failed"
-            )
+            return "resvg"
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -283,7 +293,7 @@ def main() -> int:
     except RenderSvgError as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-    print(f"PASS: SVG rendered through macOS {backend}")
+    print(f"PASS: SVG rendered through {backend}")
     return 0
 
 
