@@ -1,0 +1,19 @@
+test_changed_body_text_is_rejected (test_native_pdf_text.NativePdfTextTest) ... ok
+test_extra_numeric_body_text_is_rejected (test_native_pdf_text.NativePdfTextTest) ... ok
+test_extra_terminal_body_number_equal_to_total_pages_is_rejected (test_native_pdf_text.NativePdfTextTest) ... ok
+test_native_toc_running_title_and_page_break_inside_paragraph_are_accepted (test_native_pdf_text.NativePdfTextTest) ... ok
+test_nonsequential_footer_is_rejected (test_native_pdf_text.NativePdfTextTest) ... ok
+test_page_number_in_body_does_not_replace_missing_footer (test_native_pdf_text.NativePdfTextTest) ... ok
+test_wrong_toc_page_reference_is_rejected (test_native_pdf_text.NativePdfTextTest) ... ok
+test_changed_pdf_image_is_rejected_even_with_original_dimensions (test_pdf_figure_acceptance.PdfFigureAcceptanceTest) ... ok
+test_missing_pdf_image_is_rejected_even_when_caption_and_text_survive (test_pdf_figure_acceptance.PdfFigureAcceptanceTest) ... ok
+test_real_wps_pdf_preserves_approved_illustration (test_pdf_figure_acceptance.PdfFigureAcceptanceTest) ... ok
+test_unused_pdf_image_resource_does_not_prove_visible_illustration (test_pdf_figure_acceptance.PdfFigureAcceptanceTest) ... ok
+test_white_overlay_hiding_painted_image_is_rejected (test_pdf_figure_acceptance.PdfFigureAcceptanceTest) ... ok
+test_missing_pymupdf_reports_actionable_dependency_error (test_pdf_figure_acceptance.PdfFigureDependencyTest) ... ok
+test_no_figure_delivery_does_not_require_image_extraction (test_pdf_figure_acceptance.PdfFigureDependencyTest) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 7.728s
+
+OK

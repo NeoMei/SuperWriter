@@ -22,6 +22,7 @@ SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **Super
 - Python 3
 - WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
 - 交付检查所需的 `markitdown`、`pdfinfo`、`file`、`unzip`，以及 macOS `sips`、`osascript`/AppKit
+- 含配图或使用原生长文排版的 PDF 验收还要求运行验收器的 Python 环境安装 `PyMuPDF`（`python3 -m pip install PyMuPDF`），用于核对 PDF 图片像素和页眉页脚位置；缺少此依赖时验收失败，不自动安装。
 - 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
 第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：
@@ -79,6 +80,13 @@ awk '$0 == "---" { boundary++; next } boundary == 1 && /^version:[[:space:]]*/ {
 ## 版本边界
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### 未发布：发布后审查修复
+
+- 修复大纲连续调整后旧合稿批准被恢复，以及安装中断时回滚备份丢失的问题。
+- 修复审阅服务阻塞、历史图片显示和提交失败提示，保持当前版本确认。
+- 增加 PDF 实际配图校验，支持核对 WPS 长文目录、页眉和分节页码；相关验收需要 PyMuPDF。
+- 审查范围与验证证据见 [发布后全面审查报告](docs/acceptance/2026-09-08-post-release-audit.md)。这些补丁尚未发布。
 
 ### v0.2.0 (2026-09-08)
 

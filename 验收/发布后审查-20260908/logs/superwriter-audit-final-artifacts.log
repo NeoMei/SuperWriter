@@ -1,0 +1,9 @@
+............
+----------------------------------------------------------------------
+Ran 12 tests in 3.696s
+
+OK
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+FAIL: PDF figure verification requires PyMuPDF in the verifier's Python environment; install it with python3 -m pip install PyMuPDF

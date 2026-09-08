@@ -1,0 +1,17 @@
+test_signal_during_explicit_failure_rollback_preserves_every_original (test_install_interruptions.InstallInterruptionTest) ... FAIL
+
+======================================================================
+FAIL: test_signal_during_explicit_failure_rollback_preserves_every_original (test_install_interruptions.InstallInterruptionTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 58, in test_signal_during_explicit_failure_rollback_preserves_every_original
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+FAIL: interrupted explicit rollback changed host trees or route
+
+
+----------------------------------------------------------------------
+Ran 1 test in 1.666s
+
+FAILED (failures=1)

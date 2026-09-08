@@ -1,0 +1,6 @@
+test_signal_during_explicit_failure_rollback_preserves_every_original (test_install_interruptions.InstallInterruptionTest) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 1.760s
+
+OK

@@ -125,9 +125,9 @@ def _figure_blockers(state: dict) -> list[str]:
     figure_set = _named_object(state, "figure-set", "figure_set")
     if not _approved(figure_set):
         return ["figure set or no-figure decision must be approved"]
+    blockers = _mandatory_dependency_blockers(state, figure_set)
     if figure_set["metadata"]["mode"] == "none":
-        return []
-    blockers = []
+        return blockers
     for figure_id in figure_set["metadata"]["figure_ids"]:
         if not figure_is_approved(state, figure_id, figure_set):
             blockers.append(f"{figure_id} requires individual approval or current collection coverage")
@@ -140,11 +140,16 @@ def _delivery_blockers(state: dict, *, require_layout_approval: bool = True) -> 
         blockers.append("approach must be approved")
     blockers.extend(_outline_and_chapter_blockers(state))
     blockers.extend(_figure_blockers(state))
-    if not _approved(_named_object(state, "manuscript", "manuscript")):
+    manuscript = _named_object(state, "manuscript", "manuscript")
+    if not _approved(manuscript):
         blockers.append("manuscript must be approved")
+    else:
+        blockers.extend(_mandatory_dependency_blockers(state, manuscript))
     layout = _named_object(state, "layout", "layout")
     if require_layout_approval and layout is not None and not _approved(layout):
         blockers.append("layout must be approved when a layout review exists")
+    elif require_layout_approval and layout is not None:
+        blockers.extend(_mandatory_dependency_blockers(state, layout))
     for material_id, material in state["materials"].items():
         if material["critical"] and not _material_is_ready(
                 material, _accepted_material_resolutions(state)):

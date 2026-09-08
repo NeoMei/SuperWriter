@@ -1,0 +1,49 @@
+test_added_chapter_requires_new_aggregate_and_manuscript_review (test_outline_structure_regressions.OutlineStructureRegressionTest) ... FAIL
+test_delivery_checks_current_aggregate_chapter_coverage (test_outline_structure_regressions.OutlineStructureRegressionTest) ... test_reordered_or_removed_chapters_keep_aggregates_stale (test_outline_structure_regressions.OutlineStructureRegressionTest) ... test_unchanged_chapter_order_preserves_unaffected_approvals (test_outline_structure_regressions.OutlineStructureRegressionTest) ... ok
+
+======================================================================
+FAIL: test_added_chapter_requires_new_aggregate_and_manuscript_review (test_outline_structure_regressions.OutlineStructureRegressionTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_outline_structure_regressions.py", line 45, in test_added_chapter_requires_new_aggregate_and_manuscript_review
+    self.assertEqual(next_action(state)["object_id"], "figure-set")
+AssertionError: 'delivery' != 'figure-set'
+- delivery
++ figure-set
+
+
+======================================================================
+FAIL: test_delivery_checks_current_aggregate_chapter_coverage (test_outline_structure_regressions.OutlineStructureRegressionTest) (object_id='figure-set')
+----------------------------------------------------------------------
+scripts.collaboration.model.CollaborationError: delivery is not ready: figure-01 requires individual approval or current collection coverage
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_outline_structure_regressions.py", line 83, in test_delivery_checks_current_aggregate_chapter_coverage
+    require_delivery_ready(missing)
+AssertionError: "chapter-02" does not match "delivery is not ready: figure-01 requires individual approval or current collection coverage"
+
+======================================================================
+FAIL: test_delivery_checks_current_aggregate_chapter_coverage (test_outline_structure_regressions.OutlineStructureRegressionTest) (object_id='manuscript')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_outline_structure_regressions.py", line 83, in test_delivery_checks_current_aggregate_chapter_coverage
+    require_delivery_ready(missing)
+AssertionError: CollaborationError not raised
+
+======================================================================
+FAIL: test_reordered_or_removed_chapters_keep_aggregates_stale (test_outline_structure_regressions.OutlineStructureRegressionTest) (order=['chapter-02', 'chapter-01'])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_outline_structure_regressions.py", line 58, in test_reordered_or_removed_chapters_keep_aggregates_stale
+    self.assertEqual(state["objects"][object_id]["status"], "stale")
+AssertionError: 'approved' != 'stale'
+- approved
++ stale
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.350s
+
+FAILED (failures=4)

@@ -1,0 +1,5 @@
+FAIL: PDF expected diagram is missing or its pixels differ from the approved figure: synthetic-jpeg
+FAIL: PDF expected diagram is missing or its pixels differ from the approved figure: synthetic-jpeg
+PASS legitimate JPEG accepted
+PASS hidden JPEG rejected
+PASS altered JPEG rejected

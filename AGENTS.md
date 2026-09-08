@@ -15,7 +15,7 @@ Run commands from the repository root. There is no application build or developm
 - `bash tests/test_verify_artifacts.sh`: test artifact acceptance and malformed-output rejection.
 - `bash scripts/verify.sh --acceptance-dir /absolute/path/to/customer/project`: validate a completed delivery.
 
-Rendering tests require macOS AppKit tools. Delivery checks also require the tools listed in `README.md`, including `markitdown`, `pdfinfo`, `file`, and `unzip`.
+Rendering tests require macOS AppKit tools. Delivery checks also require the tools listed in `README.md`, including `markitdown`, `pdfinfo`, `file`, and `unzip`. PDF illustration and native longform checks require PyMuPDF in the verifier's Python environment (`python3 -m pip install PyMuPDF`); the verifier does not install it automatically.
 
 ## Coding Style & Naming Conventions
 

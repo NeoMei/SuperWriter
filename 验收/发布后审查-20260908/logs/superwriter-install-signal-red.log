@@ -1,0 +1,65 @@
+
+======================================================================
+FAIL: test_signals_restore_all_hosts_and_route_at_commit_boundaries (test_install_interruptions.InstallInterruptionTest) (signal='TERM', target='backup-skills', timing='after')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 64, in test_signals_restore_all_hosts_and_route_at_commit_boundaries
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/tmpm5np6_ag/case.sh: line 126: 71457 Terminated: 15          HOME="$TEST_HOME" SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+FAIL: interruption changed host trees or route
+
+
+======================================================================
+FAIL: test_signals_restore_all_hosts_and_route_at_commit_boundaries (test_install_interruptions.InstallInterruptionTest) (signal='TERM', target='new-skills', timing='before')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 64, in test_signals_restore_all_hosts_and_route_at_commit_boundaries
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/tmpnv8d5gdf/case.sh: line 126: 71897 Terminated: 15          HOME="$TEST_HOME" SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+FAIL: interruption changed host trees or route
+
+
+======================================================================
+FAIL: test_signals_restore_all_hosts_and_route_at_commit_boundaries (test_install_interruptions.InstallInterruptionTest) (signal='INT', target='new-skills', timing='after')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 64, in test_signals_restore_all_hosts_and_route_at_commit_boundaries
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+FAIL: unexpected signal exit: 0
+
+
+======================================================================
+FAIL: test_signals_restore_all_hosts_and_route_at_commit_boundaries (test_install_interruptions.InstallInterruptionTest) (signal='HUP', target='backup-AGENTS.md', timing='after')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 64, in test_signals_restore_all_hosts_and_route_at_commit_boundaries
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/tmpjzlyfq8k/case.sh: line 126: 72779 Hangup: 1               HOME="$TEST_HOME" SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+FAIL: interruption changed host trees or route
+
+
+======================================================================
+FAIL: test_signals_restore_all_hosts_and_route_at_commit_boundaries (test_install_interruptions.InstallInterruptionTest) (signal='TERM', target='new-AGENTS.md', timing='after')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_install_interruptions.py", line 64, in test_signals_restore_all_hosts_and_route_at_commit_boundaries
+    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+AssertionError: 1 != 0 : WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/tmp4k1ttwa5/case.sh: line 126: 73236 Terminated: 15          HOME="$TEST_HOME" SUPERWRITER_AGENTS_SKILLS_ROOT="$AGENTS_SOURCE" SUPERWRITER_OPENCODE_SKILLS_ROOT="$OPENCODE_SOURCE" WPSCOMPOSER_SKILL_SOURCE="$WPS_SOURCE" bash "$REPO_ROOT/install.sh"
+FAIL: interruption changed host trees or route
+
+
+----------------------------------------------------------------------
+Ran 1 test in 9.250s
+
+FAILED (failures=5)

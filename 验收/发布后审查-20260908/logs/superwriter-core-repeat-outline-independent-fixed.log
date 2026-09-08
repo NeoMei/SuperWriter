@@ -1,0 +1,3 @@
+v2: {'figure-set': 'stale', 'manuscript': 'stale', 'layout': 'stale'} invalidations {}
+v3: {'figure-set': 'stale', 'manuscript': 'stale', 'layout': 'stale'} next {'action': 'revise', 'object_id': 'figure-set', 'blockers': []}
+EXPECTED BLOCK delivery is not ready: figure set or no-figure decision must be approved; manuscript must be approved; layout must be approved when a layout review exists

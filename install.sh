@@ -273,7 +273,21 @@ cleanup_staging() {
   done
   cleanup_source_snapshot
 }
-trap cleanup_staging EXIT
+transaction_active=0
+finish_install() {
+  local exit_status=$?
+  trap - EXIT
+  trap '' HUP INT TERM
+  if [ "$transaction_active" -eq 1 ]; then
+    rollback_transaction || exit_status=1
+  fi
+  cleanup_staging
+  exit "$exit_status"
+}
+trap finish_install EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Create and populate a complete candidate skills tree for every host.
 for index in "${!host_roots[@]}"; do
@@ -362,38 +376,39 @@ route_committed=0
 [ -f "$agents_file" ] && route_had_existing=1
 
 rollback_transaction() {
-  local rollback_index rollback_target rollback_failed
+  local rollback_index rollback_target rollback_failed backup
   rollback_failed=0
+  # Explicit failure handlers also enter rollback outside the EXIT trap.
+  trap '' HUP INT TERM
+  transaction_active=0
   set +e
-  if [ "$route_committed" -eq 1 ]; then
-    if ! rm -f "$agents_file"; then
-      rollback_failed=1
-    fi
-  fi
-  if [ "$route_backup_moved" -eq 1 ]; then
-    if mv "$route_backup" "$agents_file"; then
+  # A signal can arrive after mv succeeds but before its shell flag is set.
+  # Reconcile the atomic rename from the staged paths, not just those flags.
+  if [ -e "$route_backup" ]; then
+    if rm -f "$agents_file" && mv "$route_backup" "$agents_file"; then
       route_backup_moved=0
     else
       preserved_stage_roots+=("${stage_roots[2]}")
       echo "Rollback incomplete: route backup retained at $route_backup" >&2
       rollback_failed=1
     fi
+  elif [ "$route_had_existing" -eq 0 ] && [ ! -e "$route_stage" ]; then
+    rm -f "$agents_file" || rollback_failed=1
   fi
   for ((rollback_index=${#host_roots[@]} - 1; rollback_index >= 0; rollback_index--)); do
     rollback_target="${host_roots[$rollback_index]}"
-    if [ "${host_committed[$rollback_index]}" -eq 1 ]; then
-      if ! rm -rf "$rollback_target"; then
-        rollback_failed=1
-      fi
-    fi
-    if [ "${host_backup_moved[$rollback_index]}" -eq 1 ]; then
-      if mv "${stage_backups[$rollback_index]}" "$rollback_target"; then
+    backup="${stage_backups[$rollback_index]}"
+    if [ -d "$backup" ]; then
+      if rm -rf "$rollback_target" && mv "$backup" "$rollback_target"; then
         host_backup_moved[$rollback_index]=0
       else
         preserved_stage_roots+=("${stage_roots[$rollback_index]}")
-        echo "Rollback incomplete: host backup retained at ${stage_backups[$rollback_index]}" >&2
+        echo "Rollback incomplete: host backup retained at $backup" >&2
         rollback_failed=1
       fi
+    elif [ "${host_had_existing[$rollback_index]}" -eq 0 ] && \
+        [ ! -d "${stage_new_roots[$rollback_index]}" ]; then
+      rm -rf "$rollback_target" || rollback_failed=1
     fi
   done
   set -e
@@ -401,6 +416,7 @@ rollback_transaction() {
 }
 
 # Commit whole host trees only after every candidate and route file is ready.
+transaction_active=1
 for index in "${!host_roots[@]}"; do
   host_root="${host_roots[$index]}"
   if [ "${host_had_existing[$index]}" -eq 1 ]; then
@@ -429,5 +445,6 @@ if ! mv "$route_stage" "$agents_file"; then
   die "Failed to commit Codex route during transaction"
 fi
 route_committed=1
+transaction_active=0
 
 echo "SuperWriter installed to 3 hosts."

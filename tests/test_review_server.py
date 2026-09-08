@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from concurrent.futures import ThreadPoolExecutor
 import http.client
 import json
 from pathlib import Path
 import subprocess
+import socket
 import sys
 import tempfile
 import threading
@@ -12,7 +14,7 @@ import unittest
 from urllib.parse import quote
 
 from scripts.collaboration.store import commit_event, initialize, load_state
-from scripts.review_server import create_server
+from scripts.review_server import _snapshot_view, create_server
 from collaboration_fixtures import delivery_ready_state
 from test_collaboration_workflow import two_chapter_figure_state
 from test_collaboration_store import (
@@ -156,6 +158,69 @@ class ReviewServerTest(unittest.TestCase):
         self.assertEqual(response.status, 400, body)
         self.assertEqual(load_state(self.root)["revision"], self.state["revision"])
 
+    def test_idle_connection_does_not_block_review_requests(self):
+        idle = socket.create_connection((self.host, self.port))
+        try:
+            # The first connection is accepted but sends no HTTP request.
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(self.request, "GET", "/api/review")
+                try:
+                    self.assertEqual(future.result(timeout=1)[0], 200)
+                finally:
+                    idle.close()
+        finally:
+            idle.close()
+
+    def test_malformed_event_identity_and_kind_return_json_errors(self):
+        for field, value in (("id", []), ("kind", {}), ("channel", [])):
+            with self.subTest(field=field):
+                event = web_event("approve", self.obj, "invalid-envelope", {})
+                event[field] = value
+                status, _, body = self.post_event(event, self.state["revision"])
+                self.assertIn(status, {400, 403, 409})
+                self.assertIn("error", json.loads(body))
+        self.assertEqual(load_state(self.root)["revision"], self.state["revision"])
+
+    def test_non_ascii_page_token_is_rejected_without_disconnect(self):
+        status, _, body = self.request("GET", "/?token=%E6%B5%8B%E8%AF%95", token=None)
+        self.assertEqual(status, 403)
+        self.assertIn("error", json.loads(body))
+
+    def test_no_figure_decision_and_full_manuscript_are_reviewable(self):
+        state = delivery_ready_state()
+        write_state_objects(self.root, state)
+        texts = {
+            "figure-set": "# 无配图决定\n本项目以文字说明即可，明确不采用配图。\n",
+            "manuscript": "# 完整合稿\n" + "正文内容完整保留。\n" * 1000 + "全文结束。\n",
+        }
+        for object_id, content in texts.items():
+            obj = state["objects"][object_id]
+            (self.root / obj["path"]).write_text(content, encoding="utf-8")
+            obj["sha256"] = digest(content)
+            for approval in state["approvals"]:
+                if approval["object_id"] == object_id:
+                    approval["sha256"] = obj["sha256"]
+                    state["processed_events"][approval["event_id"]]["sha256"] = obj["sha256"]
+        for object_id, content in texts.items():
+            state["active_object_id"] = object_id
+            (self.root / "协作状态.json").write_text(json.dumps(state), encoding="utf-8")
+            status, _, body = self.request("GET", "/api/review")
+            self.assertEqual(status, 200)
+            review = json.loads(body)
+            self.assertEqual(review["current"]["content"], content)
+            self.assertEqual(review["figures"], [])
+
+    def test_concurrent_approval_requests_commit_only_once(self):
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            responses = list(pool.map(
+                lambda number: self.post_event(
+                    web_event("approve", self.obj, f"concurrent-{number}", {}),
+                    self.state["revision"],
+                ), range(6),
+            ))
+        self.assertEqual(sorted(response[0] for response in responses), [200] + [409] * 5)
+        self.assertEqual(len(load_state(self.root)["approvals"]), 1)
+
     def test_preference_is_persisted_without_approval_or_stage_change(self):
         event = web_event(
             "record_preference", self.obj, "preference-1",
@@ -281,6 +346,28 @@ class ReviewServerTest(unittest.TestCase):
         self.assertEqual(headers["Content-Type"], "image/svg+xml")
         self.assertEqual(body, content)
 
+        view = _snapshot_view(self.root, obj)
+        self.assertNotIn("content", view)
+        self.assertIn("image_url", view)
+        revised = deepcopy(obj)
+        new_content = '<svg xmlns="http://www.w3.org/2000/svg"><text>new</text></svg>'
+        image.write_text(new_content, encoding="utf-8")
+        revised.update(version=2, sha256=digest(new_content))
+        commit_event(self.root, event_for_object(
+            "put_object", revised, "put-brief-image-v2", {"object": revised},
+        ), state["revision"])
+        historical_status, _, historical = self.request("GET", view["image_url"])
+        self.assertEqual(historical_status, 200)
+        self.assertEqual(historical, content)
+        for invalid in (
+            "/api/objects/brief-image?version=1",
+            view["image_url"] + "&version=2",
+            f"/api/objects/brief-image?version=1&sha256={'0' * 64}",
+        ):
+            status, _, body = self.request("GET", invalid)
+            self.assertIn(status, {400, 404})
+            self.assertNotEqual(body, content)
+
     def test_outline_review_lists_only_explicit_unselected_retention_options(self):
         self.server.shutdown()
         self.server.server_close()
@@ -380,12 +467,32 @@ class ReviewServerTest(unittest.TestCase):
         self.assertEqual(figure["storage_label"], "storage-name")
         self.assertNotIn("title", figure)
         self.assertNotIn("positions", figure)
-        self.assertEqual(figure["image_url"], "/api/objects/figure-01")
+        self.assertTrue(figure["image_url"].startswith("/api/objects/figure-01?version=1&sha256="))
         self.assertEqual(figure["related_chapters"][0]["id"], "chapter-01")
         self.assertIn("chapter-01", figure["related_chapters"][0]["content"])
         undeclared = next(item for item in review["figures"] if item["id"] == "figure-02")
         self.assertEqual(undeclared["caption"], "未声明")
         self.assertEqual(undeclared["placement"], "未声明")
+
+        state["active_object_id"] = "figure-01"
+        (self.root / "协作状态.json").write_text(json.dumps(state), encoding="utf-8")
+        single_status, _, single_body = self.request("GET", "/api/review")
+        self.assertEqual(single_status, 200)
+        single = json.loads(single_body)
+        self.assertEqual(single["figures"][0]["caption"], "数据交换总体架构")
+        self.assertEqual(single["figures"][0]["placement"], "第二章“接口边界”段后")
+        self.assertNotIn("content", single["current"])
+
+        from scripts.review_server import _figure_review_items
+        ambiguous = deepcopy(state)
+        duplicate_set = deepcopy(ambiguous["objects"]["figure-set"])
+        duplicate_set["id"] = "another-set"
+        ambiguous["objects"]["another-set"] = duplicate_set
+        self.assertEqual(_figure_review_items(self.root, ambiguous, ambiguous["objects"]["figure-01"])[0]["caption"], "未声明")
+
+        state["objects"]["figure-set"]["dependencies"]["figure-01"] = 2
+        # An unbound declaration must never be borrowed by individual review.
+        self.assertEqual(_figure_review_items(self.root, state, state["objects"]["figure-01"])[0]["caption"], "未声明")
 
     def test_cli_prints_reachable_random_port_url(self):
         process = subprocess.Popen(

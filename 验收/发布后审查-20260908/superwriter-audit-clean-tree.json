@@ -1,0 +1,7 @@
+{
+  "tree": "efdea3829d83d0e95828d83523504c59fd441fa8",
+  "clean_directory": "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-audit-clean-tree-ilc9gz02",
+  "exit_code": 0,
+  "log": "/tmp/superwriter-audit-clean-tree-python.log",
+  "scope": "All staged production code and tests; final report/log archival may follow."
+}

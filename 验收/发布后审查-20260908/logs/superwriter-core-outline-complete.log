@@ -1,0 +1,9 @@
+test_added_chapter_requires_new_aggregate_and_manuscript_review (test_outline_structure_regressions.OutlineStructureRegressionTest) ... ok
+test_delivery_checks_current_aggregate_chapter_coverage (test_outline_structure_regressions.OutlineStructureRegressionTest) ... ok
+test_reordered_or_removed_chapters_keep_aggregates_stale (test_outline_structure_regressions.OutlineStructureRegressionTest) ... ok
+test_unchanged_chapter_order_preserves_unaffected_approvals (test_outline_structure_regressions.OutlineStructureRegressionTest) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.402s
+
+OK

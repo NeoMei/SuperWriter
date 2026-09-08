@@ -1,0 +1,61 @@
+test_nonstring_event_enums_are_controlled_errors_without_state_changes (test_model_boundary_regressions.ModelBoundaryRegressionTest) ...
+======================================================================
+ERROR: test_nonstring_event_enums_are_controlled_errors_without_state_changes (test_model_boundary_regressions.ModelBoundaryRegressionTest) (field='kind', value=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_model_boundary_regressions.py", line 30, in test_nonstring_event_enums_are_controlled_errors_without_state_changes
+    commit_event(root, malformed, state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/store.py", line 529, in commit_event
+    updated = apply_event(state, event)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 811, in apply_event
+    _validate_event(submitted)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 347, in _validate_event
+    if event["kind"] not in EVENT_KINDS:
+TypeError: unhashable type: 'list'
+
+======================================================================
+ERROR: test_nonstring_event_enums_are_controlled_errors_without_state_changes (test_model_boundary_regressions.ModelBoundaryRegressionTest) (field='kind', value={})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_model_boundary_regressions.py", line 30, in test_nonstring_event_enums_are_controlled_errors_without_state_changes
+    commit_event(root, malformed, state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/store.py", line 529, in commit_event
+    updated = apply_event(state, event)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 811, in apply_event
+    _validate_event(submitted)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 347, in _validate_event
+    if event["kind"] not in EVENT_KINDS:
+TypeError: unhashable type: 'dict'
+
+======================================================================
+ERROR: test_nonstring_event_enums_are_controlled_errors_without_state_changes (test_model_boundary_regressions.ModelBoundaryRegressionTest) (field='channel', value=[])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_model_boundary_regressions.py", line 30, in test_nonstring_event_enums_are_controlled_errors_without_state_changes
+    commit_event(root, malformed, state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/store.py", line 529, in commit_event
+    updated = apply_event(state, event)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 811, in apply_event
+    _validate_event(submitted)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 349, in _validate_event
+    if event["channel"] not in CHANNELS:
+TypeError: unhashable type: 'list'
+
+======================================================================
+ERROR: test_nonstring_event_enums_are_controlled_errors_without_state_changes (test_model_boundary_regressions.ModelBoundaryRegressionTest) (field='channel', value={})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_model_boundary_regressions.py", line 30, in test_nonstring_event_enums_are_controlled_errors_without_state_changes
+    commit_event(root, malformed, state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/store.py", line 529, in commit_event
+    updated = apply_event(state, event)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 811, in apply_event
+    _validate_event(submitted)
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/collaboration/model.py", line 349, in _validate_event
+    if event["channel"] not in CHANNELS:
+TypeError: unhashable type: 'dict'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.002s
+
+FAILED (errors=4)

@@ -1,0 +1,15 @@
+{
+  "synthetic_test": true,
+  "observed_browser": "Codex In-app Browser",
+  "sequence": [
+    "preference revision4->5 remains pending_review",
+    "request_changes revision5->6",
+    "publicCLI revise submit v2 rev8",
+    "web request_changes rev9",
+    "publicCLI revise submit v3 rev11",
+    "stale v2 webapprove rejected",
+    "refresh currentv3 webapprove rev12 approved"
+  ],
+  "state_revision": 12,
+  "approval_count": 1
+}

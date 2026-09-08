@@ -1,5 +1,9 @@
 const token = new URLSearchParams(window.location.search).get('token') || '';
 let review = null;
+let saving = false;
+let reviewReady = false;
+let renderGeneration = 0;
+const imageUrls = new Set();
 
 function setText(id, text) {
   document.getElementById(id).textContent = text;
@@ -57,7 +61,40 @@ function renderRetention(entries) {
   }
 }
 
-async function renderFigures(entries) {
+async function imagePreview(url, caption) {
+  try {
+    const response = await fetch(url, {headers: {'X-Review-Token': token}});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const image = document.createElement('img');
+    image.alt = caption;
+    image.src = URL.createObjectURL(await response.blob());
+    imageUrls.add(image.src);
+    return image;
+  } catch (error) {
+    const warning = document.createElement('p');
+    warning.textContent = `图片预览失败：${error.message}。请刷新后核对图片。`;
+    return warning;
+  }
+}
+
+function discardImage(image) {
+  if (image.src) {
+    URL.revokeObjectURL(image.src);
+    imageUrls.delete(image.src);
+  }
+}
+
+async function renderSnapshot(prefix, snapshot, generation) {
+  const preview = document.getElementById(`${prefix}-preview`);
+  preview.replaceChildren();
+  preview.hidden = !snapshot.image_url;
+  if (!snapshot.image_url) return;
+  const image = await imagePreview(snapshot.image_url, `${snapshot.id} v${snapshot.version}`);
+  if (generation !== renderGeneration) {discardImage(image); return;}
+  preview.append(image);
+}
+
+async function renderFigures(entries, generation = renderGeneration) {
   const section = document.getElementById('figure-review');
   const container = document.getElementById('figure-items');
   container.replaceChildren();
@@ -73,13 +110,9 @@ async function renderFigures(entries) {
     placement.textContent = `插入位置：${entry.placement}`;
     article.append(heading, path, placement);
     if (entry.image_url) {
-      const response = await fetch(entry.image_url, {headers: {'X-Review-Token': token}});
-      if (response.ok) {
-        const image = document.createElement('img');
-        image.alt = entry.caption;
-        image.src = URL.createObjectURL(await response.blob());
-        article.append(image);
-      }
+      const image = await imagePreview(entry.image_url, entry.caption);
+      if (generation !== renderGeneration) {discardImage(image); return;}
+      article.append(image);
     }
     for (const relatedChapter of entry.related_chapters) {
       const context = document.createElement('div');
@@ -96,43 +129,76 @@ async function renderFigures(entries) {
 }
 
 function render() {
+  const generation = ++renderGeneration;
+  for (const url of imageUrls) URL.revokeObjectURL(url);
+  imageUrls.clear();
   setText('object-title', `${review.current.path} · v${review.current.version}`);
   setText('identity', `对象 ${review.current.id}\n摘要 ${review.current.sha256}\n状态 revision ${review.revision}`);
   setText('current-label', `v${review.current.version} · ${review.current.status}`);
-  setText('current-content', review.current.content || review.current.snapshot.message || '内容不可用');
+  setText('current-content', review.current.content ?? review.current.message ?? '内容不可用');
   setText('previous-label', review.previous.version ? `v${review.previous.version}` : '无前版');
-  setText('previous-content', review.previous.content || review.previous.message || '历史内容不可用');
+  setText('previous-content', review.previous.content ?? review.previous.message ?? '历史内容不可用');
+  renderSnapshot('current', review.current, generation);
+  renderSnapshot('previous', review.previous, generation);
   renderRetention(review.retain_chapters || []);
-  renderFigures(review.figures || []).catch((error) => {
+  renderFigures(review.figures || [], generation).catch((error) => {
+    if (generation !== renderGeneration) return;
     setText('status', `配图读取失败：${error.message}`);
   });
-  const pending = review.current.status === 'pending_review';
+  updateActions();
+}
+
+function updateActions() {
+  const usable = reviewReady && !saving && review;
+  const pending = usable && review.current.status === 'pending_review';
   document.getElementById('save-preference').disabled = !pending;
   document.getElementById('approve').disabled = !pending;
-  document.getElementById('request-changes').disabled = !['pending_review', 'approved'].includes(review.current.status);
+  document.getElementById('request-changes').disabled = !usable || !['pending_review', 'approved'].includes(review.current.status);
 }
 
 async function refresh(message = '') {
   review = await api('/api/review');
+  reviewReady = true;
   render();
   setText('status', message || `已读取 ${review.current.id} v${review.current.version}`);
 }
 
 async function submitEvent(event) {
-  const response = await api('/api/events', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({expected_revision: review.revision, event}),
-  });
-  await refresh(`已记录 ${event.object_id} v${event.version}；服务端 revision ${response.revision}`);
+  let response;
+  try {
+    response = await api('/api/events', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({expected_revision: review.revision, event}),
+    });
+  } catch (error) {
+    // A lost response (or a failed derived view write) can follow a durable commit.
+    reviewReady = false;
+    error.submissionFailed = true;
+    throw error;
+  }
+  const message = `已记录 ${event.object_id} v${event.version}；服务端 revision ${response.revision}`;
+  try {
+    await refresh(message);
+  } catch (error) {
+    reviewReady = false;
+    setText('status', `${message}。页面刷新失败：${error.message}。请刷新页面核对。`);
+  }
 }
 
 async function act(callback) {
+  if (saving || !reviewReady) return;
+  saving = true;
+  updateActions();
   try {
     setText('status', '正在保存…');
     await callback();
   } catch (error) {
-    setText('status', `未保存：${error.message}。请刷新后核对当前版本。`);
+    const outcome = error.submissionFailed ? '提交结果需核对' : '未保存';
+    setText('status', `${outcome}：${error.message}。请刷新后核对当前版本。`);
+  } finally {
+    saving = false;
+    updateActions();
   }
 }
 
@@ -162,4 +228,5 @@ document.getElementById('approve').addEventListener('click', () => act(async () 
   await submitEvent(currentEvent('approve', payload, text));
 }));
 
+updateActions();
 refresh().catch((error) => setText('status', `无法读取：${error.message}`));

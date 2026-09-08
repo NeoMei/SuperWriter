@@ -344,9 +344,9 @@ def _event_payload(event: dict) -> None:
 def _validate_event(value: object) -> dict:
     event = _exact_dict(value, EVENT_FIELDS, "event")
     _nonempty(event["id"], "event id")
-    if event["kind"] not in EVENT_KINDS:
+    if not isinstance(event["kind"], str) or event["kind"] not in EVENT_KINDS:
         _error("event kind is invalid")
-    if event["channel"] not in CHANNELS:
+    if not isinstance(event["channel"], str) or event["channel"] not in CHANNELS:
         _error("event channel is invalid")
     _validate_evidence(event["evidence"])
     needs_object = event["kind"] in {
@@ -645,6 +645,29 @@ def _figure_status_before_invalidation(state: dict, obj: dict, event_id: str) ->
     return status
 
 
+def _registered_outline_composition_matches(state: dict, obj: dict, outline: dict) -> bool:
+    """Recover the composition bound to this artifact's immutable registration.
+
+    Adjacent outline revisions are insufficient: a stale aggregate may have
+    skipped several revisions without being rewritten or reviewed.
+    """
+    registered_outline = None
+    fields = ("id", "kind", "version", "sha256", "path", "dependencies", "metadata")
+    for recorded in state["processed_events"].values():
+        if recorded["kind"] != "put_object":
+            continue
+        written = recorded["payload"]["object"]
+        if written["id"] == outline["id"]:
+            registered_outline = written
+        if all(written[field] == obj[field] for field in fields):
+            return (
+                registered_outline is not None
+                and registered_outline["metadata"]["chapter_order"]
+                == outline["metadata"]["chapter_order"]
+            )
+    return False
+
+
 def _restore_discharged_descendants(
         state: dict, restored: set[str], event_id: str,
 ) -> None:
@@ -652,6 +675,8 @@ def _restore_discharged_descendants(
     # a content-drifted or rejected figure remains blocked after the cause clears.
     discharged = set(restored)
     candidates = set()
+    outline_event = state["processed_events"][event_id]
+    outline = outline_event["payload"]["object"]
     changed = True
     while changed:
         changed = False
@@ -675,6 +700,12 @@ def _restore_discharged_descendants(
             changed = True
         for object_id in list(candidates):
             obj = state["objects"][object_id]
+            # Retaining chapter text says nothing about a full document's new
+            # membership or order. Use this aggregate's original registration,
+            # so a later unchanged outline cannot erase a prior mismatch.
+            if obj["kind"] in {"figure_set", "manuscript", "layout", "delivery"} \
+                    and not _registered_outline_composition_matches(state, obj, outline):
+                continue
             previous_status = _figure_status_before_invalidation(state, obj, event_id)
             status = "approved" if _effective_approval(state, obj) else previous_status
             if status is None or (status == "approved" and not _effective_approval(state, obj)):

@@ -5,6 +5,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_ROOT="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
+# Fixture HOME isolates installer writes, but must not hide already configured
+# Python dependencies such as PyMuPDF. Keep the invoking interpreter's user
+# package base available to child verifiers; no packages are installed here.
+SUPERWRITER_TEST_PYTHON_USER_BASE="$(python3 -B -c 'import site; print(site.USER_BASE)')"
+export PYTHONUSERBASE="$SUPERWRITER_TEST_PYTHON_USER_BASE"
+python3 -B -c 'import fitz' || {
+  echo "Artifact tests require PyMuPDF in the invoking Python environment" >&2
+  exit 1
+}
+
 python3 "$REPO_ROOT/tests/test_render_svg.py"
 
 failures=0
@@ -169,6 +179,28 @@ expect_accepted() {
   fi
 }
 
+refresh_pdf_fixture_image() {
+  python3 -B - "$1/导出/技术标-模拟标段1.pdf" "$2" <<'PY'
+from pathlib import Path
+import sys
+import fitz
+
+pdf, image = map(Path, sys.argv[1:])
+temporary = pdf.with_suffix(".tmp.pdf")
+with fitz.open(pdf) as document:
+    replaced = set()
+    for page in document:
+        for info in page.get_image_info(xrefs=True):
+            xref = info["xref"]
+            if xref and xref not in replaced:
+                page.replace_image(xref, filename=str(image))
+                replaced.add(xref)
+    assert len(replaced) == 1, "fixture must contain one diagram"
+    document.save(temporary)
+temporary.replace(pdf)
+PY
+}
+
 refresh_svg_delivery() {
   local root="$1"
   local svg="$root/配图/图1-国产化适配架构.svg"
@@ -195,6 +227,7 @@ manifest["figures"][0]["render_source_sha256"] = hashlib.sha256(svg.read_bytes()
 manifest["figures"][0]["render_sha256"] = hashlib.sha256(payload).hexdigest()
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
+  refresh_pdf_fixture_image "$root" "$png"
 }
 
 convert_fixture_to_ai_jpg() {
@@ -254,6 +287,7 @@ with zipfile.ZipFile(docx_path, "r") as source, zipfile.ZipFile(temporary, "w") 
         target.writestr(name, data)
 temporary.replace(docx_path)
 PY
+  refresh_pdf_fixture_image "$project" "$jpg"
 }
 
 replace_ai_docx_with_png() {
@@ -1488,7 +1522,10 @@ payload = path.read_bytes()
 assert b"/Count 3" in payload
 path.write_bytes(payload.replace(b"/Count 3", b"/Count 2", 1))
 PY
-expect_accepted pdf-pages "$pdf_pages" --acceptance-dir "$pdf_pages/验收/模拟客户A/模拟标段1"
+# A shortened page-tree count hides the third page (and its diagram) from
+# conforming readers, even when Poppler repairs the tree for text extraction.
+expect_rejected pdf-pages "FAIL: PDF expected diagram" "$pdf_pages" \
+  --acceptance-dir "$pdf_pages/验收/模拟客户A/模拟标段1"
 
 pdf_size="$(fresh_fixture pdf-size)"
 python3 - "$pdf_size/验收/模拟客户A/模拟标段1/导出/技术标-模拟标段1.pdf" <<'PY'

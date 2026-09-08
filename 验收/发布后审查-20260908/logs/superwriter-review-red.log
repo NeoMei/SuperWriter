@@ -1,0 +1,121 @@
+test_assets_and_registered_images_cannot_escape_current_project (test_review_server.ReviewServerTest) ... ok
+test_cli_prints_reachable_random_port_url (test_review_server.ReviewServerTest) ... ok
+test_cli_remains_usable_after_server_shutdown (test_review_server.ReviewServerTest) ... ok
+test_concurrent_approval_requests_commit_only_once (test_review_server.ReviewServerTest) ... ok
+test_explicit_confirmation_persists_and_duplicate_is_idempotent (test_review_server.ReviewServerTest) ... ok
+test_figure_set_uses_declared_caption_and_placement_with_related_context_separate (test_review_server.ReviewServerTest) ... FAIL
+test_idle_connection_does_not_block_review_requests (test_review_server.ReviewServerTest) ... ERROR
+test_malformed_event_identity_and_kind_return_json_errors (test_review_server.ReviewServerTest) ... ----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 56117)
+Traceback (most recent call last):
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 434, in handle
+    self.handle_one_request()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 422, in handle_one_request
+    method()
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/review_server.py", line 370, in do_POST
+    duplicate = state["processed_events"].get(event.get("id")) == event
+TypeError: unhashable type: 'list'
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 56118)
+Traceback (most recent call last):
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 316, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 347, in process_request
+    self.finish_request(request, client_address)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 360, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 747, in __init__
+    self.handle()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 434, in handle
+    self.handle_one_request()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 422, in handle_one_request
+    method()
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/scripts/review_server.py", line 355, in do_POST
+    if not isinstance(event, dict) or event.get("kind") not in REVIEW_EVENT_KINDS:
+TypeError: unhashable type: 'dict'
+----------------------------------------
+test_malformed_json_is_a_bad_request_not_a_state_conflict (test_review_server.ReviewServerTest) ... ok
+test_missing_historical_snapshot_is_explicitly_unavailable (test_review_server.ReviewServerTest) ... ok
+test_old_object_identity_is_rejected_after_agent_revision_and_history_is_served (test_review_server.ReviewServerTest) ... ok
+test_outline_review_lists_only_explicit_unselected_retention_options (test_review_server.ReviewServerTest) ... ok
+test_preference_is_persisted_without_approval_or_stage_change (test_review_server.ReviewServerTest) ... ok
+test_registered_current_project_image_is_served_by_object_id (test_review_server.ReviewServerTest) ... FAIL
+test_rejects_bad_token_origin_oversized_body_and_non_review_events (test_review_server.ReviewServerTest) ... ok
+test_review_returns_current_identity_content_snapshot_and_token_safe_page (test_review_server.ReviewServerTest) ... ok
+test_stale_review_is_rejected_without_new_approval (test_review_server.ReviewServerTest) ... ok
+
+======================================================================
+ERROR: test_idle_connection_does_not_block_review_requests (test_review_server.ReviewServerTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 168, in test_idle_connection_does_not_block_review_requests
+    self.assertEqual(future.result(timeout=1)[0], 200)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/concurrent/futures/_base.py", line 447, in result
+    raise TimeoutError()
+concurrent.futures._base.TimeoutError
+
+======================================================================
+ERROR: test_malformed_event_identity_and_kind_return_json_errors (test_review_server.ReviewServerTest) (field='id')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 179, in test_malformed_event_identity_and_kind_return_json_errors
+    status, _, body = self.post_event(event, self.state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 86, in post_event
+    return self.request(
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 79, in request
+    response = connection.getresponse()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1349, in getresponse
+    response.begin()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 316, in begin
+    version, status, reason = self._read_status()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 285, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+
+======================================================================
+ERROR: test_malformed_event_identity_and_kind_return_json_errors (test_review_server.ReviewServerTest) (field='kind')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 179, in test_malformed_event_identity_and_kind_return_json_errors
+    status, _, body = self.post_event(event, self.state["revision"])
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 86, in post_event
+    return self.request(
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 79, in request
+    response = connection.getresponse()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1349, in getresponse
+    response.begin()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 316, in begin
+    version, status, reason = self._read_status()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 285, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+
+======================================================================
+FAIL: test_figure_set_uses_declared_caption_and_placement_with_related_context_separate (test_review_server.ReviewServerTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 433, in test_figure_set_uses_declared_caption_and_placement_with_related_context_separate
+    self.assertTrue(figure["image_url"].startswith("/api/objects/figure-01?version=1&sha256="))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_registered_current_project_image_is_served_by_object_id (test_review_server.ReviewServerTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_review_server.py", line 321, in test_registered_current_project_image_is_served_by_object_id
+    self.assertNotIn("content", view)
+AssertionError: 'content' unexpectedly found in {'available': True, 'id': 'brief-image', 'version': 1, 'sha256': '8d9b4b794affc5daf4eafa12e0c6294ab31aaeed330886145676bd6b832e8b98', 'content': '<svg xmlns="http://www.w3.org/2000/svg"></svg>'}
+
+----------------------------------------------------------------------
+Ran 17 tests in 11.398s
+
+FAILED (failures=2, errors=3)

@@ -1,0 +1,24 @@
+{
+  "id": "synthetic-201-put_object",
+  "kind": "put_object",
+  "object_id": "approach",
+  "version": 3,
+  "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:201",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "approach",
+      "kind": "approach",
+      "path": "写作共识.md",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "dependencies": {},
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

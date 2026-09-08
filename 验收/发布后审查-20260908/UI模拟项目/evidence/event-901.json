@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-901-submit_review",
+  "kind": "submit_review",
+  "object_id": "figure-set",
+  "version": 2,
+  "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:901",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {}
+}

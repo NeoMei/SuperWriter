@@ -1,0 +1,1143 @@
+{
+  "schema_version": 2,
+  "project_id": "synthetic-collaborative-writing",
+  "revision": 49,
+  "stage": "delivery",
+  "active_object_id": "figure-set",
+  "objects": {
+    "brief": {
+      "id": "brief",
+      "kind": "brief",
+      "path": "目标.md",
+      "version": 1,
+      "sha256": "7e14f693faaa6240353deb18879d5529efa46ae87d4d489d21c0ec25a0b5fdab",
+      "dependencies": {},
+      "status": "draft",
+      "metadata": {}
+    },
+    "approach": {
+      "id": "approach",
+      "kind": "approach",
+      "path": "写作共识.md",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "dependencies": {},
+      "status": "approved",
+      "metadata": {}
+    },
+    "outline": {
+      "id": "outline",
+      "kind": "outline",
+      "path": "大纲.md",
+      "version": 1,
+      "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+      "dependencies": {
+        "approach": 3
+      },
+      "status": "approved",
+      "metadata": {
+        "chapter_order": [
+          "chapter-01",
+          "chapter-02"
+        ]
+      }
+    },
+    "chapter-01": {
+      "id": "chapter-01",
+      "kind": "chapter",
+      "path": "章节/01-输入追溯.md",
+      "version": 2,
+      "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+      "dependencies": {
+        "approach": 3,
+        "outline": 1
+      },
+      "status": "approved",
+      "metadata": {
+        "required_material_ids": []
+      }
+    },
+    "chapter-02": {
+      "id": "chapter-02",
+      "kind": "chapter",
+      "path": "章节/02-异常交付.md",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "dependencies": {
+        "approach": 3,
+        "outline": 1
+      },
+      "status": "approved",
+      "metadata": {
+        "required_material_ids": []
+      }
+    },
+    "figure-01": {
+      "id": "figure-01",
+      "kind": "figure",
+      "path": "配图/确认循环.png",
+      "version": 2,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "dependencies": {
+        "chapter-01": 2
+      },
+      "status": "approved",
+      "metadata": {}
+    },
+    "figure-set": {
+      "id": "figure-set",
+      "kind": "figure_set",
+      "path": "配图/配图集审阅.md",
+      "version": 3,
+      "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+      "dependencies": {
+        "chapter-01": 2,
+        "chapter-02": 1
+      },
+      "status": "approved",
+      "metadata": {
+        "mode": "none",
+        "figure_ids": []
+      }
+    },
+    "manuscript": {
+      "id": "manuscript",
+      "kind": "manuscript",
+      "path": "合并稿.md",
+      "version": 2,
+      "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+      "dependencies": {
+        "chapter-01": 2,
+        "chapter-02": 1,
+        "figure-set": 2
+      },
+      "status": "stale",
+      "metadata": {}
+    }
+  },
+  "materials": {},
+  "decisions": [
+    {
+      "event_id": "record_preference-89ac2857-eb81-440b-b6e0-0990204e5d73",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟测试：文风保持正式简洁，所有测量结论必须给出依据。"
+      },
+      "recorded_at": "2026-09-08T00:31:44.135239Z",
+      "scope": "approach",
+      "text": "模拟测试：文风保持正式简洁，所有测量结论必须给出依据。"
+    }
+  ],
+  "approvals": [
+    {
+      "event_id": "approve-25ff4aa1-4f9b-4b6b-8d19-b742afe25a53",
+      "object_id": "approach",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:33:39.985846Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-6a4a5e90-cb8f-4c8b-afd3-b92fa91f6319",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:42:12.244187Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-1e52a599-79d5-4210-bf05-d6f1d5073f33",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:45:57.324260Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-9504a982-8ffd-418d-9595-a29ae2cde166",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:47:25.647963Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-a22a5984-b993-4ea1-9075-0aa285dd507c",
+      "object_id": "figure-01",
+      "version": 2,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:50:14.261869Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-2ae6912e-bf61-49aa-b5f9-b4189a634d83",
+      "object_id": "figure-set",
+      "version": 2,
+      "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:51:23.962692Z",
+      "superseded_by": "synthetic-1301-request_changes"
+    },
+    {
+      "event_id": "approve-79329930-1148-472e-a12b-14e6168d6ab7",
+      "object_id": "manuscript",
+      "version": 2,
+      "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:53:47.175216Z",
+      "superseded_by": null
+    },
+    {
+      "event_id": "approve-b6a08638-efd5-4782-ad9e-5096287ecad7",
+      "object_id": "figure-set",
+      "version": 3,
+      "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "recorded_at": "2026-09-08T00:55:11.666698Z",
+      "superseded_by": null
+    }
+  ],
+  "processed_events": {
+    "synthetic-001-put_object": {
+      "id": "synthetic-001-put_object",
+      "kind": "put_object",
+      "object_id": "brief",
+      "version": 1,
+      "sha256": "7e14f693faaa6240353deb18879d5529efa46ae87d4d489d21c0ec25a0b5fdab",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "brief",
+          "kind": "brief",
+          "path": "目标.md",
+          "version": 1,
+          "sha256": "7e14f693faaa6240353deb18879d5529efa46ae87d4d489d21c0ec25a0b5fdab",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-002-advance": {
+      "id": "synthetic-002-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:2",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "approach"
+      }
+    },
+    "synthetic-003-put_object": {
+      "id": "synthetic-003-put_object",
+      "kind": "put_object",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:3",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "approach",
+          "kind": "approach",
+          "path": "写作共识.md",
+          "version": 1,
+          "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-004-submit_review": {
+      "id": "synthetic-004-submit_review",
+      "kind": "submit_review",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:4",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "record_preference-89ac2857-eb81-440b-b6e0-0990204e5d73": {
+      "id": "record_preference-89ac2857-eb81-440b-b6e0-0990204e5d73",
+      "kind": "record_preference",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟测试：文风保持正式简洁，所有测量结论必须给出依据。"
+      },
+      "payload": {
+        "scope": "approach",
+        "text": "模拟测试：文风保持正式简洁，所有测量结论必须给出依据。"
+      }
+    },
+    "request_changes-ab2cdb1a-0a9f-4252-a472-9b359d6db1b4": {
+      "id": "request_changes-ab2cdb1a-0a9f-4252-a472-9b359d6db1b4",
+      "kind": "request_changes",
+      "object_id": "approach",
+      "version": 1,
+      "sha256": "2d1cc0c7ea79e960e9f5c1e7db12f6931bc8fda72205cafd7e3d6e6472ad01e8",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟修改：明确两章分别讲输入追溯和异常交付。"
+      },
+      "payload": {
+        "comment": "模拟修改：明确两章分别讲输入追溯和异常交付。"
+      }
+    },
+    "synthetic-101-put_object": {
+      "id": "synthetic-101-put_object",
+      "kind": "put_object",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "d2160f68933982a663d4302090ce3b86c092db7040a6df4f5f3076d40df3fae0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:101",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "approach",
+          "kind": "approach",
+          "path": "写作共识.md",
+          "version": 2,
+          "sha256": "d2160f68933982a663d4302090ce3b86c092db7040a6df4f5f3076d40df3fae0",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-102-submit_review": {
+      "id": "synthetic-102-submit_review",
+      "kind": "submit_review",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "d2160f68933982a663d4302090ce3b86c092db7040a6df4f5f3076d40df3fae0",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:102",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "request_changes-ca1a54e1-0d52-4269-a4eb-294451422a55": {
+      "id": "request_changes-ca1a54e1-0d52-4269-a4eb-294451422a55",
+      "kind": "request_changes",
+      "object_id": "approach",
+      "version": 2,
+      "sha256": "d2160f68933982a663d4302090ce3b86c092db7040a6df4f5f3076d40df3fae0",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟修改：增加材料来源核验责任。"
+      },
+      "payload": {
+        "comment": "模拟修改：增加材料来源核验责任。"
+      }
+    },
+    "synthetic-201-put_object": {
+      "id": "synthetic-201-put_object",
+      "kind": "put_object",
+      "object_id": "approach",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:201",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "approach",
+          "kind": "approach",
+          "path": "写作共识.md",
+          "version": 3,
+          "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+          "dependencies": {},
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-202-submit_review": {
+      "id": "synthetic-202-submit_review",
+      "kind": "submit_review",
+      "object_id": "approach",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:202",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-25ff4aa1-4f9b-4b6b-8d19-b742afe25a53": {
+      "id": "approve-25ff4aa1-4f9b-4b6b-8d19-b742afe25a53",
+      "kind": "approve",
+      "object_id": "approach",
+      "version": 3,
+      "sha256": "f99fa270dfdd78104bdd40a52d1379522c4767568234653c781d6329fbc76ade",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-301-advance": {
+      "id": "synthetic-301-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:301",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "outline"
+      }
+    },
+    "synthetic-302-put_object": {
+      "id": "synthetic-302-put_object",
+      "kind": "put_object",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:302",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "outline",
+          "kind": "outline",
+          "path": "大纲.md",
+          "version": 1,
+          "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+          "dependencies": {
+            "approach": 3
+          },
+          "status": "draft",
+          "metadata": {
+            "chapter_order": [
+              "chapter-01",
+              "chapter-02"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-303-submit_review": {
+      "id": "synthetic-303-submit_review",
+      "kind": "submit_review",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:303",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-6a4a5e90-cb8f-4c8b-afd3-b92fa91f6319": {
+      "id": "approve-6a4a5e90-cb8f-4c8b-afd3-b92fa91f6319",
+      "kind": "approve",
+      "object_id": "outline",
+      "version": 1,
+      "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {
+        "retain_chapters": []
+      }
+    },
+    "synthetic-401-advance": {
+      "id": "synthetic-401-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:401",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "chapters"
+      }
+    },
+    "synthetic-402-put_object": {
+      "id": "synthetic-402-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:402",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-01",
+          "kind": "chapter",
+          "path": "章节/01-输入追溯.md",
+          "version": 1,
+          "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+          "dependencies": {
+            "approach": 3,
+            "outline": 1
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-403-submit_review": {
+      "id": "synthetic-403-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:403",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "request_changes-f7d2d752-70a7-4ee4-83aa-a0ff4ca3f2e7": {
+      "id": "request_changes-f7d2d752-70a7-4ee4-83aa-a0ff4ca3f2e7",
+      "kind": "request_changes",
+      "object_id": "chapter-01",
+      "version": 1,
+      "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟修改：补充中断后读取状态恢复。"
+      },
+      "payload": {
+        "comment": "模拟修改：补充中断后读取状态恢复。"
+      }
+    },
+    "synthetic-501-put_object": {
+      "id": "synthetic-501-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:501",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-01",
+          "kind": "chapter",
+          "path": "章节/01-输入追溯.md",
+          "version": 2,
+          "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+          "dependencies": {
+            "approach": 3,
+            "outline": 1
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-502-submit_review": {
+      "id": "synthetic-502-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:502",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-1e52a599-79d5-4210-bf05-d6f1d5073f33": {
+      "id": "approve-1e52a599-79d5-4210-bf05-d6f1d5073f33",
+      "kind": "approve",
+      "object_id": "chapter-01",
+      "version": 2,
+      "sha256": "ad9929d7e57947bffed18b1d5cb89b5d9634c47cb0377004655d2cae951519fd",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-601-put_object": {
+      "id": "synthetic-601-put_object",
+      "kind": "put_object",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:601",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "chapter-02",
+          "kind": "chapter",
+          "path": "章节/02-异常交付.md",
+          "version": 1,
+          "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+          "dependencies": {
+            "approach": 3,
+            "outline": 1
+          },
+          "status": "draft",
+          "metadata": {
+            "required_material_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-602-submit_review": {
+      "id": "synthetic-602-submit_review",
+      "kind": "submit_review",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:602",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-9504a982-8ffd-418d-9595-a29ae2cde166": {
+      "id": "approve-9504a982-8ffd-418d-9595-a29ae2cde166",
+      "kind": "approve",
+      "object_id": "chapter-02",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-701-advance": {
+      "id": "synthetic-701-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:701",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "illustrations"
+      }
+    },
+    "synthetic-702-put_object": {
+      "id": "synthetic-702-put_object",
+      "kind": "put_object",
+      "object_id": "figure-01",
+      "version": 1,
+      "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:702",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "figure-01",
+          "kind": "figure",
+          "path": "配图/确认循环.png",
+          "version": 1,
+          "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+          "dependencies": {
+            "chapter-01": 2
+          },
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-703-put_object": {
+      "id": "synthetic-703-put_object",
+      "kind": "put_object",
+      "object_id": "figure-set",
+      "version": 1,
+      "sha256": "7518f280021e59d4a5119b01cf5a65d9a426a41797523d13d8ff4d4484d808e7",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:703",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "figure-set",
+          "kind": "figure_set",
+          "path": "配图/配图集审阅.md",
+          "version": 1,
+          "sha256": "7518f280021e59d4a5119b01cf5a65d9a426a41797523d13d8ff4d4484d808e7",
+          "dependencies": {
+            "chapter-01": 2,
+            "chapter-02": 1,
+            "figure-01": 1
+          },
+          "status": "draft",
+          "metadata": {
+            "mode": "generated",
+            "figure_ids": [
+              "figure-01"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-704-submit_review": {
+      "id": "synthetic-704-submit_review",
+      "kind": "submit_review",
+      "object_id": "figure-01",
+      "version": 1,
+      "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:704",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "request_changes-90c70bbc-ad62-4bb9-a9d4-ea314edc08d4": {
+      "id": "request_changes-90c70bbc-ad62-4bb9-a9d4-ea314edc08d4",
+      "kind": "request_changes",
+      "object_id": "figure-01",
+      "version": 1,
+      "sha256": "5abc65fbf7c0a63fd7170edb8a9a815000b44b0614ea279db40d004e96bb6a3b",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟修改：更换为修订版流程图，保留标题与插入位置。"
+      },
+      "payload": {
+        "comment": "模拟修改：更换为修订版流程图，保留标题与插入位置。"
+      }
+    },
+    "synthetic-801-put_object": {
+      "id": "synthetic-801-put_object",
+      "kind": "put_object",
+      "object_id": "figure-01",
+      "version": 2,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:801",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "figure-01",
+          "kind": "figure",
+          "path": "配图/确认循环.png",
+          "version": 2,
+          "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+          "dependencies": {
+            "chapter-01": 2
+          },
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-802-put_object": {
+      "id": "synthetic-802-put_object",
+      "kind": "put_object",
+      "object_id": "figure-set",
+      "version": 2,
+      "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:802",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "figure-set",
+          "kind": "figure_set",
+          "path": "配图/配图集审阅.md",
+          "version": 2,
+          "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+          "dependencies": {
+            "chapter-01": 2,
+            "chapter-02": 1,
+            "figure-01": 2
+          },
+          "status": "draft",
+          "metadata": {
+            "mode": "generated",
+            "figure_ids": [
+              "figure-01"
+            ]
+          }
+        }
+      }
+    },
+    "synthetic-803-submit_review": {
+      "id": "synthetic-803-submit_review",
+      "kind": "submit_review",
+      "object_id": "figure-01",
+      "version": 2,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:803",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-a22a5984-b993-4ea1-9075-0aa285dd507c": {
+      "id": "approve-a22a5984-b993-4ea1-9075-0aa285dd507c",
+      "kind": "approve",
+      "object_id": "figure-01",
+      "version": 2,
+      "sha256": "5eeeddddcd1a8e9bf5b7f9fb3b2762212c74b752a78ac903d3bab61e0c92cf55",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-901-submit_review": {
+      "id": "synthetic-901-submit_review",
+      "kind": "submit_review",
+      "object_id": "figure-set",
+      "version": 2,
+      "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:901",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-2ae6912e-bf61-49aa-b5f9-b4189a634d83": {
+      "id": "approve-2ae6912e-bf61-49aa-b5f9-b4189a634d83",
+      "kind": "approve",
+      "object_id": "figure-set",
+      "version": 2,
+      "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-1001-advance": {
+      "id": "synthetic-1001-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1001",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "manuscript"
+      }
+    },
+    "synthetic-1002-put_object": {
+      "id": "synthetic-1002-put_object",
+      "kind": "put_object",
+      "object_id": "manuscript",
+      "version": 1,
+      "sha256": "9ecb9698a747e12c93906a2d5d0353c5fbf300a83b9ad852f36c0c4785577cb1",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1002",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "manuscript",
+          "kind": "manuscript",
+          "path": "合并稿.md",
+          "version": 1,
+          "sha256": "9ecb9698a747e12c93906a2d5d0353c5fbf300a83b9ad852f36c0c4785577cb1",
+          "dependencies": {
+            "chapter-01": 2,
+            "chapter-02": 1,
+            "figure-set": 2
+          },
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-1003-submit_review": {
+      "id": "synthetic-1003-submit_review",
+      "kind": "submit_review",
+      "object_id": "manuscript",
+      "version": 1,
+      "sha256": "9ecb9698a747e12c93906a2d5d0353c5fbf300a83b9ad852f36c0c4785577cb1",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1003",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "request_changes-44c57608-57a0-46e9-9c41-e840c4253c1e": {
+      "id": "request_changes-44c57608-57a0-46e9-9c41-e840c4253c1e",
+      "kind": "request_changes",
+      "object_id": "manuscript",
+      "version": 1,
+      "sha256": "9ecb9698a747e12c93906a2d5d0353c5fbf300a83b9ad852f36c0c4785577cb1",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "模拟合稿修改：增加交付前最终核对说明。"
+      },
+      "payload": {
+        "comment": "模拟合稿修改：增加交付前最终核对说明。"
+      }
+    },
+    "synthetic-1101-put_object": {
+      "id": "synthetic-1101-put_object",
+      "kind": "put_object",
+      "object_id": "manuscript",
+      "version": 2,
+      "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1101",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "manuscript",
+          "kind": "manuscript",
+          "path": "合并稿.md",
+          "version": 2,
+          "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+          "dependencies": {
+            "chapter-01": 2,
+            "chapter-02": 1,
+            "figure-set": 2
+          },
+          "status": "draft",
+          "metadata": {}
+        }
+      }
+    },
+    "synthetic-1102-submit_review": {
+      "id": "synthetic-1102-submit_review",
+      "kind": "submit_review",
+      "object_id": "manuscript",
+      "version": 2,
+      "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1102",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-79329930-1148-472e-a12b-14e6168d6ab7": {
+      "id": "approve-79329930-1148-472e-a12b-14e6168d6ab7",
+      "kind": "approve",
+      "object_id": "manuscript",
+      "version": 2,
+      "sha256": "072a2bc60f91369064e385bda2dff6e341a408de03872d7dbdbd36a1a6d32024",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    },
+    "synthetic-1201-advance": {
+      "id": "synthetic-1201-advance",
+      "kind": "advance",
+      "object_id": null,
+      "version": null,
+      "sha256": null,
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1201",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "stage": "delivery"
+      }
+    },
+    "synthetic-1301-request_changes": {
+      "id": "synthetic-1301-request_changes",
+      "kind": "request_changes",
+      "object_id": "figure-set",
+      "version": 2,
+      "sha256": "74d2abb6d0fee1d6c13fcd63d5d8e8fc2c3b3da00192e52deb772781b97f55dd",
+      "channel": "chat",
+      "evidence": {
+        "reference": "synthetic-test:1301",
+        "text": "synthetic-test 模拟选择：本版本不需要配图，正文保留完整说明。"
+      },
+      "payload": {
+        "comment": "模拟选择：本版本不需要配图，正文保留完整说明。"
+      }
+    },
+    "synthetic-1302-put_object": {
+      "id": "synthetic-1302-put_object",
+      "kind": "put_object",
+      "object_id": "figure-set",
+      "version": 3,
+      "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1302",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {
+        "object": {
+          "id": "figure-set",
+          "kind": "figure_set",
+          "path": "配图/配图集审阅.md",
+          "version": 3,
+          "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+          "dependencies": {
+            "chapter-01": 2,
+            "chapter-02": 1
+          },
+          "status": "draft",
+          "metadata": {
+            "mode": "none",
+            "figure_ids": []
+          }
+        }
+      }
+    },
+    "synthetic-1303-submit_review": {
+      "id": "synthetic-1303-submit_review",
+      "kind": "submit_review",
+      "object_id": "figure-set",
+      "version": 3,
+      "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+      "channel": "agent",
+      "evidence": {
+        "reference": "synthetic-test:1303",
+        "text": "synthetic-test explicit action"
+      },
+      "payload": {}
+    },
+    "approve-b6a08638-efd5-4782-ad9e-5096287ecad7": {
+      "id": "approve-b6a08638-efd5-4782-ad9e-5096287ecad7",
+      "kind": "approve",
+      "object_id": "figure-set",
+      "version": 3,
+      "sha256": "ff245594990a6c8a2e2e79f93b9fa601b74ab9799476e44501e2c0e3aaf12a44",
+      "channel": "web",
+      "evidence": {
+        "reference": "local-review:/",
+        "text": "确认当前版本"
+      },
+      "payload": {}
+    }
+  },
+  "invalidations": {
+    "manuscript": [
+      {
+        "kind": "dependency_change",
+        "event_id": "synthetic-1302-put_object",
+        "dependency_id": "figure-set",
+        "from_version": 2,
+        "to_version": 3
+      }
+    ]
+  }
+}

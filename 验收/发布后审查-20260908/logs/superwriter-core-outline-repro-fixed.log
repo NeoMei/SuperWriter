@@ -1,0 +1,4 @@
+next_action: {'action': 'revise', 'object_id': 'figure-set', 'blockers': []}
+manuscript status: stale
+manuscript dependencies: {'chapter-01': 1, 'chapter-02': 1, 'figure-set': 1}
+EXPECTED BLOCK: delivery is not ready: figure set or no-figure decision must be approved; manuscript must be approved

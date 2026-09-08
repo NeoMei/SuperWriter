@@ -31,6 +31,9 @@ pre { margin: 0; padding: 22px; min-height: 340px; max-height: 58vh; overflow: a
 .figure-item h3 { margin: 0 0 6px; }
 .figure-item > p { margin: 0 0 14px; color: #667085; }
 .figure-item img { display: block; max-width: 100%; max-height: 560px; margin: 12px auto; border-radius: 8px; }
+.snapshot-preview { padding: 20px; }
+.snapshot-preview img { display: block; max-width: 100%; max-height: 560px; margin: 0 auto; }
+pre:has(+ .snapshot-preview:not([hidden])) { min-height: 0; }
 .figure-context { margin-top: 14px; }
 .figure-context pre { min-height: 0; max-height: 240px; margin-top: 8px; border: 1px solid #e5e8ee; border-radius: 8px; }
 .action-block { padding: 20px; display: flex; flex-direction: column; gap: 12px; }

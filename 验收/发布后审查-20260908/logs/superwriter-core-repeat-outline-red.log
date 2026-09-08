@@ -1,0 +1,3 @@
+v2: {'figure-set': 'stale', 'manuscript': 'stale', 'layout': 'stale'} invalidations {}
+v3: {'figure-set': 'approved', 'manuscript': 'approved', 'layout': 'approved'} next {'action': 'export', 'object_id': 'delivery', 'blockers': []}
+BUG: reordered old manuscript again delivery ready without rereview

@@ -1,0 +1,5 @@
+Exit 1
+WARNING: WPSComposer version metadata is unavailable; capability contract accepted because SKILL.md and required scripts/macos_probe export entrypoints are present
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer capability-only; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+rc=143 before=5d027a2453330d6bda98c24503063d0db2c9692cd805e9d9dda864cfb168dc32 after=eda1b799d4c9b82df21ae5c7fd12e17e412f370b17e2f3df8b18b6c9288619dc
+FAIL: agents original lost during interrupted explicit rollback

@@ -1,0 +1,29 @@
+{
+  "id": "synthetic-402-put_object",
+  "kind": "put_object",
+  "object_id": "chapter-01",
+  "version": 1,
+  "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:402",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "chapter-01",
+      "kind": "chapter",
+      "path": "章节/01-输入追溯.md",
+      "version": 1,
+      "sha256": "3bef929a32763a933bee18f244e90a0c4f1ff19a523276ec3f64460800108b84",
+      "dependencies": {
+        "approach": 3,
+        "outline": 1
+      },
+      "status": "draft",
+      "metadata": {
+        "required_material_ids": []
+      }
+    }
+  }
+}

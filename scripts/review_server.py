@@ -6,10 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 import secrets
-import stat
 import sys
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
@@ -76,9 +75,17 @@ def _snapshot_view(root: Path, obj: dict) -> dict:
     }
     if content is None:
         result["message"] = "该历史版本在启用快照前已被覆盖，内容不可用。"
+    elif Path(obj["path"]).suffix.lower() in IMAGE_TYPES:
+        result["image_url"] = _image_url(obj)
+        result["message"] = "图片版本见预览。"
     else:
         result["content"] = content.decode("utf-8", errors="replace")
     return result
+
+
+def _image_url(obj: dict) -> str:
+    return (f"/api/objects/{quote(obj['id'], safe='')}"
+            f"?version={obj['version']}&sha256={obj['sha256']}")
 
 
 def _previous_object(state: dict, current: dict) -> dict | None:
@@ -146,11 +153,21 @@ def _figure_review_items(root: Path, state: dict, current: dict) -> list[dict]:
         figure_ids = current["metadata"]["figure_ids"]
     else:
         return []
-    declarations = (
-        _figure_declarations(read_content_snapshot(root, current["sha256"]), figure_ids)
-        if current["kind"] == "figure_set"
-        else {}
-    )
+    declaration_source = current if current["kind"] == "figure_set" else None
+    if current["kind"] == "figure":
+        matching_sets = [
+            obj for obj in state["objects"].values()
+            if obj["kind"] == "figure_set" and obj["status"] != "stale"
+            and current["id"] in obj["metadata"]["figure_ids"]
+            and obj["dependencies"].get(current["id"]) == current["version"]
+        ]
+        # Several sets can legitimately declare different uses of one image.
+        # Never silently select one of those competing placements.
+        if len(matching_sets) == 1:
+            declaration_source = matching_sets[0]
+    declarations = (_figure_declarations(
+        read_content_snapshot(root, declaration_source["sha256"]), figure_ids,
+    ) if declaration_source is not None else {})
     items = []
     for figure_id in figure_ids:
         figure = state["objects"].get(figure_id)
@@ -172,7 +189,7 @@ def _figure_review_items(root: Path, state: dict, current: dict) -> list[dict]:
                 ),
             })
         image_url = (
-            f"/api/objects/{quote(figure_id, safe='')}"
+            _image_url(figure)
             if Path(figure["path"]).suffix.lower() in IMAGE_TYPES
             else None
         )
@@ -252,11 +269,11 @@ def _review_handler(root: Path, token: str):
             self._send_json(status, {"error": message})
 
         def _valid_header_token(self) -> bool:
-            return secrets.compare_digest(self.headers.get("X-Review-Token", ""), token)
+            return secrets.compare_digest(self.headers.get("X-Review-Token", "").encode(), token.encode())
 
         def _valid_page_token(self, query: str) -> bool:
             supplied = parse_qs(query, keep_blank_values=True).get("token", [""])
-            return len(supplied) == 1 and secrets.compare_digest(supplied[0], token)
+            return len(supplied) == 1 and secrets.compare_digest(supplied[0].encode(), token.encode())
 
         def _origin(self) -> str:
             host, port = self.server.server_address
@@ -288,7 +305,7 @@ def _review_handler(root: Path, token: str):
                     if not self._valid_header_token():
                         self._error(HTTPStatus.FORBIDDEN, "invalid review token")
                     else:
-                        self._object_image(unquote(parsed.path.removeprefix("/api/objects/")))
+                        self._object_image(unquote(parsed.path.removeprefix("/api/objects/")), parsed.query)
                 else:
                     self._error(HTTPStatus.NOT_FOUND, "not found")
             except CollaborationError as error:
@@ -302,12 +319,28 @@ def _review_handler(root: Path, token: str):
                 return
             self._send(HTTPStatus.OK, content, ASSETS[name])
 
-        def _object_image(self, object_id: str) -> None:
+        def _object_image(self, object_id: str, query: str = "") -> None:
             state = load_state(root)
             obj = state["objects"].get(object_id)
             if obj is None:
                 self._error(HTTPStatus.NOT_FOUND, "registered object not found")
                 return
+            if query:
+                requested = parse_qs(query, keep_blank_values=True)
+                if set(requested) != {"version", "sha256"} or any(
+                        len(values) != 1 for values in requested.values()):
+                    self._error(HTTPStatus.BAD_REQUEST, "image requires one version and sha256")
+                    return
+                candidates = [obj] + [
+                    event["payload"]["object"] for event in state["processed_events"].values()
+                    if event["kind"] == "put_object" and event["object_id"] == object_id
+                ]
+                obj = next((candidate for candidate in candidates
+                            if str(candidate["version"]) == requested["version"][0]
+                            and candidate["sha256"] == requested["sha256"][0]), None)
+                if obj is None:
+                    self._error(HTTPStatus.NOT_FOUND, "registered image version not found")
+                    return
             media_type = IMAGE_TYPES.get(Path(obj["path"]).suffix.lower())
             if media_type is None:
                 self._error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "object is not a supported image")
@@ -352,7 +385,11 @@ def _review_handler(root: Path, token: str):
                 if not isinstance(decoded, dict) or set(decoded) != {"expected_revision", "event"}:
                     raise CollaborationError("request must contain expected_revision and event")
                 event = decoded["event"]
-                if not isinstance(event, dict) or event.get("kind") not in REVIEW_EVENT_KINDS:
+                if not isinstance(event, dict) or any(
+                        not isinstance(event.get(field), str) for field in ("id", "kind", "channel")):
+                    self._error(HTTPStatus.BAD_REQUEST, "event id, kind and channel must be strings")
+                    return
+                if event.get("kind") not in REVIEW_EVENT_KINDS:
                     self._error(HTTPStatus.FORBIDDEN, "event kind is not available to review pages")
                     return
                 if event.get("channel") != "web":
@@ -386,7 +423,7 @@ def create_server(root: Path, port: int = 0) -> HTTPServer:
     project = Path(root).resolve(strict=True)
     load_state(project)
     token = secrets.token_urlsafe(32)
-    server = HTTPServer(("127.0.0.1", port), _review_handler(project, token))
+    server = ThreadingHTTPServer(("127.0.0.1", port), _review_handler(project, token))
     server.review_token = token
     server.project_root = project
     return server

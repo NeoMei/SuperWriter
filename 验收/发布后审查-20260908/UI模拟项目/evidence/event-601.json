@@ -1,0 +1,29 @@
+{
+  "id": "synthetic-601-put_object",
+  "kind": "put_object",
+  "object_id": "chapter-02",
+  "version": 1,
+  "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:601",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "chapter-02",
+      "kind": "chapter",
+      "path": "章节/02-异常交付.md",
+      "version": 1,
+      "sha256": "8dc7e65383830905cfd3060b13b0edc218f4b677222fd269286808e9599f899e",
+      "dependencies": {
+        "approach": 3,
+        "outline": 1
+      },
+      "status": "draft",
+      "metadata": {
+        "required_material_ids": []
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+SuperWriter installed to 3 hosts.
+PASS: SuperWriter source version 0.2.0 matches dependency manifest; WPSComposer 0.8.1; external skills: grilling, grill-me, grill-with-docs, to-spec, domain-modeling, ai-image-to-ppt, obsidian-excalidraw
+PASS: SuperWriter static installation, exact manifests, gate contract, and backup isolation are satisfied

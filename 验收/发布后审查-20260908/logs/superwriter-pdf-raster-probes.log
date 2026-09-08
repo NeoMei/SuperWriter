@@ -1,0 +1,6 @@
+FAIL: PDF contains substantive body text absent or out of order in canonical merged draft: 5
+OPAQUE_OVERLAY_EXIT 1
+
+FAIL: PDF expected diagram is missing or its pixels differ from the approved figure: 图 1 审阅记录确认循环
+
+EXPECTED: EXTRA_TERMINAL_BODY_5_REJECTED

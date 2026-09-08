@@ -1,0 +1,17 @@
+test_repeated_retention_cannot_erase_original_composition_change (test_outline_structure_regressions.OutlineStructureRegressionTest) ... FAIL
+
+======================================================================
+FAIL: test_repeated_retention_cannot_erase_original_composition_change (test_outline_structure_regressions.OutlineStructureRegressionTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/neomei/项目/codexprojects/superwriter/.worktrees/superwriter-audit-020/tests/test_outline_structure_regressions.py", line 95, in test_repeated_retention_cannot_erase_original_composition_change
+    self.assertEqual(state["objects"][object_id]["status"], "stale")
+AssertionError: 'approved' != 'stale'
+- approved
++ stale
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.083s
+
+FAILED (failures=1)

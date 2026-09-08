@@ -404,6 +404,135 @@ def extracted_text(label: str, path: Path) -> str:
     return result.stdout
 
 
+def native_pdf_body_text(pdf_path: Path, docx_path: Path, markdown: str, text: str) -> tuple[str, bool]:
+    """Remove only DOCX-bound, geometrically verified native running furniture."""
+    lines = markdown.splitlines()
+    offset, title, _, _ = _wps_frontmatter(lines)
+    if not offset or "layout_engine: longform" not in lines[:offset]:
+        return text, False
+    try:
+        import fitz
+    except ImportError:
+        fail("native longform PDF verification requires PyMuPDF; "
+             "install it with python3 -m pip install PyMuPDF")
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    r = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    sections = []
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            document = ET.fromstring(archive.read("word/document.xml"))
+            relationships = ET.fromstring(archive.read("word/_rels/document.xml.rels"))
+            targets = {item.get("Id"): posixpath.normpath(posixpath.join(
+                "word", item.get("Target", ""))) for item in relationships}
+            for section in document.iter(w + "sectPr"):
+                number = section.find(w + "pgNumType")
+                margin = section.find(w + "pgMar")
+                footer = section.find(w + "footerReference")
+                if number is None or margin is None or footer is None:
+                    return text, False  # No supported native page-field contract.
+                fmt = number.get(w + "fmt", "decimal")
+                if fmt not in {"decimal", "lowerRoman"} or number.get(w + "start", "1") != "1":
+                    return text, False
+                footer_xml = ET.fromstring(archive.read(targets[footer.get(r + "id")]))
+                instructions = " ".join(item.text or "" for item in footer_xml.iter(w + "instrText"))
+                if re.fullmatch(r"\s*PAGE\s*(?:\\\*\s*MERGEFORMAT)?\s*", instructions) is None:
+                    return text, False
+                header_text = ""
+                header = section.find(w + "headerReference")
+                if header is not None:
+                    header_xml = ET.fromstring(archive.read(targets[header.get(r + "id")]))
+                    header_text = "".join(item.text or "" for item in header_xml.iter(w + "t"))
+                if header_text and normalized(header_text) != normalized(title or ""):
+                    fail("DOCX native running header differs from the source title")
+                sections.append((fmt, float(margin.get(w + "top")) / 20,
+                                 float(margin.get(w + "bottom")) / 20, header_text))
+    except (OSError, ValueError, KeyError, ET.ParseError, zipfile.BadZipFile) as error:
+        fail(f"native PDF page-field contract is unreadable: {error}")
+    if [item[0] for item in sections] not in [["decimal"], ["lowerRoman", "decimal"]]:
+        return text, False
+
+    def roman(number):
+        result = ""
+        for value, token in ((1000, "m"), (900, "cm"), (500, "d"), (400, "cd"),
+                             (100, "c"), (90, "xc"), (50, "l"), (40, "xl"),
+                             (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+            while number >= value:
+                result += token
+                number -= value
+        return result
+
+    source_blocks = markdown_block_sequence(markdown)
+    headings = export_heading_mappings(source_blocks)
+    heading_order = [value for kind, value in source_blocks if kind.startswith("heading")]
+    toc_entries = []
+    body_pages = []
+    section_index = 0
+    page_number = 0
+    raw_pages = text.split("\f")
+    while raw_pages and not raw_pages[-1].strip():
+        raw_pages.pop()
+    with fitz.open(pdf_path) as pdf:
+        if len(raw_pages) != len(pdf):
+            fail("PDF text page boundaries differ from the native document")
+        for page, raw in zip(pdf, raw_pages):
+            geometry = [
+                ("".join(span["text"] for span in line["spans"]).strip(), line["bbox"])
+                for block in page.get_text("dict")["blocks"]
+                for line in block.get("lines", [])
+            ]
+            fmt, top, bottom, header = sections[section_index]
+            footer_lines = [(value, box) for value, box in geometry
+                            if value and box[1] >= page.rect.height - bottom]
+            if len(footer_lines) != 1:
+                fail("PDF native footer must contain exactly one page number below the body margin")
+            footer_value = footer_lines[0][0]
+            if fmt == "lowerRoman" and footer_value == "1":
+                section_index = 1
+                page_number = 0
+                fmt, top, bottom, header = sections[section_index]
+            page_number += 1
+            expected = roman(page_number) if fmt == "lowerRoman" else str(page_number)
+            if footer_value != expected:
+                fail("PDF native footer page numbers are not sequential")
+            raw_lines = raw.splitlines()
+            nonempty = [index for index, line in enumerate(raw_lines) if line.strip()]
+            if not nonempty or raw_lines[nonempty[-1]].strip() != expected:
+                fail("PDF native footer does not match the extracted page text")
+            raw_lines.pop(nonempty[-1])
+            if header:
+                header_lines = [(value, box) for value, box in geometry
+                                if value and box[3] <= top and normalized(value) == normalized(header)]
+                if len(header_lines) != 1:
+                    fail("PDF native running header is missing or differs from the source title")
+                nonempty = [index for index, line in enumerate(raw_lines) if line.strip()]
+                if not nonempty or normalized(raw_lines[nonempty[0]]) != normalized(header):
+                    fail("PDF native header does not match the extracted page text")
+                raw_lines.pop(nonempty[0])
+            if fmt == "lowerRoman":
+                for line in raw_lines:
+                    if not line.strip() or line.strip() == "目 录":
+                        continue
+                    entry = re.fullmatch(r"(.+?)(?:\.{2,}|…{2,})\s*([1-9]\d*)\s*", line.strip())
+                    heading = headings.get(normalized(entry.group(1))) if entry else None
+                    if heading is None:
+                        fail("PDF native table of contents contains unexpected content")
+                    toc_entries.append((heading, int(entry.group(2))))
+            else:
+                body_pages.append("\n".join(raw_lines))
+    if not body_pages:
+        fail("PDF native document has no body pages")
+    if len(sections) == 2:
+        if [heading for heading, _ in toc_entries] != heading_order:
+            fail("PDF native table of contents differs from the ordered source headings")
+        for heading, logical_page in toc_entries:
+            if logical_page > len(body_pages) or not any(
+                headings.get(normalized(line)) == heading
+                for line in body_pages[logical_page - 1].splitlines()
+            ):
+                fail("PDF native table of contents page reference differs from the heading location")
+    return "\n".join(body_pages), True
+
+
 def png_header(payload: bytes, label: str):
     try:
         if len(payload) < 33 or payload[:8] != b"\x89PNG\r\n\x1a\n":
@@ -513,13 +642,118 @@ def compare_pixels(
     *,
     max_large_error_ratio: float = 0.02,
 ) -> None:
-    differences = [abs(a - b) for a, b in zip(left, right)]
-    if not differences:
+    if not pixels_match(left, right, max_large_error_ratio=max_large_error_ratio):
         fail(message)
+
+
+def pixels_match(left: bytes, right: bytes, *, max_large_error_ratio: float = 0.02) -> bool:
+    if len(left) != len(right) or not left:
+        return False
+    differences = [abs(a - b) for a, b in zip(left, right)]
     mean_error = sum(differences) / len(differences)
     large_error_ratio = sum(value > 24 for value in differences) / len(differences)
-    if mean_error > 4.0 or large_error_ratio > max_large_error_ratio:
-        fail(message)
+    return mean_error <= 4.0 and large_error_ratio <= max_large_error_ratio
+
+
+def validate_pdf_figures(pdf_path: Path, figures: list) -> None:
+    """Require approved pixels in images actually painted on PDF pages."""
+    if not figures:
+        return
+    try:
+        import fitz
+    except ImportError:
+        fail("PDF figure verification requires PyMuPDF in the verifier's Python environment; "
+             "install it with python3 -m pip install PyMuPDF")
+
+    candidates = []
+    try:
+        with fitz.open(pdf_path) as document, tempfile.TemporaryDirectory(
+            prefix="superwriter-pdf-images-"
+        ) as temporary:
+            directory = Path(temporary)
+            for page in document:
+                # get_images() includes unused resource entries. Inspect paint
+                # operations instead so a retained but omitted image cannot pass.
+                for info in page.get_image_info(xrefs=True):
+                    xref = info["xref"]
+                    bounds = fitz.Rect(info["bbox"])
+                    if not xref or bounds.is_empty or not page.rect.contains(bounds):
+                        continue
+                    extracted_image = document.extract_image(xref)
+                    encoded_format = extracted_image["ext"]
+                    pixmap = fitz.Pixmap(document, xref)
+                    if pixmap.colorspace is None:
+                        continue
+                    if pixmap.colorspace.n != 3:
+                        pixmap = fitz.Pixmap(fitz.csRGB, pixmap)
+                    mask_type, mask_value = document.xref_get_key(xref, "SMask")
+                    if mask_type == "xref":
+                        mask = fitz.Pixmap(document, int(mask_value.split()[0]))
+                        pixmap = fitz.Pixmap(pixmap, mask)
+                    pixels = normalized_pixels(
+                        pixmap.tobytes("png"), "PDF embedded diagram", directory,
+                        f"image-{xref}",
+                    )
+                    rendered = page.get_pixmap(matrix=fitz.Matrix(2, 2), clip=bounds, alpha=False)
+                    visible_pixels = normalized_pixels(
+                        rendered.tobytes("png"), "PDF visible diagram", directory,
+                        f"visible-{page.number}-{xref}",
+                    )
+                    # Apply the same PDF rasterization to the accepted embedded
+                    # pixels before checking visibility. Comparing a resampled
+                    # PDF crop directly to the source JPEG compounds two
+                    # different filters and falsely rejects valid exports.
+                    with fitz.open() as reference_document:
+                        reference_page = reference_document.new_page(
+                            width=page.rect.width, height=page.rect.height,
+                        )
+                        reference_page.insert_image(bounds, pixmap=pixmap, keep_proportion=False)
+                        reference_render = reference_page.get_pixmap(
+                            matrix=fitz.Matrix(2, 2), clip=bounds, alpha=False,
+                        )
+                        expected_visible_pixels = normalized_pixels(
+                            reference_render.tobytes("png"), "PDF reference diagram", directory,
+                            f"reference-{page.number}-{xref}",
+                        )
+                    candidates.append((pixmap.width, pixmap.height, pixels, encoded_format,
+                                       visible_pixels, expected_visible_pixels,
+                                       bounds.width, bounds.height))
+    except (OSError, ValueError, RuntimeError) as error:
+        fail(f"PDF diagram extraction failed: {error}")
+
+    for _, render, caption, _, width, height, approved_pixels in figures:
+        # Match the existing DOCX comparison: JPEG recompression may change a
+        # small additional proportion of channels, but not the mean tolerance.
+        source_format = "jpeg" if render.suffix.lower() in {".jpg", ".jpeg"} else "png"
+        if source_format == "jpeg":
+            # Use the PDF renderer's JPEG decoder on both sides. The original
+            # sips decoder remains authoritative for the separate DOCX check.
+            source_pixmap = fitz.Pixmap(str(render))
+            if source_pixmap.colorspace is not None and source_pixmap.colorspace.n != 3:
+                source_pixmap = fitz.Pixmap(fitz.csRGB, source_pixmap)
+            with tempfile.TemporaryDirectory(prefix="superwriter-pdf-source-") as temporary:
+                approved_pixels = normalized_pixels(
+                    source_pixmap.tobytes("png"), "PDF approved diagram", Path(temporary), "source",
+                )
+        if not any(
+            100 <= candidate_width <= 20000
+            and 100 <= candidate_height <= 20000
+            and abs(width / height - candidate_width / candidate_height) / (width / height) <= 0.002
+            # WPS rounds display extents independently (the legacy native
+            # fixture differs by 0.79 pt). Permit one layout point, while the
+            # embedded image dimensions and both pixel checks stay strict.
+            and abs(visible_width - width / height * visible_height) <= 1.0
+            and pixels_match(
+                approved_pixels, candidate_pixels,
+                max_large_error_ratio=0.03 if source_format != encoded_format else 0.02,
+            )
+            and pixels_match(
+                expected_visible_pixels, visible_pixels,
+            )
+            for candidate_width, candidate_height, candidate_pixels, encoded_format,
+                visible_pixels, expected_visible_pixels, visible_width, visible_height in candidates
+        ):
+            fail(f"PDF expected diagram is missing or its pixels differ from the approved figure: {caption}")
 
 
 def excalidraw_scene(source: Path):
@@ -1324,8 +1558,10 @@ def main() -> None:
             max_large_error_ratio=0.03 if render_suffix != embedded_suffix else 0.02,
         )
 
+    validate_pdf_figures(pdf_path, validated_figures)
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
+    pdf_text, native_furniture_removed = native_pdf_body_text(pdf_path, docx_path, merged, pdf_text)
     extracted = (("DOCX", docx_text), ("PDF", pdf_text))
     source_blocks = markdown_block_sequence(merged)
     if not source_blocks:
@@ -1351,7 +1587,7 @@ def main() -> None:
             label,
             text,
             source_blocks,
-            pdf_page_count=pages if label == "PDF" else None,
+            pdf_page_count=pages if label == "PDF" and not native_furniture_removed else None,
         )
     minimum, maximum = pdf_contract.get("min_pages"), pdf_contract.get("max_pages")
     if not is_json_integer(minimum) or not is_json_integer(maximum) or minimum < 1 or maximum < minimum or not minimum <= pages <= maximum:

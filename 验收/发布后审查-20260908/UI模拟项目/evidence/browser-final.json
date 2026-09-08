@@ -1,0 +1,25 @@
+{
+  "synthetic_test": true,
+  "revision": 44,
+  "approvals": 7,
+  "approved": {
+    "approach": 3,
+    "outline": 1,
+    "chapter-01": 2,
+    "chapter-02": 1,
+    "figure-01": 2,
+    "figure-set": 2,
+    "manuscript": 2
+  },
+  "browser_checks": [
+    "preference not approval",
+    "revision conflict rejected",
+    "restart survives",
+    "outline approval",
+    "chapter1 revision/approve before chapter2",
+    "figure current/previous image rendering",
+    "directfigure declared caption placement and chaptercontext",
+    "figure-set approval",
+    "manuscript fulltext revise and approve"
+  ]
+}

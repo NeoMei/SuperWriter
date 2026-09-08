@@ -1,0 +1,24 @@
+{
+  "id": "synthetic-001-put_object",
+  "kind": "put_object",
+  "object_id": "brief",
+  "version": 1,
+  "sha256": "7e14f693faaa6240353deb18879d5529efa46ae87d4d489d21c0ec25a0b5fdab",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:1",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {
+    "object": {
+      "id": "brief",
+      "kind": "brief",
+      "path": "目标.md",
+      "version": 1,
+      "sha256": "7e14f693faaa6240353deb18879d5529efa46ae87d4d489d21c0ec25a0b5fdab",
+      "dependencies": {},
+      "status": "draft",
+      "metadata": {}
+    }
+  }
+}

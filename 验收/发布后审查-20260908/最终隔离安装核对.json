@@ -1,0 +1,49 @@
+{
+  "synthetic_test": true,
+  "installed_home": "/var/folders/0n/49qgdd8x7kgcvh719fw743mh0000gn/T/superwriter-audit-frozen-install-5bj361b_",
+  "python_user_base": "/Users/neomei/Library/Python/3.9",
+  "checks": [
+    {
+      "check": "install",
+      "exit_code": 0,
+      "log": "/tmp/superwriter-audit-frozen-real-install.log"
+    },
+    {
+      "check": "verify",
+      "exit_code": 0,
+      "log": "/tmp/superwriter-audit-frozen-real-verify.log"
+    },
+    {
+      "check": "acceptance",
+      "exit_code": 0,
+      "log": "/tmp/superwriter-audit-frozen-real-acceptance.log"
+    },
+    {
+      "check": "installed-v1",
+      "exit_code": 0,
+      "log": "/tmp/superwriter-audit-frozen-installed-v1.log"
+    },
+    {
+      "check": "installed-v2",
+      "exit_code": 0,
+      "log": "/tmp/superwriter-audit-frozen-installed-v2.log"
+    }
+  ],
+  "runtime_sha256": {
+    ".agents/scripts/verify_acceptance.py": "1ec012b0506ccc6b8fc04ae68278740f59be1ef2f332f29f9c479beeb10ce696",
+    ".agents/scripts/collaboration/model.py": "2924dea11e2bbdd20da1bb0d255da991dc9688a30a3434ee67613586ca9e978a",
+    ".agents/scripts/collaboration/workflow.py": "55933aeb2746c817be4c18dafcac7e1563d2166d8cc4de6867af0ea7f3f4de61",
+    ".agents/scripts/review_server.py": "b95d64a06f2632b6d89691f52b9421167cf1c900fceb9528368a4c22de1ec109",
+    ".agents/scripts/review_assets/review.js": "2d0d8d7e90e4df464d6f9a72c05cf4608316bc3d77787560c608f5ffbb15c2e3",
+    ".claude/scripts/verify_acceptance.py": "1ec012b0506ccc6b8fc04ae68278740f59be1ef2f332f29f9c479beeb10ce696",
+    ".claude/scripts/collaboration/model.py": "2924dea11e2bbdd20da1bb0d255da991dc9688a30a3434ee67613586ca9e978a",
+    ".claude/scripts/collaboration/workflow.py": "55933aeb2746c817be4c18dafcac7e1563d2166d8cc4de6867af0ea7f3f4de61",
+    ".claude/scripts/review_server.py": "b95d64a06f2632b6d89691f52b9421167cf1c900fceb9528368a4c22de1ec109",
+    ".claude/scripts/review_assets/review.js": "2d0d8d7e90e4df464d6f9a72c05cf4608316bc3d77787560c608f5ffbb15c2e3",
+    ".codex/scripts/verify_acceptance.py": "1ec012b0506ccc6b8fc04ae68278740f59be1ef2f332f29f9c479beeb10ce696",
+    ".codex/scripts/collaboration/model.py": "2924dea11e2bbdd20da1bb0d255da991dc9688a30a3434ee67613586ca9e978a",
+    ".codex/scripts/collaboration/workflow.py": "55933aeb2746c817be4c18dafcac7e1563d2166d8cc4de6867af0ea7f3f4de61",
+    ".codex/scripts/review_server.py": "b95d64a06f2632b6d89691f52b9421167cf1c900fceb9528368a4c22de1ec109",
+    ".codex/scripts/review_assets/review.js": "2d0d8d7e90e4df464d6f9a72c05cf4608316bc3d77787560c608f5ffbb15c2e3"
+  }
+}

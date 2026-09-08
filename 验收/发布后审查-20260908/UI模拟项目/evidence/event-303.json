@@ -1,0 +1,13 @@
+{
+  "id": "synthetic-303-submit_review",
+  "kind": "submit_review",
+  "object_id": "outline",
+  "version": 1,
+  "sha256": "faab8df616d4bc805cd47b7ce12b965833bd656b05c4f7444fb348a43cd5e405",
+  "channel": "agent",
+  "evidence": {
+    "reference": "synthetic-test:303",
+    "text": "synthetic-test explicit action"
+  },
+  "payload": {}
+}
