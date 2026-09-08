@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import errno
 import os
 import struct
 from pathlib import Path
@@ -12,6 +14,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Callable, Mapping
 
 from scripts.collaboration.console import configure_utf8_stdio
@@ -24,6 +27,12 @@ DEPENDENCIES = (
     "to-spec",
     "domain-modeling",
     "ai-image-to-ppt",
+)
+MANAGED_SKILLS = (
+    "superwriter",
+    *DEPENDENCIES,
+    "obsidian-excalidraw",
+    "WPSComposer",
 )
 RUNTIME_FILES = (
     "scripts/render_svg.py",
@@ -150,6 +159,50 @@ def _remove(path: Path) -> None:
 def atomic_replace(source: Path, target: Path) -> None:
     """Rename one staged path atomically within its filesystem."""
     source.replace(target)
+
+
+def _path_exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink() or is_directory_reference(path)
+
+
+def _installer_lock_path(home: Path) -> Path:
+    return _resolved(home) / ".superwriter-install.lock"
+
+
+@contextmanager
+def _installer_lock(home: Path):
+    """Serialize SuperWriter installers targeting the same home with an OS lock."""
+    lock_path = _installer_lock_path(home)
+    with lock_path.open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"\0")
+                handle.flush()
+            while True:
+                handle.seek(0)
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as exc:
+                    if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        raise
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _copy_tree(source: Path, target: Path) -> None:
@@ -453,13 +506,10 @@ def _stage_host(
     dependency_snapshot: Path,
     opencode: Path,
     wps: Path,
-    host: Path,
     stage: Path,
 ) -> Path:
-    candidate = stage / "new-skills"
+    candidate = stage / "new-entries"
     candidate.mkdir()
-    if host.is_dir():
-        _copy_tree(host, candidate)
     managed_sources = {
         "superwriter": source_root,
         **{name: dependency_snapshot / name for name in DEPENDENCIES},
@@ -486,6 +536,29 @@ def _stage_host(
     return candidate
 
 
+def _route_matches_snapshot(route: Path, had_existing: bool, content: bytes) -> bool:
+    if not had_existing:
+        return not _path_exists(route)
+    if route.is_symlink() or not route.is_file():
+        return False
+    try:
+        return route.read_bytes() == content
+    except OSError:
+        return False
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _publish_route_exclusively(source: Path, target: Path) -> None:
+    """Publish a staged route only while the target name remains absent."""
+    os.link(source, target, follow_symlinks=False)
+
+
 def _set_signal_handlers() -> dict[int, signal.Handlers]:
     previous: dict[int, signal.Handlers] = {}
     for signum in (getattr(signal, "SIGHUP", None), signal.SIGINT, signal.SIGTERM):
@@ -505,16 +578,7 @@ def _restore_signal_handlers(previous: Mapping[int, signal.Handlers]) -> None:
         signal.signal(signum, handler)
 
 
-def install(environment: Mapping[str, str] | None = None) -> int:
-    env = os.environ if environment is None else environment
-    raw_home = select_home(env)
-    if not raw_home or not os.path.isabs(raw_home):
-        raise InstallError("Unsafe HOME: HOME must be a non-empty absolute path")
-    home = _resolved(Path(raw_home))
-    if home == Path(home.anchor):
-        raise InstallError("Unsafe HOME: HOME resolves to filesystem root")
-    if not home.is_dir():
-        raise InstallError(f"Unsafe HOME: HOME is not a directory: {_safe_path(home)}")
+def _install_locked(env: Mapping[str, str], home: Path) -> None:
     source_root = _resolved(Path(__file__).parent)
     agents = _resolved(Path(env.get("SUPERWRITER_AGENTS_SKILLS_ROOT", home / ".agents" / "skills")))
     opencode = _resolved(Path(env.get("SUPERWRITER_OPENCODE_SKILLS_ROOT", home / ".opencode" / "skills")))
@@ -537,47 +601,74 @@ def install(environment: Mapping[str, str] | None = None) -> int:
         targets = [
             host / name
             for host in host_roots
-            for name in ("superwriter", *DEPENDENCIES, "obsidian-excalidraw", "WPSComposer")
+            for name in MANAGED_SKILLS
         ]
         _validate_paths(home, sources, host_roots, targets, route)
-        route_text = route.read_text(encoding="utf-8") if route.is_file() else ""
+        route_had_existing = route.is_file()
+        route_content = route.read_bytes() if route_had_existing else b""
+        try:
+            route_text = route_content.decode("utf-8")
+        except UnicodeError as exc:
+            raise InstallError(f"Codex route file is not readable: {_safe_path(route)}") from exc
         _validate_route_markers(route_text)
 
         stages: list[Path] = []
         candidates: list[Path] = []
         backups: list[Path] = []
-        had_existing = [host.is_dir() for host in host_roots]
+        entry_states: list[tuple[Path, Path, Path, bool, Path]] = []
         created_parents: list[Path] = []
+        created_hosts: list[Path] = []
         preserved_stages: set[Path] = set()
-        route_had_existing = route.is_file()
         previous_handlers: dict[int, signal.Handlers] = {}
         transaction_started = False
+        completed = False
         try:
             for host in host_roots:
                 parent = host.parent
                 if not parent.exists():
                     parent.mkdir(parents=True)
                     created_parents.append(parent)
+                if not host.exists():
+                    host.mkdir()
+                    created_hosts.append(host)
                 stage = Path(tempfile.mkdtemp(prefix=".superwriter-install-", dir=parent))
                 stages.append(stage)
                 candidates.append(
-                    _stage_host(source_root, dependency_snapshot, opencode, wps, host, stage)
+                    _stage_host(source_root, dependency_snapshot, opencode, wps, stage)
                 )
-                backups.append(stage / "backup-skills")
+                backup = stage / "backup-entries"
+                backup.mkdir()
+                backups.append(backup)
             route_stage = stages[2] / "new-AGENTS.md"
             route_backup = stages[2] / "backup-AGENTS.md"
             with route_stage.open("w", encoding="utf-8", newline="\n") as handle:
                 handle.write(_render_route(route_text))
+            published_route_content = route_stage.read_bytes()
             previous_handlers = _set_signal_handlers()
             transaction_started = True
             for index, host in enumerate(host_roots):
-                if had_existing[index]:
-                    atomic_replace(host, backups[index])
-                atomic_replace(candidates[index], host)
+                for name in MANAGED_SKILLS:
+                    target = host / name
+                    candidate = candidates[index] / name
+                    backup = backups[index] / name
+                    had_existing = _path_exists(target)
+                    entry_states.append((target, backup, candidate, had_existing, stages[index]))
+                    if had_existing:
+                        atomic_replace(target, backup)
+                    atomic_replace(candidate, target)
+            if not _route_matches_snapshot(route, route_had_existing, route_content):
+                raise InstallError(
+                    "Codex route changed during installation; refusing to overwrite concurrent edits"
+                )
             if route_had_existing:
                 atomic_replace(route, route_backup)
-            atomic_replace(route_stage, route)
+                if route_backup.read_bytes() != route_content:
+                    raise InstallError(
+                        "Codex route changed during installation; refusing to publish over concurrent edits"
+                    )
+            _publish_route_exclusively(route_stage, route)
             transaction_started = False
+            completed = True
         except BaseException:
             rollback_failed = False
             if previous_handlers:
@@ -586,8 +677,20 @@ def install(environment: Mapping[str, str] | None = None) -> int:
             if transaction_started:
                 if "route_backup" in locals() and route_backup.exists():
                     try:
-                        _remove(route)
-                        atomic_replace(route_backup, route)
+                        if not _path_exists(route):
+                            _publish_route_exclusively(route_backup, route)
+                            route_backup.unlink()
+                        elif (
+                            _same_file(route, route_stage)
+                            and route.read_bytes() == published_route_content
+                        ):
+                            _remove(route)
+                            _publish_route_exclusively(route_backup, route)
+                            route_backup.unlink()
+                        else:
+                            raise FileExistsError(
+                                "Codex route was replaced by another writer during rollback"
+                            )
                     except OSError:
                         preserved_stages.add(stages[2])
                         print(
@@ -595,27 +698,29 @@ def install(environment: Mapping[str, str] | None = None) -> int:
                             file=sys.stderr,
                         )
                         rollback_failed = True
-                elif route_had_existing is False and "route_stage" in locals() and not route_stage.exists():
+                elif (
+                    route_had_existing is False
+                    and "route_stage" in locals()
+                    and _same_file(route, route_stage)
+                    and route.read_bytes() == published_route_content
+                ):
                     try:
                         _remove(route)
                     except OSError:
                         rollback_failed = True
-                for index in range(len(host_roots) - 1, -1, -1):
-                    host = host_roots[index]
-                    backup = backups[index] if index < len(backups) else None
-                    candidate = candidates[index] if index < len(candidates) else None
+                for target, backup, candidate, had_existing, stage in reversed(entry_states):
                     try:
-                        if backup is not None and backup.is_dir():
-                            _remove(host)
-                            atomic_replace(backup, host)
-                        elif not had_existing[index] and candidate is not None and not candidate.exists():
-                            _remove(host)
+                        if _path_exists(backup):
+                            _remove(target)
+                            atomic_replace(backup, target)
+                        elif not had_existing and not _path_exists(candidate):
+                            _remove(target)
                     except OSError:
-                        if index < len(stages):
-                            preserved_stages.add(stages[index])
+                        if not _path_exists(backup) and had_existing and _path_exists(target):
+                            continue
+                        preserved_stages.add(stage)
                         print(
-                            "Rollback incomplete: host backup retained at "
-                            f"{_safe_path(backup) if backup is not None else '<unknown>'}",
+                            f"Rollback incomplete: skill backup retained at {_safe_path(backup)}",
                             file=sys.stderr,
                         )
                         rollback_failed = True
@@ -628,11 +733,31 @@ def install(environment: Mapping[str, str] | None = None) -> int:
             for stage in stages:
                 if stage not in preserved_stages:
                     _remove(stage)
+            if not completed:
+                for host in reversed(created_hosts):
+                    try:
+                        host.rmdir()
+                    except OSError:
+                        pass
             for parent in reversed(created_parents):
                 try:
                     parent.rmdir()
                 except OSError:
                     pass
+
+
+def install(environment: Mapping[str, str] | None = None) -> int:
+    env = os.environ if environment is None else environment
+    raw_home = select_home(env)
+    if not raw_home or not os.path.isabs(raw_home):
+        raise InstallError("Unsafe HOME: HOME must be a non-empty absolute path")
+    home = _resolved(Path(raw_home))
+    if home == Path(home.anchor):
+        raise InstallError("Unsafe HOME: HOME resolves to filesystem root")
+    if not home.is_dir():
+        raise InstallError(f"Unsafe HOME: HOME is not a directory: {_safe_path(home)}")
+    with _installer_lock(home):
+        _install_locked(env, home)
     print("SuperWriter installed to 3 hosts.")
     return 0
 

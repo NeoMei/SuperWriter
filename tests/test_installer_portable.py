@@ -73,7 +73,7 @@ class PortableInstallerTest(unittest.TestCase):
 
     def test_existing_windows_junction_is_recreated_without_reading_its_contents(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-copy-junction-") as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             source = root / "source"
             target = root / "target"
             junction = source / "WPSComposer"
@@ -105,7 +105,7 @@ class PortableInstallerTest(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "requires native Windows junctions")
     def test_native_windows_reinstall_never_copies_external_wps_contents(self):
         with tempfile.TemporaryDirectory(prefix="SuperWriter A&B (native)^%! ") as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             home = root / "home"
             home.mkdir()
             agents, opencode, wps = self.make_sources(root)
@@ -161,7 +161,7 @@ class PortableInstallerTest(unittest.TestCase):
 
     def test_ascii_process_locale_still_emits_utf8_dependency_diagnostics(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-ascii-") as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             home = root / "用户目录"
             home.mkdir()
             agents, opencode, _wps = self.make_sources(root)
@@ -285,6 +285,281 @@ class PortableInstallerTest(unittest.TestCase):
             self.assertEqual(route_text.count("<!-- pipeline:superwriter:start -->"), 1)
             self.assertEqual(route_text.count("<!-- pipeline:superwriter:end -->"), 1)
 
+    def test_commit_preserves_unrelated_write_after_staging_and_host_identity(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-concurrent-unrelated-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            skills = home / ".agents" / "skills"
+            old = skills / "superwriter" / "OLD"
+            old.parent.mkdir(parents=True)
+            old.write_text("old\n", encoding="utf-8")
+            original_identity = (skills.stat().st_dev, skills.stat().st_ino)
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_replace = portable_installer.atomic_replace
+            injected = False
+
+            def write_unrelated_then_replace(source: Path, target: Path) -> None:
+                nonlocal injected
+                if not injected:
+                    injected = True
+                    concurrent = skills / "installed-by-another-tool" / "KEEP"
+                    concurrent.parent.mkdir()
+                    concurrent.write_text("concurrent\n", encoding="utf-8")
+                real_replace(source, target)
+
+            with mock.patch.object(
+                portable_installer, "atomic_replace", side_effect=write_unrelated_then_replace
+            ):
+                portable_installer.install(environment)
+
+            self.assertTrue(injected)
+            self.assertEqual(
+                (skills / "installed-by-another-tool" / "KEEP").read_text(encoding="utf-8"),
+                "concurrent\n",
+            )
+            self.assertEqual((skills.stat().st_dev, skills.stat().st_ino), original_identity)
+
+    def test_installer_waits_for_native_process_lock_on_same_home(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-installer-lock-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            environment = {
+                **os.environ,
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            holder_code = (
+                "import sys\n"
+                "from pathlib import Path\n"
+                "import install\n"
+                "with install._installer_lock(Path(sys.argv[1])):\n"
+                "    print('locked', flush=True)\n"
+                "    sys.stdin.readline()\n"
+            )
+            holder = subprocess.Popen(
+                [sys.executable, "-c", holder_code, str(home)],
+                cwd=ROOT,
+                env=environment,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            installer = None
+            try:
+                self.assertEqual(holder.stdout.readline().strip(), "locked")
+                installer = subprocess.Popen(
+                    [sys.executable, str(ROOT / "install.py")],
+                    cwd=ROOT,
+                    env=environment,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                )
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    installer.wait(timeout=0.5)
+                holder.stdin.write("release\n")
+                holder.stdin.flush()
+                holder_stdout, holder_stderr = holder.communicate(timeout=10)
+                self.assertEqual(holder.returncode, 0, holder_stdout + holder_stderr)
+                stdout, stderr = installer.communicate(timeout=30)
+                self.assertEqual(installer.returncode, 0, stdout + stderr)
+            finally:
+                if holder.poll() is None:
+                    holder.kill()
+                holder.communicate()
+                if installer is not None and installer.poll() is None:
+                    installer.kill()
+                if installer is not None:
+                    installer.communicate()
+
+    def test_route_change_before_publish_is_preserved_and_managed_entries_roll_back(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-route-conflict-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            for host in (".agents", ".claude", ".codex"):
+                old = home / host / "skills" / "superwriter" / "OLD"
+                old.parent.mkdir(parents=True)
+                old.write_text(f"old:{host}\n", encoding="utf-8")
+            route = home / ".codex" / "AGENTS.md"
+            route.write_text("original route\n", encoding="utf-8")
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_replace = portable_installer.atomic_replace
+            injected = False
+
+            def update_route_then_replace(source: Path, target: Path) -> None:
+                nonlocal injected
+                if not injected:
+                    injected = True
+                    route.write_text("changed by another tool\n", encoding="utf-8")
+                real_replace(source, target)
+
+            with mock.patch.object(
+                portable_installer, "atomic_replace", side_effect=update_route_then_replace
+            ):
+                with self.assertRaisesRegex(portable_installer.InstallError, "route changed"):
+                    portable_installer.install(environment)
+
+            self.assertTrue(injected)
+            self.assertEqual(route.read_text(encoding="utf-8"), "changed by another tool\n")
+            for host in (".agents", ".claude", ".codex"):
+                self.assertEqual(
+                    (home / host / "skills" / "superwriter" / "OLD").read_text(
+                        encoding="utf-8"
+                    ),
+                    f"old:{host}\n",
+                )
+
+    def test_route_edit_during_backup_move_is_restored_without_publishing(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-route-backup-race-") as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            route = home / ".codex" / "AGENTS.md"
+            route.parent.mkdir(parents=True)
+            route.write_text("original route\n", encoding="utf-8")
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_replace = portable_installer.atomic_replace
+
+            def edit_at_backup_boundary(source: Path, target: Path) -> None:
+                if source == route and target.name == "backup-AGENTS.md":
+                    route.write_text("edited at backup boundary\n", encoding="utf-8")
+                real_replace(source, target)
+
+            with mock.patch.object(
+                portable_installer, "atomic_replace", side_effect=edit_at_backup_boundary
+            ):
+                with self.assertRaisesRegex(portable_installer.InstallError, "route changed"):
+                    portable_installer.install(environment)
+            self.assertEqual(route.read_text(encoding="utf-8"), "edited at backup boundary\n")
+
+    def test_route_created_in_publish_gap_is_preserved(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-route-publish-race-") as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            route = home / ".codex" / "AGENTS.md"
+            route.parent.mkdir(parents=True)
+            route.write_text("original route\n", encoding="utf-8")
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_replace = portable_installer.atomic_replace
+
+            def create_after_backup(source: Path, target: Path) -> None:
+                real_replace(source, target)
+                if source == route and target.name == "backup-AGENTS.md":
+                    route.write_text("created in publish gap\n", encoding="utf-8")
+
+            with mock.patch.object(
+                portable_installer, "atomic_replace", side_effect=create_after_backup
+            ):
+                with self.assertRaisesRegex(portable_installer.InstallError, "Rollback incomplete"):
+                    portable_installer.install(environment)
+            self.assertEqual(route.read_text(encoding="utf-8"), "created in publish gap\n")
+            retained = list(
+                (home / ".codex").glob(".superwriter-install-*/backup-AGENTS.md")
+            )
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0].read_text(encoding="utf-8"), "original route\n")
+
+    def test_route_edited_after_publish_is_not_clobbered_by_rollback(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-route-after-publish-") as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            route = home / ".codex" / "AGENTS.md"
+            route.parent.mkdir(parents=True)
+            route.write_text("original route\n", encoding="utf-8")
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_publish = portable_installer._publish_route_exclusively
+
+            def edit_after_publish(source: Path, target: Path) -> None:
+                real_publish(source, target)
+                target.write_text("edited after publish\n", encoding="utf-8")
+                raise OSError("fail after external edit")
+
+            with mock.patch.object(
+                portable_installer,
+                "_publish_route_exclusively",
+                side_effect=edit_after_publish,
+            ):
+                with self.assertRaisesRegex(portable_installer.InstallError, "Rollback incomplete"):
+                    portable_installer.install(environment)
+            self.assertEqual(route.read_text(encoding="utf-8"), "edited after publish\n")
+            retained = list(
+                (home / ".codex").glob(".superwriter-install-*/backup-AGENTS.md")
+            )
+            self.assertEqual(len(retained), 1)
+            self.assertEqual(retained[0].read_text(encoding="utf-8"), "original route\n")
+
+    def test_new_route_edited_after_publish_is_not_removed_by_rollback(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-new-route-after-publish-") as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, wps = self.make_sources(root)
+            route = home / ".codex" / "AGENTS.md"
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_SKILL_SOURCE": str(wps),
+            }
+            real_publish = portable_installer._publish_route_exclusively
+
+            def edit_after_publish(source: Path, target: Path) -> None:
+                real_publish(source, target)
+                target.write_text("external content after publish\n", encoding="utf-8")
+                raise OSError("fail after external edit")
+
+            with mock.patch.object(
+                portable_installer,
+                "_publish_route_exclusively",
+                side_effect=edit_after_publish,
+            ):
+                with self.assertRaisesRegex(OSError, "fail after external edit"):
+                    portable_installer.install(environment)
+            self.assertEqual(
+                route.read_text(encoding="utf-8"), "external content after publish\n"
+            )
+
     def test_commit_failure_restores_all_hosts_and_route(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-rollback-") as temporary:
             root = Path(temporary)
@@ -311,8 +586,8 @@ class PortableInstallerTest(unittest.TestCase):
                 nonlocal injected
                 if (
                     not injected
-                    and source.name == "new-skills"
-                    and target == (home / ".claude" / "skills").resolve()
+                    and source.parent.name == "new-entries"
+                    and target == (home / ".claude" / "skills" / "superwriter").resolve()
                 ):
                     injected = True
                     raise OSError("injected commit failure")
@@ -325,7 +600,9 @@ class PortableInstallerTest(unittest.TestCase):
                     portable_installer.install(environment)
 
             self.assertTrue(injected)
-            self.assertEqual(tree_manifest(home), before)
+            after = tree_manifest(home)
+            after.pop(".superwriter-install.lock", None)
+            self.assertEqual(after, before)
 
     def test_failed_rollback_retains_the_only_original_host_backup(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-retained-backup-") as temporary:
@@ -352,15 +629,16 @@ class PortableInstallerTest(unittest.TestCase):
                 nonlocal commit_failed
                 if (
                     not commit_failed
-                    and source.name == "new-skills"
-                    and target == (home / ".claude" / "skills").resolve()
+                    and source.parent.name == "new-entries"
+                    and target == (home / ".claude" / "skills" / "superwriter").resolve()
                 ):
                     commit_failed = True
                     raise OSError("injected commit failure")
                 if (
                     commit_failed
-                    and source.name == "backup-skills"
-                    and target == (home / ".agents" / "skills").resolve()
+                    and source.parent.name == "backup-entries"
+                    and source.name == "superwriter"
+                    and target == (home / ".agents" / "skills" / "superwriter").resolve()
                 ):
                     raise OSError("injected restore failure")
                 real_replace(source, target)
@@ -373,19 +651,19 @@ class PortableInstallerTest(unittest.TestCase):
                     portable_installer.install(environment)
             retained = list(
                 (home / ".agents").glob(
-                    ".superwriter-install-*/backup-skills/superwriter/OLD"
+                    ".superwriter-install-*/backup-entries/superwriter/OLD"
                 )
             )
             self.assertEqual(len(retained), 1)
             self.assertEqual(retained[0].read_text(encoding="utf-8"), "old:.agents\n")
-            prefix = "Rollback incomplete: host backup retained at "
+            prefix = "Rollback incomplete: skill backup retained at "
             reported = [
                 Path(line.removeprefix(prefix))
                 for line in stderr.getvalue().splitlines()
                 if line.startswith(prefix)
             ]
             self.assertEqual(len(reported), 1)
-            self.assertTrue(os.path.samefile(reported[0], retained[0].parents[1]))
+            self.assertTrue(os.path.samefile(reported[0], retained[0].parent))
 
     def test_public_wps_reference_is_not_copied_into_hosts(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-wps-reference-") as temporary:
@@ -480,7 +758,9 @@ class PortableInstallerTest(unittest.TestCase):
                 }
                 with self.assertRaisesRegex(portable_installer.InstallError, "route markers"):
                     portable_installer.install(environment)
-                self.assertEqual(tree_manifest(home), before)
+                after = tree_manifest(home)
+                after.pop(".superwriter-install.lock", None)
+                self.assertEqual(after, before)
 
     def test_source_target_overlap_fails_without_deleting_source(self):
         with tempfile.TemporaryDirectory(prefix="superwriter-overlap-") as temporary:
@@ -598,7 +878,9 @@ class PortableInstallerTest(unittest.TestCase):
             }
             with self.assertRaisesRegex(portable_installer.InstallError, "Host skills path"):
                 portable_installer.install(environment)
-            self.assertEqual(tree_manifest(home), before)
+            after = tree_manifest(home)
+            after.pop(".superwriter-install.lock", None)
+            self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.2`；协作流程协议为 v2。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.3`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -24,6 +24,8 @@ SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **Super
 - 交付检查使用 `markitdown[docx,pdf]`、`Pillow`、`PyMuPDF`、`resvg-py` 和 `fonttools`，版本范围见 `requirements.txt`。在运行验收器的 Python 环境执行 `python -m pip install -r requirements.txt`（macOS 可用 `python3`）；缺少所需依赖时验收失败，不自动安装。
 - 图片与 PDF 验收无需 `sips`、`osascript`、`pdfinfo`、`file` 或 `unzip`；SVG 优先使用本机声明字体，并为缺少中文字体的系统提供依赖包内置的中文字体回退。
 - 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
+
+先用 `python3 --version`（Windows 用 `python --version`）确认解释器版本。使用虚拟环境时，在同一终端激活环境后安装依赖并运行 SuperWriter；脚本会调用该环境中的 `markitdown`。仅更新 skill 文件不会升级系统 Python 或安装这些包。
 
 第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：
 
@@ -55,7 +57,7 @@ $env:SUPERWRITER_OPENCODE_SKILLS_ROOT = "$HOME\.opencode\skills"
 python .\install.py
 ```
 
-也可以使用 `bash install.sh` 或 `./install.ps1` 包装入口。安装器预检 SuperWriter 运行时和依赖，再以事务方式同步到用户目录下的 `.agents/skills`、`.claude/skills`、`.codex/skills`，并更新 Codex 路由。任一必需文件缺失时，安装在修改宿主前失败；提交阶段失败会回滚。WPSComposer 的系统适配和 Office 环境要求以其项目文档为准。
+也可以使用 `bash install.sh` 或 `./install.ps1` 包装入口。安装器预检 SuperWriter 运行时和依赖，再以事务方式同步到用户目录下的 `.agents/skills`、`.claude/skills`、`.codex/skills`，并更新 Codex 路由。仅替换受管理的 skill 条目，保留其他 skill 的目录及并发写入。同一 HOME 的安装由操作系统文件锁串行执行；锁文件保留在 HOME 下，不应在安装期间删除。Codex 路由在安装期间变化时拒绝覆盖并回滚。任一必需文件缺失时，安装在修改宿主内容前失败；提交阶段失败会回滚。WPSComposer 的系统适配和 Office 环境要求以其项目文档为准。
 
 已安装后从 skill 根调用工具，客户工作目录只保存客户产物。
 
@@ -102,6 +104,16 @@ python3 -c "from pathlib import Path; print(next(s for s in Path('SKILL.md').rea
 ## 版本边界
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### v0.2.3 (2026-09-08)
+
+[SuperWriter 0.2.3 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.3)
+
+- 安装器仅替换受管理的 skill 条目，保留其他 skill 的并发修改及宿主目录身份。
+- 同一 HOME 的安装使用原生文件锁串行执行；路由发布与回滚保护并发修改，发生恢复冲突时保留备份并报告路径。
+- 完整产物验收加入 macOS CI；保留 macOS / Windows × Python 3.10 / 3.13 原生回归。
+- 版本检查统一读取版本常量，保留 SKILL 与依赖清单的严格交叉校验。
+- 修复范围与验证记录见 [技术债修复记录](docs/acceptance/2026-09-08-technical-debt.md)。
 
 ### v0.2.2 (2026-09-08)
 

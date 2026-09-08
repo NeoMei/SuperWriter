@@ -16,7 +16,7 @@ from tests.test_installer_portable import DEPENDENCIES, tree_manifest
 
 class InstallInterruptionTest(unittest.TestCase):
     def make_fixture(self, root: Path) -> tuple[Path, dict[str, str]]:
-        home = root / "home"
+        home = (root / "home").resolve()
         home.mkdir()
         agents = root / "agents"
         opencode = root / "opencode"
@@ -42,6 +42,8 @@ class InstallInterruptionTest(unittest.TestCase):
             old = home / host / "skills" / "superwriter" / "OLD"
             old.parent.mkdir(parents=True)
             old.write_text(f"old:{host}\n", encoding="utf-8")
+        with portable_installer._installer_lock(home):
+            pass
         route = home / ".codex" / "AGENTS.md"
         route.write_text("original route\n", encoding="utf-8")
         return home, {
@@ -53,9 +55,9 @@ class InstallInterruptionTest(unittest.TestCase):
 
     def test_interruptions_restore_all_hosts_and_route_at_commit_boundaries(self):
         cases = (
-            (signal.SIGTERM, "backup-skills", ".agents", "after"),
-            (signal.SIGTERM, "new-skills", ".agents", "before"),
-            (signal.SIGINT, "new-skills", ".claude", "after"),
+            (signal.SIGTERM, "backup-entries", ".agents", "after"),
+            (signal.SIGTERM, "new-entries", ".agents", "before"),
+            (signal.SIGINT, "new-entries", ".claude", "after"),
             (getattr(signal, "SIGHUP", signal.SIGTERM), "backup-AGENTS.md", ".codex", "after"),
             (signal.SIGTERM, "new-AGENTS.md", ".codex", "after"),
         )
@@ -65,32 +67,37 @@ class InstallInterruptionTest(unittest.TestCase):
                     home, environment = self.make_fixture(Path(temporary))
                     before = tree_manifest(home)
                     real_replace = portable_installer.atomic_replace
+                    real_publish = portable_installer._publish_route_exclusively
                     triggered = False
 
                     def interrupt_at_boundary(source: Path, target: Path) -> None:
                         nonlocal triggered
+                        operation = real_publish if source.name in {"new-AGENTS.md", "backup-AGENTS.md"} else real_replace
                         target_host = (home / host_name).resolve()
                         if (
                             not triggered
                             and (
-                                source_name in (source.name, target.name)
+                                source_name in (source.name, target.name, source.parent.name, target.parent.name)
                                 or source.name.startswith(source_name + ".")
                                 or target.name.startswith(source_name + ".")
                             )
                             and (
-                                target == target_host / "skills"
+                                target == target_host / "skills" / "superwriter"
+                                or source == target_host / "skills" / "superwriter"
                                 or target.parent == target_host
                                 or source.parent == target_host
                             )
                         ):
                             triggered = True
                             if timing == "after":
-                                real_replace(source, target)
+                                operation(source, target)
                             raise portable_installer.InstallInterrupted(signum)
-                        real_replace(source, target)
+                        operation(source, target)
 
                     with mock.patch.object(
                         portable_installer, "atomic_replace", side_effect=interrupt_at_boundary
+                    ), mock.patch.object(
+                        portable_installer, "_publish_route_exclusively", side_effect=interrupt_at_boundary
                     ):
                         with self.assertRaises(portable_installer.InstallInterrupted):
                             portable_installer.install(environment)
@@ -110,16 +117,18 @@ class InstallInterruptionTest(unittest.TestCase):
                 nonlocal commit_failed, rollback_signaled
                 if (
                     not commit_failed
-                    and source.name == "new-skills"
-                    and target == (home / ".claude" / "skills").resolve()
+                    and source.parent.name == "new-entries"
+                    and source.name == "superwriter"
+                    and target == (home / ".claude" / "skills" / "superwriter").resolve()
                 ):
                     commit_failed = True
                     raise OSError("injected commit failure")
                 if (
                     commit_failed
                     and not rollback_signaled
-                    and source.name == "backup-skills"
-                    and target == (home / ".agents" / "skills").resolve()
+                    and source.parent.name == "backup-entries"
+                    and source.name == "superwriter"
+                    and target == (home / ".agents" / "skills" / "superwriter").resolve()
                 ):
                     rollback_signaled = True
                     os.kill(os.getpid(), signal.SIGTERM)

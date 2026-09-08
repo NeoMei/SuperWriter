@@ -38,7 +38,7 @@ EXPECTED_EXTERNAL = {
 EXPECTED_ORDER = ("WPSComposer", *EXPECTED_EXTERNAL)
 EXPECTED_IDS = set(EXPECTED_ORDER)
 WPS_MINIMUM_VERSION = "0.7.2"
-SUPERWRITER_VERSION = "0.2.2"
+SUPERWRITER_VERSION = "0.2.3"
 SUPERWRITER_FRONTMATTER = (
     "---",
     "name: superwriter",
@@ -114,8 +114,8 @@ def validate_manifest(data: dict) -> list[str]:
         findings.append("top-level keys must be exactly schema_version, superwriter_version, dependencies")
     if data.get("schema_version") != 1 or type(data.get("schema_version")) is not int:
         findings.append("schema_version must be integer 1")
-    if data.get("superwriter_version") != "0.2.2":
-        findings.append("superwriter_version must be 0.2.2")
+    if data.get("superwriter_version") != SUPERWRITER_VERSION:
+        findings.append(f"superwriter_version must be {SUPERWRITER_VERSION}")
 
     dependencies = data.get("dependencies")
     if not isinstance(dependencies, list):

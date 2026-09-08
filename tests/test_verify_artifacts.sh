@@ -579,33 +579,35 @@ import sys
 path = Path(sys.argv[1])
 case = sys.argv[2]
 text = path.read_text(encoding="utf-8")
-assert text.count("version: 0.2.2\n") == 1
+import json
+version = json.loads((path.parent / "references" / "依赖清单.json").read_text(encoding="utf-8"))["superwriter_version"]
+assert text.count(f"version: {version}\n") == 1
 if case == "mismatch":
-    text = text.replace("version: 0.2.2\n", "version: 9.9.9\n", 1)
+    text = text.replace(f"version: {version}\n", "version: 9.9.9\n", 1)
 elif case == "missing":
-    text = text.replace("version: 0.2.2\n", "", 1)
+    text = text.replace(f"version: {version}\n", "", 1)
 elif case == "duplicate":
-    text = text.replace("version: 0.2.2\n", "version: 0.2.2\nversion: 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"version: {version}\nversion: {version}\n", 1)
 elif case == "quoted-duplicate":
-    text = text.replace("version: 0.2.2\n", 'version: 0.2.2\n"version": 0.2.2\n', 1)
+    text = text.replace(f"version: {version}\n", f'version: {version}\n"version": {version}\n', 1)
 elif case == "single-key-only":
-    text = text.replace("version: 0.2.2\n", "'version': 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"'version': {version}\n", 1)
 elif case == "double-key-only":
-    text = text.replace("version: 0.2.2\n", '"version": 0.2.2\n', 1)
+    text = text.replace(f"version: {version}\n", f'"version": {version}\n', 1)
 elif case == "quoted-value":
-    text = text.replace("version: 0.2.2\n", 'version: "0.2.2"\n', 1)
+    text = text.replace(f"version: {version}\n", f'version: "{version}"\n', 1)
 elif case == "tag-key":
-    text = text.replace("version: 0.2.2\n", "!!str version: 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"!!str version: {version}\n", 1)
 elif case == "anchor-key":
-    text = text.replace("version: 0.2.2\n", "&shadow version: 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"&shadow version: {version}\n", 1)
 elif case == "explicit-key":
-    text = text.replace("version: 0.2.2\n", "? version\n: 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"? version\n: {version}\n", 1)
 elif case == "merge-key":
-    text = text.replace("version: 0.2.2\n", "version: 0.2.2\n<<: *defaults\n", 1)
+    text = text.replace(f"version: {version}\n", f"version: {version}\n<<: *defaults\n", 1)
 elif case == "alias-key":
-    text = text.replace("version: 0.2.2\n", "version: 0.2.2\n*version_alias: 0.2.2\n", 1)
+    text = text.replace(f"version: {version}\n", f"version: {version}\n*version_alias: {version}\n", 1)
 elif case == "extra-key":
-    text = text.replace("version: 0.2.2\n", "version: 0.2.2\nlicense: MIT\n", 1)
+    text = text.replace(f"version: {version}\n", f"version: {version}\nlicense: MIT\n", 1)
 elif case == "opening-space":
     text = text.replace("---\n", " ---\n", 1)
 elif case == "closing-space":
