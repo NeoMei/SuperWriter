@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.1`；协作流程协议为 v2。
+SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.2`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -102,6 +102,16 @@ python3 -c "from pathlib import Path; print(next(s for s in Path('SKILL.md').rea
 ## 版本边界
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### v0.2.2 (2026-09-08)
+
+[SuperWriter 0.2.2 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.2)
+
+- 支持 macOS 与原生 Windows 安装；提供 Python、Bash 和 PowerShell 入口，保留事务回滚与外部依赖引用。
+- 协作状态使用平台文件锁，统一中文 UTF-8 与 LF 写入，校验 Windows 路径和目录联接。
+- SVG 渲染、图片解码及 PDF 验收采用跨平台依赖，并在缺少系统中文字体时提供回退。
+- macOS / Windows × Python 3.10 / 3.13 原生 CI 验证安装、协作及产物验收；详见 [兼容性验证记录](docs/acceptance/mac-windows-compatibility.md)。
+- 在验收器所用 Python 环境执行 `python -m pip install -r requirements.txt` 更新依赖。WPSComposer 由其独立项目维护，本次发布未改动其实现。
 
 ### v0.2.1 (2026-09-08)
 
