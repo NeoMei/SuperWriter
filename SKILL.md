@@ -1,7 +1,7 @@
 ---
 name: superwriter
 description: Use when the user asks to plan, outline, draft, or substantially revise a structured professional document such as 标书、投标文件、技术方案、项目建议书、研究报告、白皮书, tender responses, technical proposals, project proposals, research reports, or white papers. Also use to resume multi-chapter writing from notes or an existing draft. Not for terminology questions, isolated sentence edits, or formatting-only changes.
-version: 0.2.3
+version: 0.2.4
 ---
 
 # SuperWriter —— 专业长文协作写作助手
