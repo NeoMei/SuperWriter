@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.3`；协作流程协议为 v2。
+SuperWriter 是面向结构化专业长文的协作写作 skill，可用于标书、技术方案、项目建议书、研究报告和白皮书的讨论、组织与撰写；当前完整交付验收仍以标书场景为基础。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.4`；协作流程协议为 v2。
 
 ## 七阶段流程
 
@@ -104,6 +104,15 @@ python3 -c "from pathlib import Path; print(next(s for s in Path('SKILL.md').rea
 ## 版本边界
 
 v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v1/`，只服务未迁移旧项目。新版路由和当前文档只描述七阶段 v2。这些协作能力随 `v0.2.0` 发布；`v0.1.0` 标签保留原有流程。
+
+### v0.2.4 (2026-09-08)
+
+[SuperWriter 0.2.4 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.4)
+
+- 对外定位更新为“专业长文协作写作助手”，描述覆盖标书、技术方案、项目建议书、研究报告和白皮书的规划、起草、续写及实质修改。
+- 唤起依据写作意图与中英文文档类型，排除术语问答、单句润色和纯格式调整；同步安装路由与描述校验。
+- 明确非投标文档可复用的写作能力；当前完整交付验收仍基于标书契约，不宣称非投标交付已完成适配。
+- 内部 skill ID、协作协议和既有验收规则保持不变。
 
 ### v0.2.3 (2026-09-08)
 

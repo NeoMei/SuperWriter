@@ -1,12 +1,18 @@
 ---
 name: superwriter
-description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.
-version: 0.2.3
+description: Use when the user asks to plan, outline, draft, or substantially revise a structured professional document such as 标书、投标文件、技术方案、项目建议书、研究报告、白皮书, tender responses, technical proposals, project proposals, research reports, or white papers. Also use to resume multi-chapter writing from notes or an existing draft. Not for terminology questions, isolated sentence edits, or formatting-only changes.
+version: 0.2.4
 ---
 
-# SuperWriter —— 智能技术标写作助手
+# SuperWriter —— 专业长文协作写作助手
 
-SuperWriter 与用户共同完成技术标。新版流程固定为 `intake / approach / outline / chapters / illustrations / manuscript / delivery`。方案、大纲、每章、配图集（或明确的无图决定）及合稿都必须由用户明确确认当前版本；交付完成由机器验收记录判定。
+SuperWriter 协助用户讨论、组织和撰写有明确目标、材料依据与章节结构的专业长文；现有完整交付验收以标书场景为基础。新版流程固定为 `intake / approach / outline / chapters / illustrations / manuscript / delivery`。方案、大纲、每章、配图集（或明确的无图决定）及合稿都必须由用户明确确认当前版本；交付完成由机器验收记录判定。
+
+## 适用范围
+
+用户要写作或实质修改文档时使用，包含标书、投标文件、技术方案、项目建议书、研究报告和白皮书，也包含从已有材料、大纲或章节继续写作。仅解释术语、改一句话或调整现成文件格式时，不启动本流程。
+
+非投标文档可复用需求讨论、材料核验、大纲、分章写作与审阅能力。下文的招标文件、评分表、评分点和应答矩阵要求仅适用于有对应输入的投标场景；其他文档依据用户确认的写作目标、读者、内容要求和材料组织论证，不虚构评分表或招标要求。当前交付验收器仍要求评分表解析与应答矩阵，未完成非投标交付适配；不得把报告写作完成称为已通过该验收器的正式交付。
 
 ## 启动与恢复
 
