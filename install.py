@@ -58,7 +58,7 @@ ROUTE_END = "<!-- pipeline:superwriter:end -->"
 ROUTE_BLOCK = """<!-- pipeline:superwriter:start -->
 # SuperWriter 路由
 
-- 触发词：标书 / 投标 / 应标 / 招标文件 / 技术标 → 自动进入 SuperWriter（先读流水线状态.md 与协作状态.json）
+- 写作意图：策划、列大纲、起草、续写或实质修改标书、投标文件、技术方案、项目建议书、研究报告、白皮书（tender response / technical proposal / project proposal / research report / white paper）→ 进入 SuperWriter，先读流水线状态.md 与协作状态.json；仅问术语、单句润色或纯格式调整不触发。
 - 预授权技能（视为已获指令可直接调用）：markitdown、grilling、grill-me、grill-with-docs、to-spec、domain-modeling、obsidian-excalidraw、ai-image-to-ppt、WPSComposer、superwriter 自身
 - 阶段推进规则：新版使用 intake / approach / outline / chapters / illustrations / manuscript / delivery；方案、大纲、每章、配图集合或无图决定及合稿须明确确认。旧项目按 legacy-v1 执行；迁移须用户确认，不补造确认记录。导出使用 WPSComposer 并完成实际文件验收。
 - 保密：子代理上下文只带当前客户工作区，禁止跨客户引用

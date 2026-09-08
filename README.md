@@ -1,6 +1,6 @@
 # SuperWriter
 
-SuperWriter 是面向技术标的协作写作 skill。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.3`；协作流程协议为 v2。
+SuperWriter 是面向结构化专业长文的协作写作 skill，可用于标书、技术方案、项目建议书、研究报告和白皮书的讨论、组织与撰写；当前完整交付验收仍以标书场景为基础。公开名称保持 **SuperWriter**，内部 skill ID 为 `superwriter`，当前 skill 版本为 `0.2.3`；协作流程协议为 v2。
 
 ## 七阶段流程
 

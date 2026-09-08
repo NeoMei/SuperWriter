@@ -131,7 +131,7 @@ def verify(environment: dict[str, str] | None = None) -> None:
     if names != ["superwriter"]:
         fail("internal skill id must remain superwriter")
     title = next((line for line in skill_lines[boundary + 1 :] if line.startswith("# ")), "")
-    if title != "# SuperWriter —— 智能技术标写作助手":
+    if title != "# SuperWriter —— 专业长文协作写作助手":
         fail("skill display name must be SuperWriter")
     description = next((line for line in skill_lines[1:boundary] if line.startswith("description:")), "")
     if not description.startswith("description: Use when "):

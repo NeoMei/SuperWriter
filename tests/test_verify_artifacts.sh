@@ -700,8 +700,8 @@ path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 path.write_text(
     text.replace(
-        "# SuperWriter —— 智能技术标写作助手\n",
-        "# superwriter —— 智能技术标写作助手\n",
+        "# SuperWriter —— 专业长文协作写作助手\n",
+        "# superwriter —— 专业长文协作写作助手\n",
         1,
     ),
     encoding="utf-8",

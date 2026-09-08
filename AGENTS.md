@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-SuperWriter is a technical proposal writing skill. `SKILL.md` defines its workflow; `references/` holds templates and JSON contracts. `scripts/` contains dependency checks, SVG rendering, and delivery validation. `install.sh` installs skill mirrors into Agents, Claude, and Codex. `tests/` contains regression suites; `验收/` contains simulated customer workspaces, illustrations, and DOCX/PDF examples. Design documents live in `docs/`.
+SuperWriter is a collaborative professional long-form writing skill; its current complete delivery validation is based on tender-response contracts. `SKILL.md` defines its workflow; `references/` holds templates and JSON contracts. `scripts/` contains dependency checks, SVG rendering, and delivery validation. `install.sh` installs skill mirrors into Agents, Claude, and Codex. `tests/` contains regression suites; `验收/` contains simulated customer workspaces, illustrations, and DOCX/PDF examples. Design documents live in `docs/`.
 
 ## Build, Test, and Development Commands
 
@@ -33,6 +33,6 @@ History mixes imperative summaries with `feat:`, `fix:`, and `docs:` prefixes; p
 
 When `.codegraph/` exists, use `codegraph explore "symbol or file"` before searching or reading code. Otherwise skip CodeGraph.
 
-Bid-writing requests first inspect both `流水线状态.md` and `协作状态.json`. New projects use protocol v2 stages `intake / approach / outline / chapters / illustrations / manuscript / delivery`; approach, outline, every chapter, figure set or explicit no-figure decision, and manuscript require explicit current-version user approval. Delivery is machine verified, with layout approval only when a layout object exists. Actual legacy projects continue under `references/legacy-v1`; migration requires an explicit user decision and never invents approvals. Restrict tools and subagents to the current customer's workspace.
+Structured professional writing requests (tender responses, technical/project proposals, research reports, white papers) first inspect both `流水线状态.md` and `协作状态.json`. New projects use protocol v2 stages `intake / approach / outline / chapters / illustrations / manuscript / delivery`; approach, outline, every chapter, figure set or explicit no-figure decision, and manuscript require explicit current-version user approval. Delivery is machine verified, with layout approval only when a layout object exists. Actual legacy projects continue under `references/legacy-v1`; migration requires an explicit user decision and never invents approvals. Restrict tools and subagents to the current customer's workspace.
 
 Configure dependency sources with `WPSCOMPOSER_SKILL_SOURCE`, `SUPERWRITER_AGENTS_SKILLS_ROOT`, and `SUPERWRITER_OPENCODE_SKILLS_ROOT`; never commit private customer material.

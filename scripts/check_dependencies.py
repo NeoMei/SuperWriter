@@ -42,7 +42,7 @@ SUPERWRITER_VERSION = "0.2.3"
 SUPERWRITER_FRONTMATTER = (
     "---",
     "name: superwriter",
-    "description: Use when the user mentions 标书, 投标, 应标, 招标文件, 技术标, or asks to write a technical proposal or bid.",
+    "description: Use when the user asks to plan, outline, draft, or substantially revise a structured professional document such as 标书、投标文件、技术方案、项目建议书、研究报告、白皮书, tender responses, technical proposals, project proposals, research reports, or white papers. Also use to resume multi-chapter writing from notes or an existing draft. Not for terminology questions, isolated sentence edits, or formatting-only changes.",
     f"version: {SUPERWRITER_VERSION}",
     "---",
 )
