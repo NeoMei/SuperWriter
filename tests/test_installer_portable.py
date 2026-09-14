@@ -282,6 +282,9 @@ class PortableInstallerTest(unittest.TestCase):
             route_text = route.read_text(encoding="utf-8")
             self.assertIn("keep-this-line", route_text)
             self.assertNotIn("stale route", route_text)
+            self.assertIn("该确认同时满足通用设计审批要求，不得对同一阶段重复索取确认", route_text)
+            self.assertIn("方案、大纲、每章、配图集合或无图决定及合稿须明确确认", route_text)
+            self.assertIn("迁移须用户确认，不补造确认记录", route_text)
             self.assertEqual(route_text.count("<!-- pipeline:superwriter:start -->"), 1)
             self.assertEqual(route_text.count("<!-- pipeline:superwriter:end -->"), 1)
 
