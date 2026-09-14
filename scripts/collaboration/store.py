@@ -354,7 +354,8 @@ def _backfill_current_snapshots(root: Path, state: dict) -> None:
 
 
 def _verify_delivery_outputs(root: Path, event: dict) -> None:
-    for output_kind, output in event["payload"]["outputs"].items():
+    from .checks import delivery_files
+    for output_kind, output in delivery_files(event):
         path = _resolve_object_path(root, output["path"])
         try:
             mode = path.lstat().st_mode
@@ -377,6 +378,13 @@ def _invalidate_disk_drift(root: Path, state: dict) -> dict:
         for object_id, obj in updated["objects"].items()
         if not _object_matches_disk(root, obj)
     }
+    from .checks import check_files
+    for object_id, obj in updated["objects"].items():
+        if obj["kind"] == "outline" and "checks" in obj["metadata"] and obj["status"] in {"approved", "pending_review"}:
+            try:
+                check_files(root, updated)
+            except (CollaborationError, OSError, UnicodeError):
+                direct_drift.add(object_id)
     for object_id, obj in updated["objects"].items():
         if obj["kind"] != "delivery" or obj["status"] != "verified":
             continue
@@ -544,6 +552,17 @@ def commit_event(root: Path, event: dict, expected_revision: int) -> dict:
             snapshot_object_content(project, updated["objects"][event["object_id"]])
         elif event["kind"] == "record_delivery":
             _verify_delivery_outputs(project, event)
+        from .checks import check_files
+        if event["kind"] in {"submit_review", "approve", "record_delivery"}:
+            obj = updated["objects"][event["object_id"]]
+            if obj["kind"] == "outline":
+                check_files(project, updated)
+            elif obj["kind"] == "chapter":
+                check_files(project, updated, chapter_id=obj["id"], headings=True)
+            elif obj["kind"] in {"manuscript", "layout", "delivery"}:
+                check_files(project, updated, headings=True, manuscript=True)
+        if event["kind"] == "upsert_material":
+            updated = _invalidate_disk_drift(project, updated)
         _stamp_new_record(updated, event["id"])
         validate_state(updated)
         _atomic_write_json(_control_path(project, STATE_NAME), updated)

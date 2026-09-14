@@ -59,7 +59,8 @@ def _material_blockers(
         if material["critical"] and object_id in material["affected_objects"]:
             relevant.add(material_id)
     accepted = _accepted_material_resolutions(state)
-    blockers = []
+    from .checks import evidence_blockers
+    blockers = evidence_blockers(state, object_id)
     ordered_ids = required + sorted(relevant - set(required))
     for material_id in ordered_ids:
         material = state["materials"].get(material_id)
@@ -229,7 +230,8 @@ def next_action(state: dict) -> dict:
 def require_delivery_ready(state: dict) -> None:
     """Raise with every content blocker that prevents native delivery."""
     validate_state(state)
-    blockers = _delivery_blockers(state)
+    from .checks import evidence_blockers
+    blockers = _delivery_blockers(state) + evidence_blockers(state)
     if blockers:
         raise CollaborationError("delivery is not ready: " + "; ".join(blockers))
 
@@ -360,6 +362,10 @@ def _dependency_blocker(candidate: dict, upstream: dict | None) -> list[str]:
 def _mandatory_dependency_blockers(state: dict, candidate: dict) -> list[str]:
     kind = candidate["kind"]
     if kind in {"brief", "approach"}:
+        brief = _named_object(state, "brief", "brief")
+        if kind == "approach" and brief and brief["metadata"].get("document_type") == "professional":
+            if candidate["dependencies"].get(brief["id"]) != brief["version"] or brief["status"] == "stale":
+                return ["professional approach must bind current brief"]
         return []
     approach = _named_object(state, "approach", "approach")
     outline = _named_object(state, "outline", "outline")

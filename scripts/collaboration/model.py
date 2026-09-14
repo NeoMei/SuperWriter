@@ -119,6 +119,13 @@ def _validate_metadata(kind: str, metadata: object) -> None:
         "chapter": {"required_material_ids"},
         "figure_set": {"figure_ids", "mode"},
     }.get(kind, set())
+    if kind == "brief" and isinstance(metadata, dict) and "document_type" in metadata:
+        _exact_dict(metadata, {"document_type"}, "brief metadata")
+        if metadata["document_type"] not in {"tender", "professional"}:
+            _error("brief document_type must be tender or professional")
+        return
+    if kind == "outline" and isinstance(metadata, dict) and "checks" in metadata:
+        expected = expected | {"checks"}
     if kind == "approach" and metadata == {}:
         return
     metadata = _exact_dict(metadata, expected, f"{kind} metadata")
@@ -131,6 +138,9 @@ def _validate_metadata(kind: str, metadata: object) -> None:
             _digest(digest, "approach material resolution digest")
     elif kind == "outline":
         _string_list(metadata["chapter_order"], "outline chapter_order")
+        if "checks" in metadata:
+            from .checks import validate_checks
+            validate_checks(metadata["checks"], metadata["chapter_order"])
     elif kind == "chapter":
         _string_list(metadata["required_material_ids"], "chapter required_material_ids")
     elif kind == "figure_set":
@@ -333,6 +343,8 @@ def _event_payload(event: dict) -> None:
         "advance": {"stage"},
         "record_delivery": {"manuscript_sha256", "outputs"},
     }[kind]
+    if kind == "record_delivery" and isinstance(event["payload"], dict) and "attachments" in event["payload"]:
+        expected = expected | {"attachments"}
     payload = _exact_dict(event["payload"], expected, f"{kind} payload")
     if kind == "put_object":
         obj = _validate_object(payload["object"])
@@ -352,6 +364,8 @@ def _event_payload(event: dict) -> None:
     elif kind == "advance" and payload["stage"] not in STAGES:
         _error("advance stage is invalid")
     elif kind == "record_delivery":
+        from .checks import validate_files
+        validate_files(payload.get("attachments", []))
         _digest(payload["manuscript_sha256"], "record_delivery manuscript_sha256")
         outputs = _exact_dict(payload["outputs"], {"docx", "pdf"}, "record_delivery outputs")
         for output_kind in ("docx", "pdf"):
@@ -510,6 +524,17 @@ def validate_state(state: dict) -> None:
             for field in ("object_id", "version", "sha256", "channel", "evidence")
         ) or decision["scope"] != event["payload"]["scope"] or decision["text"] != event["payload"]["text"]:
             _error("decision record does not match its processed event")
+    for object_id, obj in state["objects"].items():
+        extension = {"brief": "document_type", "outline": "checks"}.get(obj["kind"])
+        if extension is None:
+            continue
+        registrations = [e["payload"]["object"] for e in state["processed_events"].values()
+                         if e["kind"] == "put_object" and e["object_id"] == object_id]
+        latest = max(registrations, key=lambda item: item["version"], default=None)
+        if extension in obj["metadata"] or (latest and extension in latest["metadata"]):
+            fields = ("id", "kind", "path", "version", "sha256", "dependencies", "metadata")
+            if latest is None or any(obj[field] != latest[field] for field in fields):
+                _error(f"{object_id} must match its registered contract")
     _check_dependency_graph(state["objects"])
     for object_id, obj in state["objects"].items():
         if obj["status"] == "approved" and not any(
@@ -775,6 +800,12 @@ def _retain_outline_chapters(state: dict, event: dict, outline: dict) -> None:
     )
     if outline_event is None:
         _error("outline retention requires the current outline revision event")
+    old_outline = next((e["payload"]["object"] for e in state["processed_events"].values()
+                        if e["kind"] == "put_object" and e["object_id"] == outline["id"]
+                        and e["version"] == outline["version"] - 1), None)
+    old_checks = old_outline["metadata"].get("checks") if old_outline else None
+    if old_checks != outline["metadata"].get("checks"):
+        _error("outline checks have changed; chapters require fresh review")
     new_order = outline["metadata"]["chapter_order"]
     restored = set()
     for entry in entries:
@@ -936,6 +967,8 @@ def apply_event(state: dict, event: dict) -> dict:
             )
             if manuscript is None or submitted["payload"]["manuscript_sha256"] != manuscript["sha256"]:
                 _error("record_delivery manuscript_sha256 must match the current approved manuscript")
+            from .checks import verify_attachment_binding
+            verify_attachment_binding(updated, submitted["payload"])
             obj["status"] = "verified"
 
     updated["processed_events"][submitted["id"]] = submitted
