@@ -1,7 +1,7 @@
 ---
 name: superwriter
 description: Use when the user asks to plan, outline, draft, or substantially revise a structured professional document such as 标书、投标文件、技术方案、项目建议书、研究报告、白皮书, tender responses, technical proposals, project proposals, research reports, or white papers. Also use to resume multi-chapter writing from notes or an existing draft. Not for terminology questions, isolated sentence edits, or formatting-only changes.
-version: 0.2.5
+version: 0.2.6
 ---
 
 # SuperWriter —— 专业长文协作写作助手
@@ -56,6 +56,12 @@ python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" apply --project
 先消化招标文件、评分表和已有材料，展示当前理解、矛盾、推荐方案及理由，再问一个会实际改变写法的问题。已有答案不重复问；只有真实取舍才给两到三个选项并标出推荐项。可借用 brainstorming 的发散与收敛方法讨论内容，但不自动转成软件实现计划、issue 或外部发布。
 
 每轮更新 `写作共识`，分开记录已决定、待决定、待核验。材料的约定取得路径、实际取得和核验是三个状态。只有 `acquired + verified` 的材料可作事实依据；关键缺口必须先取得并核验，或由当前已确认方案绑定完全一致的替代处理，才能起草受影响章节。指定联系人不等于授权发送消息。
+
+## 投标证明材料
+
+投标项目读取 `references/投标证明材料台账模板.md`。区分招标要求、公司证明材料、产品技术资料和历史参考文档；历史标书不直接作为事实依据。材料真实性与可用性、本项目适用性、具体条款支撑程度分别核验，不能仅凭 `acquired + verified` 推定证据充分。证书、报告、知识产权及财务资料按类别核对主体、产品版本、范围、有效期或适用年度及原件具体页码。
+
+intake 将台账纳入 brief；approach 确认选用及缺口处理；outline 纳入“条款 → 响应陈述 → 材料及摘要 → 原件页码/条目 → 最终附件位置”映射。章节审阅带对应证据快照，陈述不得超出证明范围。合稿检查引用与证据一致，delivery 按台账逐项核对实际附件的完整、清晰、编号和顺序，并在现有报告保存原件及输出摘要证据。材料变化后重新核验并更新受影响对象，不另设审批阶段。当前验收器不自动验证材料真实性或独立附件，不能将机器 PASS 等同于这些核验通过。
 
 ## 七阶段操作
 
