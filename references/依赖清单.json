@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "superwriter_version": "0.2.5",
+  "superwriter_version": "0.2.6",
   "dependencies": [
     {
       "id": "WPSComposer",
