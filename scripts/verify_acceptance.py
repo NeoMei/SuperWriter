@@ -24,6 +24,7 @@ from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 from render_svg import RenderSvgError, render_svg
 from svg_geometry_compare import SvgTextMaskError, masked_svg_pixels_match
 from collaboration.console import configure_utf8_stdio
+from collaboration.checks import check_files, markdown_headings, validate_files, verify_attachment_binding
 from collaboration.model import CollaborationError
 from collaboration.store import load_state
 from collaboration.workflow import figure_is_approved, require_delivery_ready
@@ -1188,7 +1189,7 @@ def _one_state_object(state: dict, kind: str, label: str) -> dict:
     return matches[0]
 
 
-def validate_pipeline_v2(root: Path, pipeline: object) -> dict:
+def validate_pipeline_v2(root: Path, pipeline: object, document_type: str = "tender") -> dict:
     """Validate the exact current protocol-v2 review chain without recording delivery."""
     require_keys(
         pipeline,
@@ -1233,8 +1234,21 @@ def validate_pipeline_v2(root: Path, pipeline: object) -> dict:
     outline = _one_state_object(state, "outline", "outline")
     if outline["status"] != "approved" or outline["path"] != "大纲.md":
         fail("collaboration outline must be the current approved project-root 大纲.md")
+    briefs = [obj for obj in state["objects"].values() if obj["kind"] == "brief"]
+    if len(briefs) > 1:
+        fail("document_type requires an unambiguous brief")
+    source_type = briefs[0]["metadata"].get("document_type", "tender") if briefs else "tender"
+    if document_type not in {"tender", "professional"} or document_type != source_type:
+        fail("acceptance manifest document_type differs from collaboration brief")
     score_path = root / "评分表解析.md"
     matrix_path = root / "应答矩阵.md"
+    if document_type == "professional":
+        brief = briefs[0]
+        approach = _one_state_object(state, "approach", "approach")
+        if approach["dependencies"].get(brief["id"]) != brief["version"]:
+            fail("professional approach must bind current brief requirements")
+        score_path = project_path(root, brief["path"], "professional requirements")
+        matrix_path = root / "大纲.md"
     outline_path = root / "大纲.md"
     for path in (score_path, matrix_path, outline_path):
         require_file(
@@ -1307,9 +1321,18 @@ def validate_v2_bindings(
         chapters: list,
         figures: list,
         outputs: dict,
+        attachments: list | None = None,
 ) -> None:
     """Bind v2 manifest artifacts to the exact approved collaboration objects."""
     state = context["state"]
+    attachments = [] if attachments is None else attachments
+    try:
+        validate_files(attachments)
+        verify_attachment_binding(state, {"attachments": attachments,
+            "outputs": {k: {"path": outputs.get(k, "")} for k in ("docx", "pdf")}})
+        check_files(root, state, headings=True, manuscript=True)
+    except (CollaborationError, OSError, UnicodeError) as error:
+        fail(f"structured delivery checks failed: {error}")
     outline = _one_state_object(state, "outline", "outline")
     chapter_ids = outline["metadata"]["chapter_order"]
     if len(chapters) != len(chapter_ids):
@@ -1361,6 +1384,8 @@ def validate_v2_bindings(
     record = context["delivery_record"]
     if record is None:
         return
+    if record["payload"].get("attachments", []) != attachments:
+        fail("record_delivery attachments differ from acceptance manifest")
     if record["payload"]["manuscript_sha256"] != manuscript["sha256"]:
         fail("record_delivery manuscript digest differs from approved manuscript")
     for kind in ("docx", "pdf"):
@@ -1373,6 +1398,60 @@ def validate_v2_bindings(
             fail(f"record_delivery {kind} digest differs from current output")
 
 
+def validate_professional_requirements(root, context, points, point_chapters, chapters):
+    """Read content anchors from the brief and their approved outline matrix.
+
+    Tables use ID | 内容要求 | 章节. A dash ID explicitly means no required ID;
+    content anchors are still mandatory and must occur in the assigned chapter.
+    """
+    def rows(path):
+        require_file(path, "professional requirements document is missing")
+        result = []
+        in_table = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.lstrip().startswith("|"):
+                in_table = False
+                continue
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if cells == ["ID", "内容要求", "章节"]:
+                in_table = True
+                continue
+            if not in_table or all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                continue
+            if len(cells) != 3 or len(normalized(cells[1])) < 4 or not cells[2]:
+                fail("professional requirement row is invalid")
+            result.append(cells)
+        if not result:
+            fail("professional requirements must declare substantive content anchors")
+        return result
+
+    requirements = rows(context["score_path"])
+    if rows(context["matrix_path"]) != requirements:
+        fail("professional requirements differ from approved outline matrix")
+    ids = [row[0] for row in requirements if row[0] != "-"]
+    if ids != points or len(ids) != len(set(ids)):
+        fail("professional requirement IDs differ from manifest")
+    by_number = {}
+    for chapter in chapters:
+        if not isinstance(chapter, dict) or not isinstance(chapter.get("number"), str):
+            fail("professional chapter entry is invalid")
+        by_number[chapter["number"]] = chapter
+    covered = set()
+    for point, anchor, number in requirements:
+        if number not in by_number:
+            fail("professional requirement chapter is missing")
+        chapter = by_number[number]
+        path = project_path(root, chapter.get("path"), "professional chapter")
+        require_file(path, "professional requirement chapter is missing")
+        if normalized(anchor) not in normalized(path.read_text(encoding="utf-8")):
+            fail("professional requirement content anchor is missing from chapter")
+        if point != "-" and (point_chapters.get(point) != number or point not in chapter.get("points", [])):
+            fail("professional requirement primary chapter differs from manifest")
+        covered.add(number)
+    if covered != set(by_number):
+        fail("professional requirements must cover every declared chapter")
+
+
 def main() -> None:
     configure_utf8_stdio()
     if len(sys.argv) != 2:
@@ -1382,7 +1461,15 @@ def main() -> None:
     if not manifest_path.is_file():
         fail("acceptance manifest is missing: 验收清单.json")
     manifest = load_json(manifest_path, "acceptance manifest")
-    require_keys(manifest, {"version", "points", "required_terms", "pipeline", "chapters", "point_chapters", "figures", "outputs", "pdf"}, "acceptance manifest")
+    manifest_keys = {"version", "points", "required_terms", "pipeline", "chapters", "point_chapters", "figures", "outputs", "pdf"}
+    if isinstance(manifest, dict) and manifest.get("version") == 2 and "document_type" in manifest:
+        manifest_keys.add("document_type")
+    if isinstance(manifest, dict) and manifest.get("version") == 2 and "attachments" in manifest:
+        manifest_keys.add("attachments")
+    require_keys(manifest, manifest_keys, "acceptance manifest")
+    document_type = manifest.get("document_type", "tender")
+    if not isinstance(document_type, str) or document_type not in {"tender", "professional"}:
+        fail("acceptance manifest document_type is invalid")
     if not isinstance(manifest, dict) or not is_json_integer(manifest.get("version")):
         fail("acceptance manifest integer fields must use JSON integers")
     if manifest.get("version") not in (1, 2):
@@ -1396,7 +1483,9 @@ def main() -> None:
     figures = manifest.get("figures")
     outputs = manifest.get("outputs")
     pdf_contract = manifest.get("pdf")
-    if not isinstance(points, list) or not points or len(points) != len(set(points)) or not all(re.fullmatch(r"[A-Za-z]+\d+", str(point)) for point in points):
+    point_pattern = r"[A-Za-z]+\d+" if document_type == "tender" else r"[^\s|]+"
+    if (not isinstance(points, list) or not all(isinstance(point, str) and re.fullmatch(point_pattern, point) for point in points)
+            or len(points) != len(set(points)) or (document_type == "tender" and not points)):
         fail("acceptance manifest point IDs are invalid")
     if not isinstance(terms, list) or not all(isinstance(term, str) and term for term in terms):
         fail("acceptance manifest required terms are invalid")
@@ -1417,31 +1506,35 @@ def main() -> None:
     context = (
         validate_pipeline_v1(root, pipeline)
         if manifest["version"] == 1
-        else validate_pipeline_v2(root, pipeline)
+        else validate_pipeline_v2(root, pipeline, document_type)
     )
     evidence = context["evidence"]
     score_path = context["score_path"]
     matrix_path = context["matrix_path"]
     outline_path = context["outline_path"]
 
-    score_rows = list(markdown_rows(score_path.read_text(encoding="utf-8")))
-    matrix_rows = list(markdown_rows(matrix_path.read_text(encoding="utf-8")))
-    score_ids = [row[0] for row in score_rows]
-    matrix_ids = [row[0] for row in matrix_rows]
-    if score_ids != points or matrix_ids != points or len(score_ids) != len(matrix_ids):
-        fail("score-table count, matrix count, and manifest point IDs differ")
-    if len(matrix_ids) != len(set(matrix_ids)):
-        fail("matrix point mappings are not unique")
-    for row in matrix_rows:
-        if len(row) < 7 or not row[4] or row[4] in {"—", "-"} or row[6] != "已核查":
-            fail(f"matrix point is not uniquely assigned and checked: {row[0]}")
-        if str(point_chapters.get(row[0])) != row[4]:
-            fail(f"matrix primary chapter differs from manifest: {row[0]}")
-    matrix_text = matrix_path.read_text(encoding="utf-8")
-    if not re.search(rf"已映射[：:]\s*{len(points)}\s*/\s*{len(points)}", matrix_text) or "100%" not in matrix_text and "全覆盖" not in matrix_text:
-        fail("matrix does not record 100% checked coverage")
+    if document_type == "professional":
+        validate_professional_requirements(root, context, points, point_chapters, chapters)
+    else:
+        score_rows = list(markdown_rows(score_path.read_text(encoding="utf-8")))
+        matrix_rows = list(markdown_rows(matrix_path.read_text(encoding="utf-8")))
+        score_ids = [row[0] for row in score_rows]
+        matrix_ids = [row[0] for row in matrix_rows]
+        if score_ids != points or matrix_ids != points or len(score_ids) != len(matrix_ids):
+            fail("score-table count, matrix count, and manifest point IDs differ")
+        if len(matrix_ids) != len(set(matrix_ids)):
+            fail("matrix point mappings are not unique")
+        for row in matrix_rows:
+            if len(row) < 7 or not row[4] or row[4] in {"—", "-"} or row[6] != "已核查":
+                fail(f"matrix point is not uniquely assigned and checked: {row[0]}")
+            if str(point_chapters.get(row[0])) != row[4]:
+                fail(f"matrix primary chapter differs from manifest: {row[0]}")
+        matrix_text = matrix_path.read_text(encoding="utf-8")
+        if not re.search(rf"已映射[：:]\s*{len(points)}\s*/\s*{len(points)}", matrix_text) or "100%" not in matrix_text and "全覆盖" not in matrix_text:
+            fail("matrix does not record 100% checked coverage")
 
     outline = outline_path.read_text(encoding="utf-8")
+    structured_headings = manifest["version"] == 2 and "checks" in _one_state_object(context["state"], "outline", "outline")["metadata"]
     declared_chapters = {}
     declared_chapter_paths = set()
     for chapter in chapters:
@@ -1459,7 +1552,12 @@ def main() -> None:
         declared_chapters[number] = path
         declared_chapter_paths.add(relative_path)
         chapter_text = path.read_text(encoding="utf-8")
-        if not re.search(rf"(?m)^#+\s*{re.escape(number)}\.", chapter_text):
+        if not number.strip():
+            fail("chapter key must be nonempty")
+        heading_matches = (re.search(rf"(?m)^#+\s*{re.escape(number)}\.", chapter_text)
+                           if document_type == "tender" and not structured_headings
+                           else markdown_headings(chapter_text))
+        if not heading_matches:
             fail(f"chapter file heading does not match chapter number: {chapter.get('path')}")
         for point in chapter["points"]:
             if point not in points or point not in chapter_text:
@@ -1467,11 +1565,11 @@ def main() -> None:
     for point, number in point_chapters.items():
         if point not in points or str(number) not in declared_chapters:
             fail(f"outline/chapter mapping is invalid: {point}")
-        if point not in outline or not re.search(rf"(?m)^\s*{re.escape(str(number))}\.\s+.*{re.escape(point)}", outline):
+        if document_type == "tender" and not structured_headings and (point not in outline or not re.search(rf"(?m)^\s*{re.escape(str(number))}\.\s+.*{re.escape(point)}", outline)):
             fail(f"outline is missing primary chapter mapping: {point} -> {number}")
 
     if manifest["version"] == 2:
-        validate_v2_bindings(root, context, chapters, figures, outputs)
+        validate_v2_bindings(root, context, chapters, figures, outputs, manifest.get("attachments", []))
 
     merged_path = project_path(root, outputs.get("merged"), "merged draft")
     docx_path = project_path(root, outputs.get("docx"), "DOCX output")
@@ -1510,6 +1608,11 @@ def main() -> None:
         fail("acceptance manifest figure paths must be unique")
     validated_figures = [validate_figure(root, figure) for figure in figures]
     merged = merged_path.read_text(encoding="utf-8")
+    if document_type == "professional":
+        chapter_blocks = []
+        for path in declared_chapters.values():
+            chapter_blocks.extend(markdown_block_sequence(path.read_text(encoding="utf-8")))
+        require_ordered_source_coverage("professional merged draft", merged, chapter_blocks)
     for _, render, caption, *_ in validated_figures:
         if render.relative_to(root).as_posix() not in merged or caption not in merged:
             fail(f"merged draft does not reference declared figure/caption: {caption}")

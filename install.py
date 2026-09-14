@@ -36,6 +36,8 @@ MANAGED_SKILLS = (
 )
 RUNTIME_FILES = (
     "scripts/render_svg.py",
+    "scripts/runtime.py",
+    "scripts/collaboration/checks.py",
     "scripts/svg_geometry_compare.py",
     "scripts/render_svg_macos.js",
     "scripts/collaboration/__init__.py",

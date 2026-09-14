@@ -14,7 +14,7 @@ SuperWriter 协助用户讨论、组织和撰写有明确目标、材料依据�
 
 用户要写作或实质修改文档时使用，包含标书、投标文件、技术方案、项目建议书、研究报告和白皮书，也包含从已有材料、大纲或章节继续写作。仅解释术语、改一句话或调整现成文件格式时，不启动本流程。
 
-非投标文档可复用需求讨论、材料核验、大纲、分章写作与审阅能力。下文的招标文件、评分表、评分点和应答矩阵要求仅适用于有对应输入的投标场景；其他文档依据用户确认的写作目标、读者、内容要求和材料组织论证，不虚构评分表或招标要求。当前交付验收器仍要求评分表解析与应答矩阵，未完成非投标交付适配；不得把报告写作完成称为已通过该验收器的正式交付。
+非投标文档可复用需求讨论、材料核验、大纲、分章写作与审阅能力。下文的招标文件、评分表、评分点和应答矩阵要求仅适用于有对应输入的投标场景；其他文档依据用户确认的写作目标、读者、内容要求和材料组织论证，不虚构评分表或招标要求。非投标交付按 `references/专业文档验收.md` 在 brief.metadata.document_type 与 v2 验收清单中明确登记 professional，方案依赖当前 brief；用已登记的需求说明及大纲需求矩阵核对正文，不虚构评分表。省略文档类型仍按 tender 验收，不能靠删除评分表切换。
 
 ## 标书结构优先规则
 
@@ -45,6 +45,10 @@ python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" apply --project
 
 每次写入或审阅都绑定精确对象 ID、version、UTF-8 内容 SHA-256 与状态 revision。用户点击偏好、默认选项、沉默、机器检查和代理自己的判断都不是批准；只有带真实用户证据的 `approve` 事件可批准写作对象。HTML 审阅页是可选界面，与 CLI 使用同一状态库；不可用时退回 CLI，不改变语义。
 
+## 持久运行入口
+
+完整交付需要 Python 3.10+ 和 requirements.txt 中的依赖。按 `references/运行环境.md` 显式执行 `python3 scripts/runtime.py setup --python <本机Python3.10+路径>` 建立持久环境；以后使用 `python3 scripts/runtime.py run collaboration_state.py -- <参数>` 或 `run verify_acceptance.py -- <项目目录>`，无需激活环境。run/status 只核验，不隐式安装；系统 Python 3.9 可用于启动入口，但不能运行完整验收。以下直调命令仅在已经选定同一合格 Python 环境时使用。
+
 ## 本机命令与路径
 
 上面的 Bash 示例用于 macOS。Windows 使用原生 Python 与 PowerShell：先设置 `$env:SUPERWRITER_SKILL_ROOT = "$HOME\.codex\skills\superwriter"`，再运行 `python "$env:SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" next --project "C:\客户项目\技术方案"`。其他子命令同样替换解释器与环境变量语法；不要把 Bash 的 `export`、续行反斜杠直接交给 PowerShell。
@@ -61,7 +65,11 @@ python3 "$SUPERWRITER_SKILL_ROOT/scripts/collaboration_state.py" apply --project
 
 投标项目读取 `references/投标证明材料台账模板.md`。区分招标要求、公司证明材料、产品技术资料和历史参考文档；历史标书不直接作为事实依据。材料真实性与可用性、本项目适用性、具体条款支撑程度分别核验，不能仅凭 `acquired + verified` 推定证据充分。证书、报告、知识产权及财务资料按类别核对主体、产品版本、范围、有效期或适用年度及原件具体页码。
 
-intake 将台账纳入 brief；approach 确认选用及缺口处理；outline 纳入“条款 → 响应陈述 → 材料及摘要 → 原件页码/条目 → 最终附件位置”映射。章节审阅带对应证据快照，陈述不得超出证明范围。合稿检查引用与证据一致，delivery 按台账逐项核对实际附件的完整、清晰、编号和顺序，并在现有报告保存原件及输出摘要证据。材料变化后重新核验并更新受影响对象，不另设审批阶段。当前验收器不自动验证材料真实性或独立附件，不能将机器 PASS 等同于这些核验通过。
+intake 将台账纳入 brief；approach 确认选用及缺口处理；outline 纳入“条款 → 响应陈述 → 材料及摘要 → 原件页码/条目 → 最终附件位置”映射。章节审阅带对应证据快照，陈述不得超出证明范围。合稿检查引用与证据一致，delivery 按台账逐项核对实际附件的完整、清晰、编号和顺序，并在现有报告保存原件及输出摘要证据。材料变化后重新核验并更新受影响对象，不另设审批阶段。启用 checks 后可自动绑定独立附件文件摘要并检查恢复时的漂移；当前验收器不自动验证材料真实性、页面清晰度或证据语义，不能将机器 PASS 等同于这些核验通过。
+
+## 可自动核对的声明
+
+新增项目按 `references/结构化核验.md` 将 checks 登记到 outline.metadata，并在大纲正文展示一致的 superwriter-checks JSON 块。程序校验标题顺序、材料状态/摘要、声明主体/版本/年度匹配、有效期对指定时间基准的覆盖以及附件字节。旧大纲不含 checks 继续兼容，但不声称获得这些检查；给旧项目启用须正常更新大纲并重新审阅。真实性和招标语义仍由实际来源核验。
 
 ## 七阶段操作
 

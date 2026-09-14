@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "document_type": "tender",
+  "attachments": [],
   "points": ["P01"],
   "required_terms": ["项目专用必含词"],
   "pipeline": {

@@ -1,0 +1,25 @@
+{
+  "heading_mode": "exact",
+  "headings": [
+    {"chapter_id": "chapter-01", "level": 1, "title": "第一章 技术响应"}
+  ],
+  "attachments": [
+    {"id": "attachment-01", "path": "附件/证明材料.pdf", "sha256": "填写实际文件SHA-256"}
+  ],
+  "evidence": [
+    {
+      "material_id": "material-01",
+      "path": "原件/测试报告.pdf",
+      "sha256": "填写原件SHA-256",
+      "chapter_id": "chapter-01",
+      "source_locator": "第2页 测试结论第3项",
+      "material_sha256": "填写材料记录规范JSON的SHA-256",
+      "scope": {"subject": "投标主体名称", "product_version": "1.0", "period": "不适用"},
+      "required_scope": {"subject": "投标主体名称", "product_version": "1.0", "period": "不适用"},
+      "as_of": "2026-09-14",
+      "valid_until": null,
+      "applicability": "unverified",
+      "support": "unverified"
+    }
+  ]
+}

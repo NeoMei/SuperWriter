@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "document_type": "professional",
+  "points": ["purpose", "delivery"],
+  "required_terms": [],
+  "pipeline": {
+    "workflow_version": 2,
+    "state": "协作状态.json",
+    "state_revision": 0,
+    "manuscript_object_id": "manuscript"
+  },
+  "chapters": [
+    {"number": "findings", "path": "章节/研究发现.md", "points": ["purpose"]},
+    {"number": "methods", "path": "章节/实施方法.md", "points": ["delivery"]}
+  ],
+  "point_chapters": {"purpose": "findings", "delivery": "methods"},
+  "figures": [],
+  "outputs": {
+    "merged": "合并稿.md",
+    "merged_sha256": "生成时填写",
+    "docx": "导出/研究报告.docx",
+    "pdf": "导出/研究报告.pdf"
+  },
+  "pdf": {"min_pages": 1, "max_pages": 200, "page_size": "A4"}
+}

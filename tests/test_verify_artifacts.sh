@@ -39,6 +39,7 @@ fresh_fixture() {
   cp "$REPO_ROOT/scripts/render_svg_macos.js" "$fixture/scripts/render_svg_macos.js"
   cp "$REPO_ROOT/install.sh" "$fixture/install.sh"
   cp "$REPO_ROOT/install.py" "$fixture/install.py"
+  cp "$REPO_ROOT/scripts/runtime.py" "$fixture/scripts/runtime.py"
   cp "$REPO_ROOT/requirements.txt" "$fixture/requirements.txt"
   cp "$REPO_ROOT/README.md" "$fixture/README.md"
   cp "$REPO_ROOT/SKILL.md" "$fixture/SKILL.md"
