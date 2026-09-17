@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import stat
@@ -12,13 +13,15 @@ from .model import CollaborationError, _digest, _exact_dict, _integer, _nonempty
 
 
 def _positive_number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value <= 0):
         raise CollaborationError(f'{label} must be a number > 0')
     return value
 
 
 def _nonnegative_number(value: object, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value < 0):
         raise CollaborationError(f'{label} must be a number >= 0')
     return value
 
