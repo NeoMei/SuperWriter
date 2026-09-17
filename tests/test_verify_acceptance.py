@@ -345,6 +345,8 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
         sz="24",
         line="360",
         line_rule="auto",
+        pg_num_fmt="decimal",
+        pg_num_start="1",
     ):
         import zipfile
         doc_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -354,6 +356,7 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
     <w:sectPr>
       <w:pgSz w:w="{w_w}" w:h="{w_h}"/>
       <w:pgMar w:top="{top}" w:bottom="{bottom}" w:left="{left}" w:right="{right}"/>
+      <w:pgNumType w:fmt="{pg_num_fmt}" w:start="{pg_num_start}"/>
     </w:sectPr>
   </w:body>
 </w:document>"""
@@ -468,6 +471,61 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
             with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
                 verify_tender_layout(docx_path, bad_size, native_page_contract=True)
             self.assertIn("tender layout body size differs", error.getvalue())
+
+    def test_unverified_and_conflict_status_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            for status in ("unverified", "conflict"):
+                layout = self.valid_layout()
+                layout["status"] = status
+                error = io.StringIO()
+                with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                    verify_tender_layout(docx_path, layout, native_page_contract=True)
+                self.assertIn(f"tender layout status is not verified: '{status}'", error.getvalue())
+
+    def test_chinese_font_matches_eastasia_strictly_and_not_masked_by_ascii(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # EastAsia is 黑体, ascii is 宋体. Chinese font requirement 宋体 must check EastAsia and fail
+            self.make_docx(docx_path, font_east_asia="黑体", font_ascii="宋体")
+            layout = self.valid_layout()
+            layout["typography"]["body_font"] = "宋体"
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout, native_page_contract=True)
+            self.assertIn("tender layout body font differs: expected '宋体', got '黑体'", error.getvalue())
+
+    def test_page_number_actual_format_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path, pg_num_fmt="decimal")
+            layout = self.valid_layout()
+            layout["page_numbers"]["format"] = "lowerRoman"
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout, native_page_contract=True)
+            self.assertIn(
+                "tender layout page number format differs: expected 'lowerRoman', got 'decimal'",
+                error.getvalue(),
+            )
+
+    def test_point_based_line_spacing_support_and_rejection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # 24pt = 480 twips with exact rule
+            self.make_docx(docx_path, line="480", line_rule="exact")
+            layout = self.valid_layout()
+            layout["typography"]["line_spacing"] = "24pt"
+            verify_tender_layout(docx_path, layout, native_page_contract=True)
+
+            # Same 24pt requested against auto lineRule fails
+            docx_auto = Path(temporary) / "doc_auto.docx"
+            self.make_docx(docx_auto, line="480", line_rule="auto")
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_auto, layout, native_page_contract=True)
+            self.assertIn("tender layout line spacing rule differs", error.getvalue())
 
     def test_without_layout_verification_is_bypassed_compatibly(self):
         with tempfile.TemporaryDirectory() as temporary:

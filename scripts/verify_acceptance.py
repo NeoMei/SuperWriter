@@ -556,17 +556,24 @@ def _layout_mm(twips: str, field: str) -> float:
     return value / 20 / 72 * 25.4
 
 
-def _layout_line_spacing(spec: object) -> float:
+def _parse_line_spacing_spec(spec: object) -> tuple[str, float]:
+    """Parse line spacing into ('multiple', multiplier) or ('points', pt)."""
     if not isinstance(spec, str) or not spec.strip():
         fail("tender layout line spacing is missing")
-    text = spec.strip()
-    try:
-        return float(text)
-    except ValueError:
-        match = re.search(r"\d+(?:\.\d+)?", text)
-        if match is None:
-            fail(f"tender layout line spacing is not a multiple: {spec!r}")
-        return float(match.group(0))
+    text = spec.strip().lower()
+    pt_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:pt|磅)", text)
+    if pt_match:
+        val = float(pt_match.group(1))
+        if val <= 0 or not math.isfinite(val):
+            fail(f"tender layout line spacing points must be positive: {spec!r}")
+        return ("points", val)
+    mult_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:x|倍)?", text)
+    if mult_match:
+        val = float(mult_match.group(1))
+        if val <= 0 or not math.isfinite(val):
+            fail(f"tender layout line spacing multiple must be positive: {spec!r}")
+        return ("multiple", val)
+    fail(f"tender layout line spacing cannot be parsed: {spec!r}")
 
 
 def verify_tender_layout(
@@ -575,6 +582,8 @@ def verify_tender_layout(
     """Check the delivered DOCX against the approved outline layout spec."""
     if not isinstance(layout, dict):
         fail("tender layout spec is invalid")
+    if layout.get("status") != "verified":
+        fail(f"tender layout status is not verified: {layout.get('status')!r}")
     w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     try:
         with zipfile.ZipFile(docx_path) as archive:
@@ -629,10 +638,29 @@ def verify_tender_layout(
     numbers = layout.get("page_numbers", {})
     if not isinstance(numbers, dict):
         fail("tender layout page number format is not supported")
-    if numbers.get("format") not in {"decimal", "lowerRoman"} or numbers.get("start") != 1:
+    expected_format = numbers.get("format")
+    expected_start = numbers.get("start")
+    if expected_format not in {"decimal", "lowerRoman"} or expected_start != 1:
         fail("tender layout page number format is not supported")
     if not native_page_contract:
         fail("tender layout page numbers differ from the native page-field contract")
+    body_section = sections[-1]
+    num_type = body_section.find(w + "pgNumType")
+    actual_fmt = num_type.get(w + "fmt", "decimal") if num_type is not None else "decimal"
+    try:
+        actual_start = int(num_type.get(w + "start", "1")) if num_type is not None else 1
+    except ValueError:
+        actual_start = -1
+    if actual_fmt != expected_format:
+        fail(
+            f"tender layout page number format differs: expected {expected_format!r}, "
+            f"got {actual_fmt!r}"
+        )
+    if actual_start != expected_start:
+        fail(
+            f"tender layout page number start differs: expected {expected_start}, "
+            f"got {actual_start}"
+        )
 
     typography = layout.get("typography", {})
     if not isinstance(typography, dict):
@@ -650,14 +678,14 @@ def verify_tender_layout(
     if fonts is None:
         fail("tender layout body font is missing from the default paragraph style")
     expected_font = typography.get("body_font")
-    actual_fonts = [fonts.get(w + "eastAsia"), fonts.get(w + "ascii")]
-    if not isinstance(expected_font, str) or not any(
-        isinstance(actual, str) and actual.casefold() == expected_font.casefold()
-        for actual in actual_fonts
-    ):
-        actual = next((value for value in actual_fonts if value), "")
+    if not isinstance(expected_font, str) or not expected_font.strip():
+        fail("tender layout body font is missing")
+    is_cjk = any(ord(char) > 127 for char in expected_font)
+    actual_font = fonts.get(w + "eastAsia") if is_cjk else (fonts.get(w + "ascii") or fonts.get(w + "hAnsi"))
+    display_actual = actual_font if actual_font else "(no font declared)"
+    if not actual_font or actual_font.casefold() != expected_font.casefold():
         fail(
-            f"tender layout body font differs: expected {expected_font!r}, got {actual!r}"
+            f"tender layout body font differs: expected {expected_font!r}, got {display_actual!r}"
         )
     size = run_properties.find(w + "sz")
     if size is None:
@@ -673,26 +701,44 @@ def verify_tender_layout(
             f"tender layout body size differs: expected {expected_size}pt, "
             f"got {actual_size:g}pt"
         )
-    expected_spacing = _layout_line_spacing(typography.get("line_spacing"))
+    expected_type, expected_val = _parse_line_spacing_spec(typography.get("line_spacing"))
     properties = default_styles[0].find(w + "pPr")
     spacing = properties.find(w + "spacing") if properties is not None else None
-    if spacing is not None and spacing.get(w + "lineRule") not in (None, "auto"):
-        rule = spacing.get(w + "lineRule")
-        fail(
-            "tender layout line spacing uses a non-auto lineRule "
-            f"({rule}); its w:line value is a pound measure the current "
-            "machine check does not compare"
-        )
-    line = spacing.get(w + "line") if spacing is not None else None
-    try:
-        actual_spacing = float(line) / 240 if line is not None else 1.0
-    except (TypeError, ValueError):
-        fail(f"tender layout line spacing is not numeric: {line!r}")
-    if not math.isclose(actual_spacing, expected_spacing, rel_tol=0.0, abs_tol=0.01):
-        fail(
-            f"tender layout line spacing differs: expected {expected_spacing:g}x, "
-            f"got {actual_spacing:g}x"
-        )
+    line_rule = spacing.get(w + "lineRule") if spacing is not None else None
+    line_val_str = spacing.get(w + "line") if spacing is not None else None
+
+    if expected_type == "multiple":
+        if line_rule not in (None, "auto"):
+            fail(
+                f"tender layout line spacing rule differs: expected auto/multiple, "
+                f"got lineRule={line_rule!r}"
+            )
+        try:
+            actual_spacing = float(line_val_str) / 240 if line_val_str is not None else 1.0
+        except (TypeError, ValueError):
+            fail(f"tender layout line spacing is not numeric: {line_val_str!r}")
+        if not math.isclose(actual_spacing, expected_val, rel_tol=0.0, abs_tol=0.01):
+            fail(
+                f"tender layout line spacing differs: expected {expected_val:g}x, "
+                f"got {actual_spacing:g}x"
+            )
+    else:
+        if line_rule not in ("exact", "atLeast"):
+            fail(
+                f"tender layout line spacing rule differs: expected exact/atLeast for point spacing, "
+                f"got lineRule={line_rule!r}"
+            )
+        if line_val_str is None:
+            fail("tender layout line spacing w:line is missing for point spacing")
+        try:
+            actual_pt = float(line_val_str) / 20
+        except (TypeError, ValueError):
+            fail(f"tender layout line spacing is not numeric: {line_val_str!r}")
+        if not math.isclose(actual_pt, expected_val, rel_tol=0.0, abs_tol=0.1):
+            fail(
+                f"tender layout line spacing differs: expected {expected_val:g}pt, "
+                f"got {actual_pt:g}pt"
+            )
 def png_header(payload: bytes, label: str):
     try:
         if len(payload) < 33 or payload[:8] != b"\x89PNG\r\n\x1a\n":
