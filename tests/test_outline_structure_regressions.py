@@ -121,5 +121,84 @@ class OutlineStructureRegressionTest(unittest.TestCase):
                         require_delivery_ready(missing)
 
 
+class OutlineLayoutSchemaTest(unittest.TestCase):
+    def base_checks(self):
+        return {
+            "heading_mode": "exact",
+            "headings": [{"chapter_id": "chapter-01", "level": 1, "title": "第一章 技术响应"}],
+            "attachments": [],
+            "evidence": [],
+            "layout": {
+                "status": "verified",
+                "source_locator": "投标人须知 3.2-3.4",
+                "page": {
+                    "width_mm": 210,
+                    "height_mm": 297,
+                    "orientation": "portrait",
+                    "margins_mm": {"top": 25, "bottom": 25, "left": 30, "right": 25},
+                },
+                "page_numbers": {"format": "decimal", "start": 1},
+                "typography": {
+                    "body_font": "宋体",
+                    "body_size_pt": 12,
+                    "line_spacing": "1.5",
+                },
+            },
+        }
+
+    def test_valid_full_layout_spec_passes(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        validate_checks(checks, ["chapter-01"])
+
+    def test_checks_without_layout_is_compatible(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        del checks["layout"]
+        validate_checks(checks, ["chapter-01"])
+
+    def test_missing_status_is_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        del checks["layout"]["status"]
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+    def test_invalid_status_enum_is_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        checks["layout"]["status"] = "not_a_valid_status"
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+    def test_invalid_orientation_enum_is_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        checks["layout"]["page"]["orientation"] = "diagonal"
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+    def test_negative_margin_is_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        checks["layout"]["page"]["margins_mm"]["top"] = -5
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+    def test_zero_body_size_pt_is_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        checks["layout"]["typography"]["body_size_pt"] = 0
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+    def test_extra_keys_in_layout_are_rejected(self):
+        from scripts.collaboration.checks import validate_checks
+        checks = self.base_checks()
+        checks["layout"]["extra"] = True
+        with self.assertRaises(CollaborationError):
+            validate_checks(checks, ["chapter-01"])
+
+
 if __name__ == "__main__":
     unittest.main()
