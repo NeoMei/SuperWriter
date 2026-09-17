@@ -411,6 +411,24 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
                 verify_tender_layout(docx_path, layout, native_page_contract=True)
             self.assertIn("tender layout page width differs", error.getvalue())
 
+    def test_page_geometry_tolerance_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # actual width in fixture is 11906 twips = 210.007mm
+            self.make_docx(docx_path)
+            # +0.4mm (210.4mm) is within 0.5mm tolerance (abs diff ~0.393mm <= 0.5mm) -> passes
+            layout_pass = self.valid_layout()
+            layout_pass["page"]["width_mm"] = 210.4
+            verify_tender_layout(docx_path, layout_pass, native_page_contract=True)
+
+            # +0.6mm (210.6mm) exceeds 0.5mm tolerance (abs diff ~0.593mm > 0.5mm) -> fails
+            layout_fail = self.valid_layout()
+            layout_fail["page"]["width_mm"] = 210.6
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout_fail, native_page_contract=True)
+            self.assertIn("tender layout page width differs", error.getvalue())
+
     def test_page_numbers_contract_positive_and_negative(self):
         with tempfile.TemporaryDirectory() as temporary:
             docx_path = Path(temporary) / "doc.docx"
@@ -452,14 +470,15 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
             self.assertIn("tender layout body size differs", error.getvalue())
 
     def test_without_layout_verification_is_bypassed_compatibly(self):
-        # An outline without layout leaves tender_layout None/empty, so verify_tender_layout is skipped
-        manifest = {"version": 2}
-        outline_meta = {"checks": {}}
-        tender_layout = (
-            manifest["version"] == 2
-            and outline_meta.get("checks", {}).get("layout")
-        )
-        self.assertFalse(bool(tender_layout))
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            # verify_tender_layout requires a dict spec; calling it with None or invalid spec fails,
+            # demonstrating that the caller's conditional guard (if tender_layout:) is essential.
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, None, native_page_contract=True)
+            self.assertIn("tender layout spec is invalid", error.getvalue())
 
 
 if __name__ == "__main__":
