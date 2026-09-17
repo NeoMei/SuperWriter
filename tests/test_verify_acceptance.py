@@ -29,6 +29,7 @@ from verify_acceptance import (  # noqa: E402
     require_ordered_export_coverage,
     require_ordered_source_coverage,
     validate_figure,
+    verify_tender_layout,
 )
 
 
@@ -326,6 +327,216 @@ class AcceptanceImageContractTest(unittest.TestCase):
             "pixels differ",
             max_large_error_ratio=0.03,
         )
+
+
+class TenderLayoutAcceptanceTest(unittest.TestCase):
+    def make_docx(
+        self,
+        path: Path,
+        *,
+        w_w="11906",
+        w_h="16838",
+        top="1417",
+        bottom="1417",
+        left="1701",
+        right="1417",
+        font_east_asia="宋体",
+        font_ascii="Times New Roman",
+        sz="24",
+        line="360",
+        line_rule="auto",
+        pg_num_fmt="decimal",
+        pg_num_start="1",
+    ):
+        import zipfile
+        doc_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Sample</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="{w_w}" w:h="{w_h}"/>
+      <w:pgMar w:top="{top}" w:bottom="{bottom}" w:left="{left}" w:right="{right}"/>
+      <w:pgNumType w:fmt="{pg_num_fmt}" w:start="{pg_num_start}"/>
+    </w:sectPr>
+  </w:body>
+</w:document>"""
+        rule_attr = f' w:lineRule="{line_rule}"' if line_rule else ""
+        line_attr = f' w:line="{line}"' if line else ""
+        spacing_tag = f'<w:spacing{line_attr}{rule_attr}/>' if (line or line_rule) else ""
+        styles_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1">
+    <w:pPr>
+      {spacing_tag}
+    </w:pPr>
+    <w:rPr>
+      <w:rFonts w:eastAsia="{font_east_asia}" w:ascii="{font_ascii}"/>
+      <w:sz w:val="{sz}"/>
+    </w:rPr>
+  </w:style>
+</w:styles>"""
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("word/document.xml", doc_xml.encode("utf-8"))
+            archive.writestr("word/styles.xml", styles_xml.encode("utf-8"))
+
+    def valid_layout(self):
+        return {
+            "status": "verified",
+            "source_locator": "投标人须知 3.2-3.4",
+            "page": {
+                "width_mm": 210,
+                "height_mm": 297,
+                "orientation": "portrait",
+                "margins_mm": {"top": 25, "bottom": 25, "left": 30, "right": 25},
+            },
+            "page_numbers": {"format": "decimal", "start": 1},
+            "typography": {
+                "body_font": "宋体",
+                "body_size_pt": 12,
+                "line_spacing": "1.5",
+            },
+        }
+
+    def test_page_geometry_and_typography_match_passes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            verify_tender_layout(docx_path, self.valid_layout(), native_page_contract=True)
+
+    def test_page_geometry_exceeding_tolerance_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            layout = self.valid_layout()
+            layout["page"]["width_mm"] = 220  # Exceeds 0.5mm tolerance
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout, native_page_contract=True)
+            self.assertIn("tender layout page width differs", error.getvalue())
+
+    def test_page_geometry_tolerance_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # actual width in fixture is 11906 twips = 210.007mm
+            self.make_docx(docx_path)
+            # +0.4mm (210.4mm) is within 0.5mm tolerance (abs diff ~0.393mm <= 0.5mm) -> passes
+            layout_pass = self.valid_layout()
+            layout_pass["page"]["width_mm"] = 210.4
+            verify_tender_layout(docx_path, layout_pass, native_page_contract=True)
+
+            # +0.6mm (210.6mm) exceeds 0.5mm tolerance (abs diff ~0.593mm > 0.5mm) -> fails
+            layout_fail = self.valid_layout()
+            layout_fail["page"]["width_mm"] = 210.6
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout_fail, native_page_contract=True)
+            self.assertIn("tender layout page width differs", error.getvalue())
+
+    def test_page_numbers_contract_positive_and_negative(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            # Positive case
+            verify_tender_layout(docx_path, self.valid_layout(), native_page_contract=True)
+            # Negative case: native page contract not met
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, self.valid_layout(), native_page_contract=False)
+            self.assertIn("tender layout page numbers differ", error.getvalue())
+            # Negative case: unsupported format or start
+            bad_numbers = self.valid_layout()
+            bad_numbers["page_numbers"]["start"] = 2
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, bad_numbers, native_page_contract=True)
+            self.assertIn("tender layout page number format is not supported", error.getvalue())
+
+    def test_typography_contract_positive_and_negative(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            # Positive case
+            verify_tender_layout(docx_path, self.valid_layout(), native_page_contract=True)
+            # Negative case: font mismatch
+            bad_font = self.valid_layout()
+            bad_font["typography"]["body_font"] = "黑体"
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, bad_font, native_page_contract=True)
+            self.assertIn("tender layout body font differs", error.getvalue())
+            # Negative case: size mismatch
+            bad_size = self.valid_layout()
+            bad_size["typography"]["body_size_pt"] = 14
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, bad_size, native_page_contract=True)
+            self.assertIn("tender layout body size differs", error.getvalue())
+
+    def test_unverified_and_conflict_status_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            for status in ("unverified", "conflict"):
+                layout = self.valid_layout()
+                layout["status"] = status
+                error = io.StringIO()
+                with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                    verify_tender_layout(docx_path, layout, native_page_contract=True)
+                self.assertIn(f"tender layout status is not verified: '{status}'", error.getvalue())
+
+    def test_chinese_font_matches_eastasia_strictly_and_not_masked_by_ascii(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # EastAsia is 黑体, ascii is 宋体. Chinese font requirement 宋体 must check EastAsia and fail
+            self.make_docx(docx_path, font_east_asia="黑体", font_ascii="宋体")
+            layout = self.valid_layout()
+            layout["typography"]["body_font"] = "宋体"
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout, native_page_contract=True)
+            self.assertIn("tender layout body font differs: expected '宋体', got '黑体'", error.getvalue())
+
+    def test_page_number_actual_format_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path, pg_num_fmt="decimal")
+            layout = self.valid_layout()
+            layout["page_numbers"]["format"] = "lowerRoman"
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, layout, native_page_contract=True)
+            self.assertIn(
+                "tender layout page number format differs: expected 'lowerRoman', got 'decimal'",
+                error.getvalue(),
+            )
+
+    def test_point_based_line_spacing_support_and_rejection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            # 24pt = 480 twips with exact rule
+            self.make_docx(docx_path, line="480", line_rule="exact")
+            layout = self.valid_layout()
+            layout["typography"]["line_spacing"] = "24pt"
+            verify_tender_layout(docx_path, layout, native_page_contract=True)
+
+            # Same 24pt requested against auto lineRule fails
+            docx_auto = Path(temporary) / "doc_auto.docx"
+            self.make_docx(docx_auto, line="480", line_rule="auto")
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_auto, layout, native_page_contract=True)
+            self.assertIn("tender layout line spacing rule differs", error.getvalue())
+
+    def test_without_layout_verification_is_bypassed_compatibly(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(docx_path)
+            # verify_tender_layout requires a dict spec; calling it with None or invalid spec fails,
+            # demonstrating that the caller's conditional guard (if tender_layout:) is essential.
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, None, native_page_contract=True)
+            self.assertIn("tender layout spec is invalid", error.getvalue())
 
 
 if __name__ == "__main__":

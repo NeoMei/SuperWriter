@@ -4,11 +4,61 @@ from __future__ import annotations
 from datetime import date
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import stat
 
 from .model import CollaborationError, _digest, _exact_dict, _integer, _nonempty, _portable_project_path
+
+
+def _positive_number(value: object, label: str) -> float:
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value <= 0):
+        raise CollaborationError(f'{label} must be a number > 0')
+    return value
+
+
+def _nonnegative_number(value: object, label: str) -> float:
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value < 0):
+        raise CollaborationError(f'{label} must be a number >= 0')
+    return value
+
+
+def _exact_dict_optional(value: object, required: set[str], optional: set[str], label: str) -> dict:
+    if not isinstance(value, dict):
+        raise CollaborationError(f'{label} must be an object')
+    unknown = set(value) - required - optional
+    missing = required - set(value)
+    if unknown:
+        raise CollaborationError(f'{label} has unknown field: {sorted(unknown)[0]}')
+    if missing:
+        raise CollaborationError(f'{label} is missing field: {sorted(missing)[0]}')
+    return value
+
+
+def _layout_checks(value: object) -> None:
+    _exact_dict(value, {'status', 'source_locator', 'page', 'page_numbers', 'typography'}, 'layout')
+    if value['status'] not in ('verified', 'unverified', 'conflict'):
+        raise CollaborationError('layout status must be verified, unverified or conflict')
+    _nonempty(value['source_locator'], 'layout source_locator')
+    _exact_dict(value['page'], {'width_mm', 'height_mm', 'orientation', 'margins_mm'}, 'layout page')
+    _positive_number(value['page']['width_mm'], 'layout page width_mm')
+    _positive_number(value['page']['height_mm'], 'layout page height_mm')
+    if value['page']['orientation'] not in ('portrait', 'landscape'):
+        raise CollaborationError('layout page orientation must be portrait or landscape')
+    margins = _exact_dict(value['page']['margins_mm'], {'top', 'bottom', 'left', 'right'}, 'layout page margins_mm')
+    for key in ('top', 'bottom', 'left', 'right'):
+        _nonnegative_number(margins[key], f'layout page margins_mm {key}')
+    _exact_dict(value['page_numbers'], {'format', 'start'}, 'layout page_numbers')
+    if value['page_numbers']['format'] not in ('decimal', 'lowerRoman'):
+        raise CollaborationError('layout page_numbers format must be decimal or lowerRoman')
+    _integer(value['page_numbers']['start'], 'layout page_numbers start', 1)
+    _exact_dict(value['typography'], {'body_font', 'body_size_pt', 'line_spacing'}, 'layout typography')
+    _nonempty(value['typography']['body_font'], 'layout typography body_font')
+    _positive_number(value['typography']['body_size_pt'], 'layout typography body_size_pt')
+    _nonempty(value['typography']['line_spacing'], 'layout typography line_spacing')
 
 
 def validate_files(value: object) -> list:
@@ -43,12 +93,15 @@ def _date(value: object, label: str) -> date:
 
 
 def validate_checks(value: object, chapter_order: list[str]) -> None:
-    _exact_dict(value, {'heading_mode', 'headings', 'attachments', 'evidence'}, 'outline checks')
+    _exact_dict_optional(value, {'heading_mode', 'headings', 'attachments', 'evidence'},
+                         {'layout'}, 'outline checks')
     if value['heading_mode'] not in ('exact', 'subsequence'):
         raise CollaborationError('heading_mode must be exact or subsequence')
     validate_files(value['attachments'])
     if not isinstance(value['headings'], list) or not isinstance(value['evidence'], list):
         raise CollaborationError('headings and evidence must be lists')
+    if 'layout' in value:
+        _layout_checks(value['layout'])
     heading_chapters = []
     for heading in value['headings']:
         _exact_dict(heading, {'chapter_id', 'level', 'title'}, 'heading')

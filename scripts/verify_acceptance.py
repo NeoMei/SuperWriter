@@ -546,6 +546,199 @@ def native_pdf_body_text(pdf_path: Path, docx_path: Path, markdown: str, text: s
     return "\n".join(body_pages), True
 
 
+def _layout_mm(twips: str, field: str) -> float:
+    try:
+        value = float(twips)
+    except (TypeError, ValueError):
+        fail(f"tender layout page {field} is not numeric: {twips!r}")
+    if not math.isfinite(value):
+        fail(f"tender layout page {field} is not finite: {twips!r}")
+    return value / 20 / 72 * 25.4
+
+
+def _parse_line_spacing_spec(spec: object) -> tuple[str, float]:
+    """Parse line spacing into ('multiple', multiplier) or ('points', pt)."""
+    if not isinstance(spec, str) or not spec.strip():
+        fail("tender layout line spacing is missing")
+    text = spec.strip().lower()
+    pt_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:pt|磅)", text)
+    if pt_match:
+        val = float(pt_match.group(1))
+        if val <= 0 or not math.isfinite(val):
+            fail(f"tender layout line spacing points must be positive: {spec!r}")
+        return ("points", val)
+    mult_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:x|倍)?", text)
+    if mult_match:
+        val = float(mult_match.group(1))
+        if val <= 0 or not math.isfinite(val):
+            fail(f"tender layout line spacing multiple must be positive: {spec!r}")
+        return ("multiple", val)
+    fail(f"tender layout line spacing cannot be parsed: {spec!r}")
+
+
+def verify_tender_layout(
+    docx_path: Path, layout: object, native_page_contract: bool
+) -> None:
+    """Check the delivered DOCX against the approved outline layout spec."""
+    if not isinstance(layout, dict):
+        fail("tender layout spec is invalid")
+    if layout.get("status") != "verified":
+        fail(f"tender layout status is not verified: {layout.get('status')!r}")
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            document = ET.fromstring(archive.read("word/document.xml"))
+            styles = ET.fromstring(archive.read("word/styles.xml"))
+    except (OSError, KeyError, ET.ParseError, zipfile.BadZipFile) as error:
+        fail(f"tender layout DOCX sections are unreadable: {error}")
+
+    sections = list(document.iter(w + "sectPr"))
+    if not sections:
+        fail("tender layout page size is missing: DOCX has no sectPr")
+    page = layout.get("page", {})
+    expected_size = (
+        page.get("width_mm"), page.get("height_mm"), page.get("orientation")
+    )
+    expected_margins = page.get("margins_mm", {}) if isinstance(page.get("margins_mm"), dict) else {}
+    for index, section in enumerate(sections, 1):
+        size = section.find(w + "pgSz")
+        margin = section.find(w + "pgMar")
+        if size is None or margin is None:
+            fail(f"tender layout page size is missing: sectPr {index} has no pgSz/pgMar")
+        width = _layout_mm(size.get(w + "w"), "width")
+        height = _layout_mm(size.get(w + "h"), "height")
+        orientation = "landscape" if width > height else "portrait"
+        if orientation != expected_size[2]:
+            fail(
+                f"tender layout page orientation differs in sectPr {index}: "
+                f"expected {expected_size[2]}, got {orientation}"
+            )
+        for field, actual, expected in (
+            ("width", width, expected_size[0]),
+            ("height", height, expected_size[1]),
+        ):
+            if not isinstance(expected, (int, float)) or isinstance(expected, bool) \
+                    or not math.isclose(actual, expected, rel_tol=0.0, abs_tol=0.5):
+                fail(
+                    f"tender layout page {field} differs in sectPr {index}: "
+                    f"expected {expected}mm, got {actual:.2f}mm"
+                )
+        for field, attribute in (
+            ("top", "top"), ("bottom", "bottom"), ("left", "left"), ("right", "right")
+        ):
+            expected = expected_margins.get(field)
+            actual = _layout_mm(margin.get(w + attribute), f"margin {field}")
+            if not isinstance(expected, (int, float)) or isinstance(expected, bool) \
+                    or not math.isclose(actual, expected, rel_tol=0.0, abs_tol=0.5):
+                fail(
+                    f"tender layout page margin {field} differs in sectPr {index}: "
+                    f"expected {expected}mm, got {actual:.2f}mm"
+                )
+
+    numbers = layout.get("page_numbers", {})
+    if not isinstance(numbers, dict):
+        fail("tender layout page number format is not supported")
+    expected_format = numbers.get("format")
+    expected_start = numbers.get("start")
+    if expected_format not in {"decimal", "lowerRoman"} or expected_start != 1:
+        fail("tender layout page number format is not supported")
+    if not native_page_contract:
+        fail("tender layout page numbers differ from the native page-field contract")
+    body_section = sections[-1]
+    num_type = body_section.find(w + "pgNumType")
+    actual_fmt = num_type.get(w + "fmt", "decimal") if num_type is not None else "decimal"
+    try:
+        actual_start = int(num_type.get(w + "start", "1")) if num_type is not None else 1
+    except ValueError:
+        actual_start = -1
+    if actual_fmt != expected_format:
+        fail(
+            f"tender layout page number format differs: expected {expected_format!r}, "
+            f"got {actual_fmt!r}"
+        )
+    if actual_start != expected_start:
+        fail(
+            f"tender layout page number start differs: expected {expected_start}, "
+            f"got {actual_start}"
+        )
+
+    typography = layout.get("typography", {})
+    if not isinstance(typography, dict):
+        fail("tender layout typography spec is invalid")
+    default_styles = [
+        style for style in styles.findall(w + "style")
+        if style.get(w + "type") == "paragraph" and style.get(w + "default") == "1"
+    ]
+    if len(default_styles) != 1:
+        fail("tender layout default paragraph style is missing or ambiguous")
+    run_properties = default_styles[0].find(w + "rPr")
+    if run_properties is None:
+        fail("tender layout default paragraph style has no run properties")
+    fonts = run_properties.find(w + "rFonts")
+    if fonts is None:
+        fail("tender layout body font is missing from the default paragraph style")
+    expected_font = typography.get("body_font")
+    if not isinstance(expected_font, str) or not expected_font.strip():
+        fail("tender layout body font is missing")
+    is_cjk = any(ord(char) > 127 for char in expected_font)
+    actual_font = fonts.get(w + "eastAsia") if is_cjk else (fonts.get(w + "ascii") or fonts.get(w + "hAnsi"))
+    display_actual = actual_font if actual_font else "(no font declared)"
+    if not actual_font or actual_font.casefold() != expected_font.casefold():
+        fail(
+            f"tender layout body font differs: expected {expected_font!r}, got {display_actual!r}"
+        )
+    size = run_properties.find(w + "sz")
+    if size is None:
+        fail("tender layout body size is missing from the default paragraph style")
+    try:
+        actual_size = float(size.get(w + "val")) / 2
+    except (TypeError, ValueError):
+        fail(f"tender layout body size is not numeric: {size.get(w + 'val')!r}")
+    expected_size = typography.get("body_size_pt")
+    if not isinstance(expected_size, (int, float)) or isinstance(expected_size, bool) \
+            or not math.isclose(actual_size, expected_size, rel_tol=0.0, abs_tol=0.01):
+        fail(
+            f"tender layout body size differs: expected {expected_size}pt, "
+            f"got {actual_size:g}pt"
+        )
+    expected_type, expected_val = _parse_line_spacing_spec(typography.get("line_spacing"))
+    properties = default_styles[0].find(w + "pPr")
+    spacing = properties.find(w + "spacing") if properties is not None else None
+    line_rule = spacing.get(w + "lineRule") if spacing is not None else None
+    line_val_str = spacing.get(w + "line") if spacing is not None else None
+
+    if expected_type == "multiple":
+        if line_rule not in (None, "auto"):
+            fail(
+                f"tender layout line spacing rule differs: expected auto/multiple, "
+                f"got lineRule={line_rule!r}"
+            )
+        try:
+            actual_spacing = float(line_val_str) / 240 if line_val_str is not None else 1.0
+        except (TypeError, ValueError):
+            fail(f"tender layout line spacing is not numeric: {line_val_str!r}")
+        if not math.isclose(actual_spacing, expected_val, rel_tol=0.0, abs_tol=0.01):
+            fail(
+                f"tender layout line spacing differs: expected {expected_val:g}x, "
+                f"got {actual_spacing:g}x"
+            )
+    else:
+        if line_rule not in ("exact", "atLeast"):
+            fail(
+                f"tender layout line spacing rule differs: expected exact/atLeast for point spacing, "
+                f"got lineRule={line_rule!r}"
+            )
+        if line_val_str is None:
+            fail("tender layout line spacing w:line is missing for point spacing")
+        try:
+            actual_pt = float(line_val_str) / 20
+        except (TypeError, ValueError):
+            fail(f"tender layout line spacing is not numeric: {line_val_str!r}")
+        if not math.isclose(actual_pt, expected_val, rel_tol=0.0, abs_tol=0.1):
+            fail(
+                f"tender layout line spacing differs: expected {expected_val:g}pt, "
+                f"got {actual_pt:g}pt"
+            )
 def png_header(payload: bytes, label: str):
     try:
         if len(payload) < 33 or payload[:8] != b"\x89PNG\r\n\x1a\n":
@@ -1696,6 +1889,13 @@ def main() -> None:
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
     pdf_text, native_furniture_removed = native_pdf_body_text(pdf_path, docx_path, merged, pdf_text)
+    tender_layout = (
+        manifest["version"] == 2
+        and _one_state_object(context["state"], "outline", "outline")["metadata"]
+            .get("checks", {}).get("layout")
+    )
+    if tender_layout:
+        verify_tender_layout(docx_path, tender_layout, native_furniture_removed)
     extracted = (("DOCX", docx_text), ("PDF", pdf_text))
     source_blocks = markdown_block_sequence(merged)
     if not source_blocks:

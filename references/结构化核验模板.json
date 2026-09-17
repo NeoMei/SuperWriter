@@ -6,6 +6,13 @@
   "attachments": [
     {"id": "attachment-01", "path": "附件/证明材料.pdf", "sha256": "填写实际文件SHA-256"}
   ],
+  "layout": {
+    "status": "verified",
+    "source_locator": "投标人须知 3.2-3.4",
+    "page": {"width_mm": 210, "height_mm": 297, "orientation": "portrait", "margins_mm": {"top": 25, "bottom": 25, "left": 30, "right": 25}},
+    "page_numbers": {"format": "decimal", "start": 1},
+    "typography": {"body_font": "宋体", "body_size_pt": 12, "line_spacing": "1.5"}
+  },
   "evidence": [
     {
       "material_id": "material-01",
