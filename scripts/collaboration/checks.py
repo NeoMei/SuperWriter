@@ -10,6 +10,10 @@ import re
 import stat
 
 from .model import CollaborationError, _digest, _exact_dict, _integer, _nonempty, _portable_project_path
+try:
+    from ..tender_contract import TenderContractError, validate_tender_contract
+except ImportError:  # Support verify_acceptance.py's direct script imports.
+    from tender_contract import TenderContractError, validate_tender_contract
 
 
 def _positive_number(value: object, label: str) -> float:
@@ -112,7 +116,7 @@ def _date(value: object, label: str) -> date:
 
 def validate_checks(value: object, chapter_order: list[str]) -> None:
     _exact_dict_optional(value, {'heading_mode', 'headings', 'attachments', 'evidence'},
-                         {'layout'}, 'outline checks')
+                         {'layout', 'tender_contract'}, 'outline checks')
     if value['heading_mode'] not in ('exact', 'subsequence'):
         raise CollaborationError('heading_mode must be exact or subsequence')
     validate_files(value['attachments'])
@@ -120,6 +124,11 @@ def validate_checks(value: object, chapter_order: list[str]) -> None:
         raise CollaborationError('headings and evidence must be lists')
     if 'layout' in value:
         _layout_checks(value['layout'])
+    if 'tender_contract' in value:
+        try:
+            validate_tender_contract(value['tender_contract'])
+        except TenderContractError as error:
+            raise CollaborationError(f'tender_contract: {error}') from error
     heading_chapters = []
     for heading in value['headings']:
         _exact_dict(heading, {'chapter_id', 'level', 'title'}, 'heading')

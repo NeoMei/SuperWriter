@@ -27,6 +27,7 @@ from verify_acceptance import (  # noqa: E402
     normalized_pixels,
     pdf_metadata,
     require_tender_layout_contract,
+    require_tender_review_index_contract,
     require_ordered_export_coverage,
     require_ordered_source_coverage,
     validate_figure,
@@ -399,6 +400,67 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
                 "line_spacing": "1.5",
             },
         }
+
+    def tender_contract(self, *, rows=None):
+        return {
+            "source_locator": "评分办法 2.1",
+            "structure_mode": "fixed",
+            "sections": [{
+                "id": "section-01", "title": "技术响应", "order": 1,
+                "kind": "chapter", "parent": None, "allow_extensions": False,
+            }],
+            "scoring_items": [{
+                "id": "S01", "label": "技术方案", "source_label": "技术方案",
+                "order": 1, "section_id": "section-01", "evidence_ids": ["MAT-01"],
+                "aliases": [],
+            }],
+            "review_index": {
+                "section_id": "section-01", "required_item_ids": ["S01"],
+                "rows": rows if rows is not None else [
+                    {"item_id": "S01", "label": "技术方案", "page": 1, "notes": ""}
+                ],
+            },
+        }
+
+    def outline_with_tender_contract(self, contract):
+        return {"metadata": {"checks": {"tender_contract": contract}}}
+
+    def test_v2_tender_contract_rejects_missing_review_index_item(self):
+        contract = self.tender_contract(rows=[])
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+            require_tender_review_index_contract(
+                self.outline_with_tender_contract(contract), "tender", 2
+            )
+        self.assertIn("review index missing item S01", error.getvalue())
+
+    def test_v2_tender_contract_rejects_duplicate_review_index_item(self):
+        row = {"item_id": "S01", "label": "技术方案", "page": 1, "notes": ""}
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+            require_tender_review_index_contract(
+                self.outline_with_tender_contract(self.tender_contract(rows=[row, row])),
+                "tender", 2,
+            )
+        self.assertIn("review index duplicate item S01", error.getvalue())
+
+    def test_v2_tender_contract_rejects_unfilled_review_index_page(self):
+        row = {"item_id": "S01", "label": "技术方案", "page": None, "notes": "待排版"}
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+            require_tender_review_index_contract(
+                self.outline_with_tender_contract(self.tender_contract(rows=[row])),
+                "tender", 2,
+            )
+        self.assertIn("review index page is not filled for S01", error.getvalue())
+
+    def test_v2_tender_contract_accepts_fully_populated_review_index(self):
+        self.assertEqual(
+            require_tender_review_index_contract(
+                self.outline_with_tender_contract(self.tender_contract()), "tender", 2,
+            ),
+            self.tender_contract(),
+        )
 
     def test_page_geometry_and_typography_match_passes(self):
         with tempfile.TemporaryDirectory() as temporary:

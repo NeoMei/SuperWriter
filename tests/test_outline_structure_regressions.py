@@ -154,6 +154,25 @@ class OutlineLayoutSchemaTest(unittest.TestCase):
             },
         }
 
+    def tender_contract(self):
+        return {
+            "source_locator": "评分办法 2.1",
+            "structure_mode": "fixed",
+            "sections": [{
+                "id": "section-01", "title": "技术响应", "order": 1,
+                "kind": "chapter", "parent": None, "allow_extensions": False,
+            }],
+            "scoring_items": [{
+                "id": "S01", "label": "技术方案", "source_label": "技术方案",
+                "order": 1, "section_id": "section-01", "evidence_ids": ["MAT-01"],
+                "aliases": [],
+            }],
+            "review_index": {
+                "section_id": "section-01", "required_item_ids": ["S01"],
+                "rows": [{"item_id": "S01", "label": "技术方案", "page": 1, "notes": ""}],
+            },
+        }
+
     def test_valid_full_layout_spec_passes(self):
         checks = self.base_checks()
         self.validate(checks, ["chapter-01"])
@@ -162,6 +181,18 @@ class OutlineLayoutSchemaTest(unittest.TestCase):
         checks = self.base_checks()
         del checks["layout"]
         self.validate(checks, ["chapter-01"])
+
+    def test_tender_contract_is_optional_and_valid_when_declared(self):
+        checks = self.base_checks()
+        checks["tender_contract"] = self.tender_contract()
+        self.validate(checks, ["chapter-01"])
+
+    def test_invalid_tender_contract_has_stable_schema_error(self):
+        checks = self.base_checks()
+        checks["tender_contract"] = self.tender_contract()
+        del checks["tender_contract"]["review_index"]
+        with self.assertRaisesRegex(CollaborationError, r"tender_contract.*review_index"):
+            self.validate(checks, ["chapter-01"])
 
     def test_missing_status_is_rejected(self):
         checks = self.base_checks()
