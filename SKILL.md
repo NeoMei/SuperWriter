@@ -115,4 +115,4 @@ intake 将台账纳入 brief；approach 确认选用及缺口处理；outline �
 
 ## 核查与依赖
 
-阶段核查见 `references/门禁清单.md`，讨论与事件例见 `references/协作讨论规则.md`。安装要求 WPSComposer `0.7.2` 或更高版本，以及 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`。安装器只从配置的可信本地源镜像依赖，不静默下载。
+阶段核查见 `references/门禁清单.md`，讨论与事件例见 `references/协作讨论规则.md`。安装要求 WPSComposer `0.7.2` 或更高版本，以及 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`。安装器默认从官方仓库同步并缓存最新 WPSComposer；设置 `WPSCOMPOSER_SKILL_SOURCE` 时使用指定本地版本且不执行 Git 操作，设置 `WPSCOMPOSER_AUTO_UPDATE=0` 时停用刷新。

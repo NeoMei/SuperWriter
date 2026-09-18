@@ -24,29 +24,30 @@ v0.2.9 交付契约扩展：[持久运行环境](references/运行环境.md)、[
 ## 依赖
 
 - Python 3.10 或更高版本（macOS 与 Windows 原生 Python）
-- WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本
+- WPS Office 与 [WPSComposer](https://github.com/NeoMei/WPSComposer) `0.7.2` 或更高版本；安装器默认自动同步官方仓库的最新版本
 - 交付检查使用 `markitdown[docx,pdf]`、`Pillow`、`PyMuPDF`、`resvg-py` 和 `fonttools`，版本范围见 `requirements.txt`。在运行验收器的 Python 环境执行 `python -m pip install -r requirements.txt`（macOS 可用 `python3`）；缺少所需依赖时验收失败，不自动安装。
 - 图片与 PDF 验收无需 `sips`、`osascript`、`pdfinfo`、`file` 或 `unzip`；SVG 优先使用本机声明字体，并为缺少中文字体的系统提供依赖包内置的中文字体回退。
 - 已安装的 `grilling`、`grill-me`、`grill-with-docs`、`to-spec`、`domain-modeling`、`ai-image-to-ppt`、`obsidian-excalidraw`
 
 先用 `python3 --version`（Windows 用 `python --version`）确认解释器版本。使用虚拟环境时，在同一终端激活环境后安装依赖并运行 SuperWriter；脚本会调用该环境中的 `markitdown`。仅更新 skill 文件不会升级系统 Python 或安装这些包。
 
-第三方 skill 不属于 SuperWriter 发布物。安装器从以下配置的本地可信源镜像，不静默下载：
+第三方 skill 不属于 SuperWriter 发布物。安装器从以下来源取得依赖：WPSComposer 默认从官方仓库同步最新版本并缓存到用户目录，其他 skill 继续从配置的本地可信源镜像。
 
 | 依赖 | 默认源 | 覆盖变量 |
 | --- | --- | --- |
-| WPSComposer | 同级 `WPSComposer/skills/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE` |
+| WPSComposer | 官方仓库的最新浅克隆，缓存于 `~/.superwriter/dependencies/WPSComposer` | `WPSCOMPOSER_SKILL_SOURCE`（本地覆盖）、`WPSCOMPOSER_REPOSITORY`（仓库覆盖） |
 | Agents skills | `~/.agents/skills` | `SUPERWRITER_AGENTS_SKILLS_ROOT` |
 | obsidian-excalidraw | `~/.opencode/skills` | `SUPERWRITER_OPENCODE_SKILLS_ROOT` |
 
 ## 安装
 
-macOS 与 Windows 共用 Python 安装入口，不需要在 Windows 安装 Bash。依赖源仍通过上表中的环境变量指定；安装器不会下载依赖或修改 WPSComposer 项目。
+macOS 与 Windows 共用 Python 安装入口，不需要在 Windows 安装 Bash。默认安装会刷新 WPSComposer 缓存并把三个宿主指向同一份版本化源码；显式设置 `WPSCOMPOSER_SKILL_SOURCE` 时不执行 Git 操作，也不修改该本地项目。网络不可用时会继续使用上一次有效缓存；可设置 `WPSCOMPOSER_AUTO_UPDATE=0` 禁止自动刷新。
 
 macOS：
 
 ```bash
-export WPSCOMPOSER_SKILL_SOURCE="/path/to/WPSComposer/skills/WPSComposer"
+# 可选：指定本地 WPSComposer；不设置则自动同步官方最新版本
+# export WPSCOMPOSER_SKILL_SOURCE="/path/to/WPSComposer/skills/WPSComposer"
 export SUPERWRITER_AGENTS_SKILLS_ROOT="/path/to/agents/skills"
 export SUPERWRITER_OPENCODE_SKILLS_ROOT="/path/to/opencode/skills"
 python3 install.py
@@ -55,7 +56,8 @@ python3 install.py
 Windows PowerShell（路径支持中文和空格）：
 
 ```powershell
-$env:WPSCOMPOSER_SKILL_SOURCE = "C:\Skills\WPSComposer\skills\WPSComposer"
+# 可选：指定本地 WPSComposer；不设置则自动同步官方最新版本
+# $env:WPSCOMPOSER_SKILL_SOURCE = "C:\Skills\WPSComposer\skills\WPSComposer"
 $env:SUPERWRITER_AGENTS_SKILLS_ROOT = "$HOME\.agents\skills"
 $env:SUPERWRITER_OPENCODE_SKILLS_ROOT = "$HOME\.opencode\skills"
 python .\install.py

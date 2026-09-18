@@ -40,6 +40,130 @@ def tree_manifest(root: Path) -> dict[str, tuple[str, str]]:
 
 
 class PortableInstallerTest(unittest.TestCase):
+    def _git(self, *arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *arguments],
+            cwd=cwd,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=True,
+        )
+
+    def make_wps_repository(self, root: Path) -> Path:
+        repository = root / "remote-wps"
+        skill = repository / "skills" / "WPSComposer"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: WPSComposer\n---\n\n# WPS Composer\n", encoding="utf-8"
+        )
+        plugin = repository / ".codex-plugin" / "plugin.json"
+        plugin.parent.mkdir(parents=True)
+        plugin.write_text(
+            json.dumps({"name": "wps-composer", "version": "0.9.0"}) + "\n",
+            encoding="utf-8",
+        )
+        self._git("init", cwd=repository)
+        self._git("config", "user.email", "test@example.com", cwd=repository)
+        self._git("config", "user.name", "Test", cwd=repository)
+        self._git("add", ".", cwd=repository)
+        self._git("commit", "-m", "initial", cwd=repository)
+        return repository
+
+    def test_default_wps_resolution_clones_and_refreshes_the_official_source(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-wps-sync-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            repository = self.make_wps_repository(root)
+            environment = {"WPSCOMPOSER_REPOSITORY": str(repository)}
+
+            first = portable_installer._resolve_wps_source(environment, ROOT, home)
+            first_commit = portable_installer._git_revision(first.parents[1])
+            self.assertTrue(first.is_dir())
+            self.assertTrue(str(first).startswith(str((home / ".superwriter").resolve())))
+
+            (repository / "skills" / "WPSComposer" / "refresh.txt").write_text(
+                "latest\n", encoding="utf-8"
+            )
+            self._git("add", ".", cwd=repository)
+            self._git("commit", "-m", "refresh", cwd=repository)
+
+            second = portable_installer._resolve_wps_source(environment, ROOT, home)
+            second_commit = portable_installer._git_revision(second.parents[1])
+            self.assertNotEqual(first_commit, second_commit)
+            self.assertNotEqual(first, second)
+            self.assertTrue((second / "refresh.txt").is_file())
+
+    def test_explicit_wps_source_never_runs_git(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-wps-explicit-") as temporary:
+            root = Path(temporary)
+            source = root / "WPSComposer" / "skills" / "WPSComposer"
+            source.mkdir(parents=True)
+            environment = {"WPSCOMPOSER_SKILL_SOURCE": str(source)}
+            with mock.patch.object(
+                portable_installer.subprocess, "run", side_effect=AssertionError("git used")
+            ):
+                self.assertEqual(
+                    portable_installer._resolve_wps_source(environment, ROOT, root / "home"),
+                    source.resolve(),
+                )
+
+    def test_default_wps_resolution_uses_cached_source_when_refresh_fails(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-wps-cache-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            repository = self.make_wps_repository(root)
+            environment = {"WPSCOMPOSER_REPOSITORY": str(repository)}
+            cached = portable_installer._resolve_wps_source(environment, ROOT, home)
+
+            with mock.patch.object(
+                portable_installer,
+                "_git_revision",
+                side_effect=portable_installer.InstallError("network unavailable"),
+            ):
+                self.assertEqual(
+                    portable_installer._resolve_wps_source(environment, ROOT, home), cached
+                )
+
+    def test_auto_update_can_be_disabled_without_running_git(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-wps-offline-") as temporary:
+            root = Path(temporary)
+            source_root = root / "superwriter"
+            source_root.mkdir()
+            source = root / "WpsComposer" / "skills" / "WPSComposer"
+            source.mkdir(parents=True)
+            environment = {"WPSCOMPOSER_AUTO_UPDATE": "0"}
+            with mock.patch.object(
+                portable_installer.subprocess, "run", side_effect=AssertionError("git used")
+            ):
+                selected = portable_installer._resolve_wps_source(
+                    environment, source_root, root / "home"
+                )
+                self.assertTrue(os.path.samefile(selected, source))
+
+    def test_install_without_override_stages_the_managed_wps_cache(self):
+        with tempfile.TemporaryDirectory(prefix="superwriter-wps-install-") as temporary:
+            root = Path(temporary)
+            home = root / "home"
+            home.mkdir()
+            agents, opencode, _unused = self.make_sources(root)
+            repository = self.make_wps_repository(root)
+            environment = {
+                "HOME": str(home),
+                "SUPERWRITER_AGENTS_SKILLS_ROOT": str(agents),
+                "SUPERWRITER_OPENCODE_SKILLS_ROOT": str(opencode),
+                "WPSCOMPOSER_REPOSITORY": str(repository),
+            }
+
+            self.assertEqual(portable_installer.install(environment), 0)
+            selected = portable_installer._cached_wps_source(home)
+            self.assertIsNotNone(selected)
+            for host in (".agents", ".claude", ".codex"):
+                reference = home / host / "skills" / "WPSComposer"
+                self.assertTrue(os.path.samefile(reference, selected))
+
     def test_windows_junction_names_normalize_extended_and_unc_prefixes(self):
         cases = {
             r"C:\Users\A&B\WPSComposer": (

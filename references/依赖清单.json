@@ -10,7 +10,7 @@
       "source_root": "wps",
       "environment": "WPSCOMPOSER_SKILL_SOURCE",
       "minimum_version": "0.7.2",
-      "install_hint": "git clone https://github.com/NeoMei/WPSComposer.git, then set WPSCOMPOSER_SKILL_SOURCE"
+      "install_hint": "Installer syncs the latest official WPSComposer automatically; set WPSCOMPOSER_SKILL_SOURCE to override"
     },
     {
       "id": "grilling",

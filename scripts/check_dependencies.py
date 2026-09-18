@@ -68,8 +68,8 @@ DEPENDENCY_KEYS = {
 }
 WPS_KEYS = DEPENDENCY_KEYS | {"minimum_version"}
 WPS_INSTALL_HINT = (
-    "git clone https://github.com/NeoMei/WPSComposer.git, "
-    "then set WPSCOMPOSER_SKILL_SOURCE"
+    "Installer syncs the latest official WPSComposer automatically; "
+    "set WPSCOMPOSER_SKILL_SOURCE to override"
 )
 THIRD_PARTY_INSTALL_HINTS = {
     "agents": "Install from a trusted skill manager into the agents skill source root",

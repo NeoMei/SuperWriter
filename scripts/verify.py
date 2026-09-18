@@ -74,10 +74,14 @@ def expected_superwriter_manifest() -> dict[str, tuple[str, str]]:
     return expected
 
 
-def _discover_wps_source(environment: dict[str, str]) -> Path:
+def _discover_wps_source(environment: dict[str, str], home: Path | None = None) -> Path:
     configured = environment.get("WPSCOMPOSER_SKILL_SOURCE", "")
     if configured:
         return Path(configured).expanduser().resolve(strict=False)
+    cached_home = home or (Path(environment["HOME"]) if environment.get("HOME") else None)
+    cached = installer._cached_wps_source(cached_home) if cached_home is not None else None
+    if cached is not None:
+        return cached
     return installer._discover_wps_source(SOURCE_ROOT)
 
 
@@ -93,7 +97,7 @@ def verify(environment: dict[str, str] | None = None) -> None:
     opencode = Path(
         env.get("SUPERWRITER_OPENCODE_SKILLS_ROOT", home / ".opencode" / "skills")
     ).resolve(strict=False)
-    wps = _discover_wps_source(env)
+    wps = _discover_wps_source(env, home)
 
     dependency = subprocess.run(
         [

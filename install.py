@@ -34,6 +34,11 @@ MANAGED_SKILLS = (
     "obsidian-excalidraw",
     "WPSComposer",
 )
+WPSCOMPOSER_REPOSITORY = "https://github.com/NeoMei/WPSComposer.git"
+WPSCOMPOSER_REPOSITORY_ENV = "WPSCOMPOSER_REPOSITORY"
+WPSCOMPOSER_AUTO_UPDATE_ENV = "WPSCOMPOSER_AUTO_UPDATE"
+WPSCOMPOSER_CACHE_RELATIVE = Path(".superwriter") / "dependencies" / "WPSComposer"
+WPSCOMPOSER_CACHE_CURRENT = "current"
 RUNTIME_FILES = (
     "scripts/render_svg.py",
     "scripts/runtime.py",
@@ -345,6 +350,144 @@ def _discover_wps_source(source_root: Path) -> Path:
     return _resolved(source_root.parent / "WPSComposer" / "skills" / "WPSComposer")
 
 
+def _git_revision(repository: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    revision = result.stdout.strip()
+    if result.returncode or not revision:
+        detail = result.stderr.strip() or "unknown Git error"
+        raise InstallError(f"Unable to read WPSComposer Git revision: {detail}")
+    return revision
+
+
+def _git_remote_revision(repository: str) -> str:
+    result = subprocess.run(
+        ["git", "ls-remote", repository, "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode:
+        detail = result.stderr.strip() or "unknown Git error"
+        raise InstallError(f"Unable to check the WPSComposer repository: {detail}")
+    revision = result.stdout.split(maxsplit=1)[0] if result.stdout.strip() else ""
+    if not revision:
+        raise InstallError("The WPSComposer repository did not report a HEAD revision")
+    return revision
+
+
+def _wps_cache_root(home: Path) -> Path:
+    return _resolved(home / WPSCOMPOSER_CACHE_RELATIVE)
+
+
+def _cached_wps_source(home: Path) -> Path | None:
+    cache_root = _wps_cache_root(home)
+    try:
+        revision = (cache_root / WPSCOMPOSER_CACHE_CURRENT).read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError):
+        return None
+    if not revision or any(character not in "0123456789abcdef" for character in revision.lower()):
+        return None
+    repository = cache_root / revision
+    source = repository / "skills" / "WPSComposer"
+    if not repository.is_dir() or not source.is_dir():
+        return None
+    return _resolved(source)
+
+
+def _clone_wps_repository(repository: str, cache_root: Path, revision: str) -> Path:
+    cache_root.mkdir(parents=True, exist_ok=True)
+    destination = cache_root / revision
+    source = destination / "skills" / "WPSComposer"
+    if source.is_dir():
+        (cache_root / WPSCOMPOSER_CACHE_CURRENT).write_text(revision + "\n", encoding="ascii")
+        return _resolved(source)
+    with tempfile.TemporaryDirectory(prefix="clone-", dir=cache_root.parent) as temporary:
+        clone = Path(temporary) / "WPSComposer"
+        result = subprocess.run(
+            ["git", "clone", "--depth", "1", "--no-tags", repository, str(clone)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if result.returncode:
+            detail = result.stderr.strip() or "unknown Git error"
+            raise InstallError(f"Unable to download the latest WPSComposer: {detail}")
+        actual_revision = _git_revision(clone)
+        if actual_revision != revision:
+            revision = actual_revision
+            destination = cache_root / revision
+            source = destination / "skills" / "WPSComposer"
+            if source.is_dir():
+                (cache_root / WPSCOMPOSER_CACHE_CURRENT).write_text(
+                    revision + "\n", encoding="ascii"
+                )
+                return _resolved(source)
+        if destination.exists():
+            raise InstallError(f"WPSComposer cache revision already exists but is incomplete: {destination}")
+        clone.replace(destination)
+    if not source.is_dir():
+        raise InstallError(f"Downloaded WPSComposer is missing skills/WPSComposer: {destination}")
+    (cache_root / WPSCOMPOSER_CACHE_CURRENT).write_text(revision + "\n", encoding="ascii")
+    return _resolved(source)
+
+
+def _resolve_wps_source(environment: Mapping[str, str], source_root: Path, home: Path) -> Path:
+    configured = environment.get("WPSCOMPOSER_SKILL_SOURCE", "").strip()
+    if configured:
+        return _resolved(Path(configured))
+
+    cached = _cached_wps_source(home)
+    auto_update = environment.get(WPSCOMPOSER_AUTO_UPDATE_ENV, "1").strip().lower()
+    if auto_update in {"0", "false", "no", "off"}:
+        if cached is not None:
+            return cached
+        return _discover_wps_source(source_root)
+
+    repository = environment.get(WPSCOMPOSER_REPOSITORY_ENV, WPSCOMPOSER_REPOSITORY).strip()
+    if not repository:
+        repository = WPSCOMPOSER_REPOSITORY
+    try:
+        remote_revision = _git_remote_revision(repository)
+        if cached is not None:
+            cached_revision = _git_revision(cached.parents[1])
+            if cached_revision == remote_revision:
+                return cached
+        return _clone_wps_repository(repository, _wps_cache_root(home), remote_revision)
+    except (InstallError, OSError) as exc:
+        if cached is not None:
+            print(
+                f"WPSComposer refresh failed; using cached revision at {_safe_path(cached)}: {exc}",
+                file=sys.stderr,
+            )
+            return cached
+        sibling = _discover_wps_source(source_root)
+        if sibling.is_dir():
+            print(
+                f"WPSComposer refresh failed; using local source at {_safe_path(sibling)}: {exc}",
+                file=sys.stderr,
+            )
+            return sibling
+        raise InstallError(
+            "Unable to obtain WPSComposer automatically. Set "
+            "WPSCOMPOSER_SKILL_SOURCE to a local skills/WPSComposer directory. "
+            f"Refresh error: {exc}"
+        ) from exc
+
+
 def _validate_route_markers(text: str) -> None:
     lines = text.splitlines()
     starts = [index for index, line in enumerate(lines) if line == ROUTE_START]
@@ -584,8 +727,7 @@ def _install_locked(env: Mapping[str, str], home: Path) -> None:
     source_root = _resolved(Path(__file__).parent)
     agents = _resolved(Path(env.get("SUPERWRITER_AGENTS_SKILLS_ROOT", home / ".agents" / "skills")))
     opencode = _resolved(Path(env.get("SUPERWRITER_OPENCODE_SKILLS_ROOT", home / ".opencode" / "skills")))
-    wps_value = env.get("WPSCOMPOSER_SKILL_SOURCE", "")
-    wps = _resolved(Path(wps_value)) if wps_value else _discover_wps_source(source_root)
+    wps = _resolve_wps_source(env, source_root, home)
     _run_preflight(source_root, agents, opencode, wps)
 
     host_roots = [
