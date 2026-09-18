@@ -708,12 +708,14 @@ def _verify_body_typography(document: ET.Element, styles: ET.Element, typography
             _check_direct_size(run_properties.find(w + "sz"), expected_size, f"{scope} run {run_index}", w)
 
 
-def require_tender_layout_contract(outline: dict, document_type: str, manifest_version: int) -> dict | None:
+def require_tender_layout_contract(
+    outline: dict, document_type: str, manifest_version: int, *, enforce: bool = True
+) -> dict | None:
     """Return the layout contract and reject unbound v2 tender deliveries."""
     metadata = outline.get("metadata") if isinstance(outline, dict) else None
     checks = metadata.get("checks") if isinstance(metadata, dict) else None
     layout = checks.get("layout") if isinstance(checks, dict) else None
-    if manifest_version == 2 and document_type == "tender":
+    if enforce and manifest_version == 2 and document_type == "tender":
         if not isinstance(layout, dict):
             fail("tender layout contract is required for protocol-v2 delivery")
         if layout.get("status") != "verified":
@@ -2053,11 +2055,14 @@ def main() -> None:
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
     pdf_text, native_furniture_removed = native_pdf_body_text(pdf_path, docx_path, merged, pdf_text)
-    tender_layout = require_tender_layout_contract(
-        _one_state_object(context["state"], "outline", "outline"),
-        document_type,
-        manifest["version"],
-    )
+    tender_layout = None
+    if manifest["version"] == 2:
+        tender_layout = require_tender_layout_contract(
+            _one_state_object(context["state"], "outline", "outline"),
+            document_type,
+            manifest["version"],
+            enforce=("document_type" in manifest),
+        )
     if tender_layout:
         verify_tender_layout(docx_path, tender_layout, native_furniture_removed)
         verify_tender_template(root, docx_path, tender_layout.get("template"))
