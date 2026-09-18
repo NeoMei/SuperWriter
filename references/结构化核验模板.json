@@ -29,5 +29,73 @@
       "applicability": "unverified",
       "support": "unverified"
     }
-  ]
+  ],
+  "tender_contract": {
+    "source_locator": "招募文件（定稿）第三章第2条、评分表第5页",
+    "structure_mode": "partial",
+    "sections": [
+      {
+        "id": "S09",
+        "title": "9、资格审查资料",
+        "order": 1,
+        "kind": "chapter",
+        "parent": null,
+        "allow_extensions": false
+      },
+      {
+        "id": "S10",
+        "title": "10、类似业绩",
+        "order": 2,
+        "kind": "chapter",
+        "parent": null,
+        "allow_extensions": false
+      },
+      {
+        "id": "S11",
+        "title": "11、申请人认为需要提供的其他文件",
+        "order": 3,
+        "kind": "chapter",
+        "parent": null,
+        "allow_extensions": true
+      }
+    ],
+    "scoring_items": [
+      {
+        "id": "P01",
+        "label": "资格审查完整性",
+        "source_label": "资格审查完整性",
+        "order": 1,
+        "section_id": "S11",
+        "evidence_ids": ["material-01"],
+        "aliases": []
+      },
+      {
+        "id": "P02",
+        "label": "报价响应速度",
+        "source_label": "报价响应逮度",
+        "order": 2,
+        "section_id": "S11",
+        "evidence_ids": ["material-01"],
+        "aliases": ["报价响应速度"]
+      }
+    ],
+    "review_index": {
+      "section_id": "S11",
+      "required_item_ids": ["P01", "P02"],
+      "rows": [
+        {
+          "item_id": "P01",
+          "label": "资格审查完整性",
+          "page": null,
+          "notes": "待合稿排版后回填"
+        },
+        {
+          "item_id": "P02",
+          "label": "报价响应速度",
+          "page": null,
+          "notes": "待合稿排版后回填"
+        }
+      ]
+    }
+  }
 }
