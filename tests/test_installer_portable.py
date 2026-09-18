@@ -40,6 +40,9 @@ def tree_manifest(root: Path) -> dict[str, tuple[str, str]]:
 
 
 class PortableInstallerTest(unittest.TestCase):
+    def test_runtime_manifest_includes_tender_contract_module(self):
+        self.assertIn("scripts/tender_contract.py", portable_installer.RUNTIME_FILES)
+
     def _git(self, *arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["git", *arguments],
