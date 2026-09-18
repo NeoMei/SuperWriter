@@ -32,11 +32,11 @@
 - `build_writer_checklist(contract: dict) -> list[dict]` returns one row per declared scoring item in source order with response location, evidence IDs, and review-index page.
 - `reverse_evidence_map(contract: dict) -> dict[str, list[str]]` maps every evidence/material ID back to scoring-item IDs.
 
-- [ ] **Step 1: Write failing tests** for the exact contract shape, fixed section order, score-item order, missing review-index rows, duplicate rows, explicit typo aliases, strict page validation, checklist order, and reverse evidence mapping.
-- [ ] **Step 2: Run `PYTHONPATH=. python3 -m unittest tests.test_tender_contract -v`** and confirm failures are due to the missing module/behavior.
-- [ ] **Step 3: Implement the minimal standard-library module** with exact-key validation, source-label preservation, explicit aliases, and deterministic derived outputs.
-- [ ] **Step 4: Re-run the focused tests** and confirm all pass.
-- [ ] **Step 5: Commit** with `feat: add tender requirements contract`.
+- [x] **Step 1: Write failing tests** for the exact contract shape, fixed section order, score-item order, missing review-index rows, duplicate rows, explicit typo aliases, strict page validation, checklist order, and reverse evidence mapping.
+- [x] **Step 2: Run `PYTHONPATH=. python3 -m unittest tests.test_tender_contract -v`** and confirm failures are due to the missing module/behavior.
+- [x] **Step 3: Implement the minimal standard-library module** with exact-key validation, source-label preservation, explicit aliases, and deterministic derived outputs.
+- [x] **Step 4: Re-run the focused tests** and confirm all pass.
+- [x] **Step 5: Commit** with `feat: add tender requirements contract`.
 
 ### Task 2: Bind the contract to protocol v2 checks and acceptance
 
@@ -51,13 +51,13 @@
 - v2 tender acceptance reads the current approved outline checks; when `tender_contract` is present it rejects review-index findings with `strict_pages=True` before accepting DOCX/PDF delivery.
 - Existing projects without `tender_contract`, professional projects, and legacy-v1 continue through their existing paths.
 
-- [ ] **Step 1: Add failing schema tests** for valid/invalid tender contracts and compatibility without the optional field.
-- [ ] **Step 2: Run the focused schema tests** and confirm the new cases fail before integration.
-- [ ] **Step 3: Add failing acceptance tests** for a missing review-index item, duplicate item, unfilled page, and a fully populated valid contract bound to the approved outline.
-- [ ] **Step 4: Run the focused acceptance tests** and confirm they fail for the intended contract findings.
-- [ ] **Step 5: Implement the optional schema binding and acceptance gate** without changing existing point/matrix checks or template/layout behavior.
-- [ ] **Step 6: Re-run both focused suites** and confirm all pass.
-- [ ] **Step 7: Commit** with `fix: enforce tender review index contract`.
+- [x] **Step 1: Add failing schema tests** for valid/invalid tender contracts and compatibility without the optional field.
+- [x] **Step 2: Run the focused schema tests** and confirm the new cases fail before integration.
+- [x] **Step 3: Add failing acceptance tests** for a missing review-index item, duplicate item, unfilled page, and a fully populated valid contract bound to the approved outline.
+- [x] **Step 4: Run the focused acceptance tests** and confirm they fail for the intended contract findings.
+- [x] **Step 5: Implement the optional schema binding and acceptance gate** without changing existing point/matrix checks or template/layout behavior.
+- [x] **Step 6: Re-run both focused suites** and confirm all pass.
+- [x] **Step 7: Commit** with `fix: enforce tender review index contract`.
 
 ### Task 3: Document the workflow and provide contract/checklist templates
 
@@ -75,18 +75,25 @@
 - The JSON example contains a complete opt-in `tender_contract` skeleton with a deliberate placeholder page state; no automatic approval is implied.
 - The workflow exposes the derived writer checklist and reverse evidence map as review aids, while final delivery requires strict filled pages.
 
-- [ ] **Step 1: Add failing guidance tests** for the contract name, fixed-section rule, explicit alias rule, writer checklist, and strict delivery page requirement.
-- [ ] **Step 2: Run the guidance tests** and confirm they fail before documentation changes.
-- [ ] **Step 3: Update the workflow and JSON examples** with the exact contract shape and the no-Word-first boundary.
-- [ ] **Step 4: Re-run guidance tests and the complete Python regression suite.**
-- [ ] **Step 5: Run `bash tests/test_install.sh`, `bash tests/test_verify_artifacts.sh`, `python3 scripts/verify.py`, and `git diff --check`.**
-- [ ] **Step 6: Commit** with `docs: document tender requirements and index checks`.
+- [x] **Step 1: Add failing guidance tests** for the contract name, fixed-section rule, explicit alias rule, writer checklist, and strict delivery page requirement.
+- [x] **Step 2: Run the guidance tests** and confirm they fail before documentation changes.
+- [x] **Step 3: Update the workflow and JSON examples** with the exact contract shape and the no-Word-first boundary.
+- [x] **Step 4: Re-run guidance tests and the complete Python regression suite.**
+- [x] **Step 5: Run `bash tests/test_install.sh`, `bash tests/test_verify_artifacts.sh`, `python3 scripts/verify.py`, and `git diff --check`.**
+- [x] **Step 6: Commit** with `docs: document tender requirements and index checks`.
 
 ## Review Checklist
 
-- [ ] A fixed section such as `9、资格审查资料` or `10、类似业绩` cannot be silently moved under `11、申请人认为需要提供的其他文件`.
-- [ ] All declared scoring items appear exactly once in the review index; known source typos require explicit aliases.
-- [ ] Writer checklist rows and reverse evidence mappings are deterministic and preserve source order.
-- [ ] Strict delivery rejects missing/invalid final page numbers but permits draft placeholders before delivery.
-- [ ] Existing v2 projects without the extension, professional documents, and legacy-v1 remain compatible.
-- [ ] No Word-first round-trip or raw `.doc` parser is claimed by the implementation.
+- [x] A fixed section such as `9、资格审查资料` or `10、类似业绩` cannot be silently moved under `11、申请人认为需要提供的其他文件`.
+- [x] All declared scoring items appear exactly once in the review index; known source typos require explicit aliases.
+- [x] Writer checklist rows and reverse evidence mappings are deterministic and preserve source order.
+- [x] Strict delivery rejects missing/invalid final page numbers but permits draft placeholders before delivery.
+- [x] Existing v2 projects without the extension, professional documents, and legacy-v1 remain compatible.
+- [x] No Word-first round-trip or raw `.doc` parser is claimed by the implementation.
+
+## Verification record
+
+- `PYTHONPATH=.:tests python3 -m unittest discover -s tests -p 'test_*.py'`: 345 passed, 2 skipped.
+- `bash tests/test_install.sh`: 34 passed, 2 skipped.
+- `bash tests/test_verify_artifacts.sh`: 13 passed.
+- `WPSCOMPOSER_SKILL_SOURCE=/Users/neomei/项目/codexprojects/WpsComposer/skills/WPSComposer python3 scripts/verify.py --acceptance-dir 验收/模拟客户A/模拟标段1`: passed.
