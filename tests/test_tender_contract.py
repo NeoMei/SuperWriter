@@ -138,6 +138,27 @@ class TenderContractTest(unittest.TestCase):
             ):
                 review_index_findings(value, strict_pages=strict_pages)
 
+    def test_review_index_notes_must_be_strings_even_when_falsy(self):
+        for notes in (None, False, 0):
+            value = contract()
+            value["review_index"]["rows"][0]["notes"] = notes
+            with self.assertRaisesRegex(TenderContractError, "notes must be a string"):
+                validate_tender_contract(value)
+
+    def test_writer_checklist_rejects_duplicate_review_rows(self):
+        value = contract()
+        value["review_index"]["rows"].append(
+            {"item_id": "P01", "label": "文件编写质量", "page": 9, "notes": "重复"}
+        )
+        with self.assertRaisesRegex(TenderContractError, "duplicate review index row P01"):
+            build_writer_checklist(value)
+
+    def test_review_index_required_items_follow_scoring_order(self):
+        value = contract()
+        value["review_index"]["required_item_ids"] = ["P02", "P01"]
+        with self.assertRaisesRegex(TenderContractError, "required_item_ids must follow scoring order"):
+            validate_tender_contract(value)
+
     def test_review_index_reports_missing_duplicate_and_unknown_rows(self):
         value = contract()
         value["review_index"]["rows"] = [

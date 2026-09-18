@@ -139,6 +139,11 @@ def validate_tender_contract(value: object) -> None:
     required = _unique_strings(index["required_item_ids"], "tender review_index required_item_ids")
     if set(required) != item_ids:
         raise TenderContractError("tender review_index required_item_ids must match scoring_items")
+    expected_required = [
+        item["id"] for item in sorted(scoring_items, key=lambda item: item["order"])
+    ]
+    if required != expected_required:
+        raise TenderContractError("tender review_index required_item_ids must follow scoring order")
     if not isinstance(index["rows"], list):
         raise TenderContractError("tender review_index rows must be a list")
     for row in index["rows"]:
@@ -151,7 +156,10 @@ def validate_tender_contract(value: object) -> None:
             or item_row["page"] <= 0
         ):
             raise TenderContractError("tender review_index row page must be null or positive integer")
-        _text(item_row["notes"], "tender review_index row notes") if item_row["notes"] else None
+        if not isinstance(item_row["notes"], str):
+            raise TenderContractError("tender review_index row notes must be a string")
+        if item_row["notes"]:
+            _text(item_row["notes"], "tender review_index row notes")
 
     # Fixed/prescribed sections remain source-bound. A score item can use one
     # only when the review index explicitly names it as the required mapping
@@ -204,7 +212,12 @@ def build_writer_checklist(contract: dict) -> list[dict]:
     """Build the source-ordered checklist used while drafting a response."""
     validate_tender_contract(contract)
     sections = {section["id"]: section for section in contract["sections"]}
-    rows = {row["item_id"]: row for row in contract["review_index"]["rows"]}
+    rows = {}
+    for row in contract["review_index"]["rows"]:
+        item_id = row["item_id"]
+        if item_id in rows:
+            raise TenderContractError(f"duplicate review index row {item_id}")
+        rows[item_id] = row
     result = []
     for item in sorted(contract["scoring_items"], key=lambda item: item["order"]):
         row = rows.get(item["id"])
