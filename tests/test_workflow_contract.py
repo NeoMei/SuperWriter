@@ -93,6 +93,18 @@ class WorkflowContractTest(unittest.TestCase):
         for artifact in ("方案", "大纲", "每章", "配图集", "合稿"):
             self.assertIn(artifact, skill)
 
+    def test_tender_guidance_requires_template_first_generation(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        structure = (ROOT / "references/招标响应结构模板.md").read_text(encoding="utf-8")
+        acceptance = (ROOT / "references/协作交付验收.md").read_text(encoding="utf-8")
+        self.assertIn("复制到项目内模板路径", skill)
+        self.assertIn("登记 SHA-256", skill)
+        self.assertIn("作为 WPSComposer 的生成基准", acceptance)
+        self.assertIn("mode: copy", structure)
+        self.assertIn("mode: none", structure)
+        example = json.loads((ROOT / "references/结构化核验模板.json").read_text(encoding="utf-8"))
+        self.assertEqual(example["layout"]["template"]["mode"], "none")
+
     def test_static_validator_accepts_staged_v1_and_future_v2_contracts(self):
         for version, stages in ((1, V1_STAGES), (2, V2_STAGES)):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
