@@ -105,6 +105,47 @@ class WorkflowContractTest(unittest.TestCase):
         example = json.loads((ROOT / "references/结构化核验模板.json").read_text(encoding="utf-8"))
         self.assertEqual(example["layout"]["template"]["mode"], "none")
 
+    def test_tender_guidance_binds_fixed_sections_and_limits_score_order(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        structure = (ROOT / "references/招标响应结构模板.md").read_text(encoding="utf-8")
+        matrix = (ROOT / "references/应答矩阵模板.md").read_text(encoding="utf-8")
+
+        self.assertIn("固定章节必须以招标文件来源为准", skill)
+        self.assertIn("评分项顺序只能用于来源明确允许的扩展位置", skill)
+        self.assertIn("source_label", structure)
+        self.assertIn("aliases", structure)
+        self.assertIn("第9、10项固定章节不得移入第11项", structure)
+        self.assertIn("本项目无独立技术标", structure)
+        self.assertIn("不得按评分项重排", matrix)
+
+    def test_tender_contract_template_includes_explicit_source_labels_and_draft_pages(self):
+        example = json.loads((ROOT / "references/结构化核验模板.json").read_text(encoding="utf-8"))
+        contract = example["tender_contract"]
+
+        self.assertEqual(
+            set(contract), {"source_locator", "structure_mode", "sections", "scoring_items", "review_index"}
+        )
+        self.assertTrue(contract["source_locator"])
+        self.assertTrue(contract["sections"])
+        self.assertTrue(contract["scoring_items"])
+        self.assertTrue(contract["scoring_items"][0]["source_label"])
+        self.assertIn("aliases", contract["scoring_items"][0])
+        self.assertIn("page", contract["review_index"]["rows"][0])
+        self.assertIsNone(contract["review_index"]["rows"][0]["page"])
+
+    def test_tender_guidance_exposes_derived_maps_strict_pages_and_source_boundary(self):
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        structured = (ROOT / "references/结构化核验.md").read_text(encoding="utf-8")
+        acceptance = (ROOT / "references/协作交付验收.md").read_text(encoding="utf-8")
+
+        for document in (skill, structured, acceptance):
+            self.assertIn("build_writer_checklist", document)
+            self.assertIn("reverse_evidence_map", document)
+        self.assertIn("strict_pages=True", acceptance)
+        self.assertIn("Word-first", structured)
+        self.assertIn("原始 `.doc` 解析", structured)
+        self.assertIn("反向证据映射", acceptance)
+
     def test_static_validator_accepts_staged_v1_and_future_v2_contracts(self):
         for version, stages in ((1, V1_STAGES), (2, V2_STAGES)):
             with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:

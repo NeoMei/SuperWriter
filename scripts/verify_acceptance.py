@@ -28,6 +28,7 @@ from collaboration.checks import check_files, markdown_headings, validate_files,
 from collaboration.model import CollaborationError
 from collaboration.store import load_state
 from collaboration.workflow import figure_is_approved, require_delivery_ready
+from tender_contract import TenderContractError, review_index_findings
 from tender_template import TemplateError, resolve_template, verify_template_application
 
 
@@ -728,6 +729,26 @@ def require_tender_layout_contract(
         if template.get("mode") not in {"copy", "none"}:
             fail("tender layout template mode is invalid")
     return layout if isinstance(layout, dict) else None
+
+
+def require_tender_review_index_contract(
+    outline: dict, document_type: str, manifest_version: int
+) -> dict | None:
+    """Reject an opted-in v2 tender contract with an incomplete review index."""
+    if manifest_version != 2 or document_type != "tender":
+        return None
+    metadata = outline.get("metadata") if isinstance(outline, dict) else None
+    checks = metadata.get("checks") if isinstance(metadata, dict) else None
+    contract = checks.get("tender_contract") if isinstance(checks, dict) else None
+    if contract is None:
+        return None
+    try:
+        findings = review_index_findings(contract, strict_pages=True)
+    except TenderContractError as error:
+        fail(f"tender_contract: {error}")
+    if findings:
+        fail("tender review index contract failed: " + "; ".join(findings))
+    return contract
 
 
 def verify_tender_template(project_root: Path, docx_path: Path, template_spec: object) -> None:
@@ -1593,6 +1614,7 @@ def validate_pipeline_v2(root: Path, pipeline: object, document_type: str = "ten
     outline = _one_state_object(state, "outline", "outline")
     if outline["status"] != "approved" or outline["path"] != "大纲.md":
         fail("collaboration outline must be the current approved project-root 大纲.md")
+    require_tender_review_index_contract(outline, document_type, 2)
     briefs = [obj for obj in state["objects"].values() if obj["kind"] == "brief"]
     if len(briefs) > 1:
         fail("document_type requires an unambiguous brief")

@@ -42,6 +42,7 @@ WPSCOMPOSER_CACHE_CURRENT = "current"
 RUNTIME_FILES = (
     "scripts/render_svg.py",
     "scripts/runtime.py",
+    "scripts/tender_contract.py",
     "scripts/collaboration/checks.py",
     "scripts/svg_geometry_compare.py",
     "scripts/render_svg_macos.js",
