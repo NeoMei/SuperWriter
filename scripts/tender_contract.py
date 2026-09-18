@@ -41,10 +41,12 @@ def _unique_strings(value: object, label: str, *, allow_empty: bool = True) -> l
         raise TenderContractError(f"{label} must be a list")
     result = []
     for item in value:
-        if not isinstance(item, str) or (not allow_empty and not item.strip()):
+        if not isinstance(item, str):
             raise TenderContractError(f"{label} must contain strings")
-        if not item:
+        if not item or (not allow_empty and not item.strip()):
             raise TenderContractError(f"{label} must not contain empty strings")
+        if item != item.strip():
+            raise TenderContractError(f"{label} must be trimmed strings")
         result.append(item)
     if len(result) != len(set(result)):
         raise TenderContractError(f"{label} must contain unique values")
@@ -150,6 +152,17 @@ def validate_tender_contract(value: object) -> None:
         ):
             raise TenderContractError("tender review_index row page must be null or positive integer")
         _text(item_row["notes"], "tender review_index row notes") if item_row["notes"] else None
+
+    # Fixed/prescribed sections remain source-bound. A score item can use one
+    # only when the review index explicitly names it as the required mapping
+    # location; extension sections are permitted by their declaration.
+    for item in scoring_items:
+        section = section_by_id[item["section_id"]]
+        if not section["allow_extensions"] and item["section_id"] != index["section_id"]:
+            raise TenderContractError(
+                f"tender scoring item {item['id']} section is not an extension location "
+                "or required score mapping"
+            )
 
 
 def review_index_findings(contract: dict, *, strict_pages: bool) -> list[str]:

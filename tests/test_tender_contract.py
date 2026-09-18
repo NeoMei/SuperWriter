@@ -89,6 +89,55 @@ class TenderContractTest(unittest.TestCase):
         with self.assertRaisesRegex(TenderContractError, "section"):
             validate_tender_contract(value)
 
+    def test_fixed_section_requires_explicit_review_index_mapping(self):
+        value = contract()
+        value["scoring_items"][0]["section_id"] = "S01"
+        value["review_index"]["section_id"] = "S11"
+        with self.assertRaisesRegex(TenderContractError, "required score mapping"):
+            validate_tender_contract(value)
+
+        # A fixed section is a permitted score location when the review index
+        # explicitly declares that section as the required score-mapping area.
+        value["review_index"]["section_id"] = "S01"
+        validate_tender_contract(value)
+
+    def test_extension_section_is_a_permitted_scoring_location(self):
+        value = contract()
+        value["scoring_items"][0]["section_id"] = "S11"
+        validate_tender_contract(value)
+
+    def test_whitespace_only_ids_evidence_aliases_and_notes_are_rejected(self):
+        cases = []
+
+        value = contract()
+        value["scoring_items"][0]["evidence_ids"] = ["   "]
+        cases.append(value)
+
+        value = contract()
+        value["scoring_items"][0]["aliases"] = ["\t"]
+        cases.append(value)
+
+        value = contract()
+        value["review_index"]["rows"][0]["notes"] = "\n"
+        cases.append(value)
+
+        for malformed in cases:
+            with self.assertRaisesRegex(
+                TenderContractError,
+                "must contain strings|must be trimmed|trimmed nonempty",
+            ):
+                validate_tender_contract(malformed)
+
+    def test_invalid_review_index_page_is_a_stable_contract_error_in_draft_and_strict(self):
+        value = contract()
+        value["review_index"]["rows"][0]["page"] = 0
+        for strict_pages in (False, True):
+            with self.assertRaisesRegex(
+                TenderContractError,
+                "review_index row page must be null or positive integer",
+            ):
+                review_index_findings(value, strict_pages=strict_pages)
+
     def test_review_index_reports_missing_duplicate_and_unknown_rows(self):
         value = contract()
         value["review_index"]["rows"] = [
