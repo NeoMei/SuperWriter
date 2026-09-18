@@ -28,6 +28,7 @@ from collaboration.checks import check_files, markdown_headings, validate_files,
 from collaboration.model import CollaborationError
 from collaboration.store import load_state
 from collaboration.workflow import figure_is_approved, require_delivery_ready
+from tender_template import TemplateError, resolve_template, verify_template_application
 
 
 def fail(message: str) -> None:
@@ -576,6 +577,168 @@ def _parse_line_spacing_spec(spec: object) -> tuple[str, float]:
     fail(f"tender layout line spacing cannot be parsed: {spec!r}")
 
 
+def _style_is_heading(style: ET.Element | None, w: str) -> bool:
+    if style is None:
+        return False
+    style_id = (style.get(w + "styleId") or "").casefold()
+    name = style.find(w + "name")
+    style_name = (name.get(w + "val") if name is not None else "").casefold()
+    if "heading" in style_id or "heading" in style_name or "标题" in style_name:
+        return True
+    return style.find(w + "pPr/" + w + "outlineLvl") is not None
+
+
+def _style_chain(style_id: str | None, styles_by_id: dict[str, ET.Element], w: str) -> list[ET.Element]:
+    chain = []
+    seen = set()
+    current = style_id
+    while current and current not in seen:
+        seen.add(current)
+        style = styles_by_id.get(current)
+        if style is None:
+            break
+        chain.append(style)
+        based_on = style.find(w + "basedOn")
+        current = based_on.get(w + "val") if based_on is not None else None
+    return chain
+
+
+def _effective_child(chain: list[ET.Element], path: str, w: str) -> ET.Element | None:
+    for style in chain:
+        element = style.find(path)
+        if element is not None:
+            return element
+    return None
+
+
+def _check_direct_font(fonts: ET.Element | None, expected_font: str, scope: str, w: str) -> None:
+    if fonts is None:
+        return
+    is_cjk = any(ord(char) > 127 for char in expected_font)
+    actual = fonts.get(w + "eastAsia") if is_cjk else (fonts.get(w + "ascii") or fonts.get(w + "hAnsi"))
+    if actual is None or actual.casefold() != expected_font.casefold():
+        fail(
+            f"tender layout body font differs in {scope}: expected {expected_font!r}, "
+            f"got {actual if actual is not None else '(no font declared)'!r}"
+        )
+
+
+def _check_direct_size(size: ET.Element | None, expected_size: object, scope: str, w: str) -> None:
+    if size is None:
+        return
+    try:
+        actual = float(size.get(w + "val")) / 2
+    except (TypeError, ValueError):
+        fail(f"tender layout body size is not numeric in {scope}: {size.get(w + 'val')!r}")
+    if not isinstance(expected_size, (int, float)) or isinstance(expected_size, bool) \
+            or not math.isclose(actual, expected_size, rel_tol=0.0, abs_tol=0.01):
+        fail(
+            f"tender layout body size differs in {scope}: expected {expected_size}pt, "
+            f"got {actual:g}pt"
+        )
+
+
+def _check_spacing(spacing: ET.Element | None, expected_type: str, expected_val: float, scope: str, w: str) -> None:
+    if spacing is None:
+        return
+    line_rule = spacing.get(w + "lineRule")
+    line_value = spacing.get(w + "line")
+    if expected_type == "multiple":
+        if line_rule not in (None, "auto"):
+            fail(f"tender layout line spacing rule differs in {scope}: expected auto/multiple, got lineRule={line_rule!r}")
+        try:
+            actual = float(line_value) / 240 if line_value is not None else 1.0
+        except (TypeError, ValueError):
+            fail(f"tender layout line spacing is not numeric in {scope}: {line_value!r}")
+        if not math.isclose(actual, expected_val, rel_tol=0.0, abs_tol=0.01):
+            fail(f"tender layout line spacing differs in {scope}: expected {expected_val:g}x, got {actual:g}x")
+        return
+    if line_rule not in ("exact", "atLeast"):
+        fail(f"tender layout line spacing rule differs in {scope}: expected exact/atLeast for point spacing, got lineRule={line_rule!r}")
+    if line_value is None:
+        fail(f"tender layout line spacing w:line is missing in {scope}")
+    try:
+        actual = float(line_value) / 20
+    except (TypeError, ValueError):
+        fail(f"tender layout line spacing is not numeric in {scope}: {line_value!r}")
+    if not math.isclose(actual, expected_val, rel_tol=0.0, abs_tol=0.1):
+        fail(f"tender layout line spacing differs in {scope}: expected {expected_val:g}pt, got {actual:g}pt")
+
+
+def _verify_body_typography(document: ET.Element, styles: ET.Element, typography: dict, w: str) -> None:
+    expected_font = typography.get("body_font")
+    expected_size = typography.get("body_size_pt")
+    expected_type, expected_val = _parse_line_spacing_spec(typography.get("line_spacing"))
+    styles_by_id = {
+        style.get(w + "styleId"): style
+        for style in styles.findall(w + "style")
+        if style.get(w + "styleId")
+    }
+    default_style = next(
+        style for style in styles.findall(w + "style")
+        if style.get(w + "type") == "paragraph" and style.get(w + "default") == "1"
+    )
+    for paragraph_index, paragraph in enumerate(document.iter(w + "p"), 1):
+        if not "".join(paragraph.itertext()).strip():
+            continue
+        paragraph_properties = paragraph.find(w + "pPr")
+        style_id = None
+        if paragraph_properties is not None:
+            paragraph_style = paragraph_properties.find(w + "pStyle")
+            style_id = paragraph_style.get(w + "val") if paragraph_style is not None else None
+        style = styles_by_id.get(style_id)
+        if _style_is_heading(style, w):
+            continue
+        scope = f"body paragraph {paragraph_index}"
+        chain = _style_chain(style_id, styles_by_id, w)
+        if not chain:
+            chain = [default_style]
+        _check_direct_font(_effective_child(chain, w + "rPr/" + w + "rFonts", w), expected_font, scope + " style", w)
+        _check_direct_size(_effective_child(chain, w + "rPr/" + w + "sz", w), expected_size, scope + " style", w)
+        _check_spacing(_effective_child(chain, w + "pPr/" + w + "spacing", w), expected_type, expected_val, scope + " style", w)
+        if paragraph_properties is not None:
+            _check_spacing(paragraph_properties.find(w + "spacing"), expected_type, expected_val, scope, w)
+            _check_direct_font(paragraph_properties.find(w + "rPr/" + w + "rFonts"), expected_font, scope, w)
+            _check_direct_size(paragraph_properties.find(w + "rPr/" + w + "sz"), expected_size, scope, w)
+        for run_index, run in enumerate(paragraph.findall(w + "r"), 1):
+            run_properties = run.find(w + "rPr")
+            if run_properties is None:
+                continue
+            _check_direct_font(run_properties.find(w + "rFonts"), expected_font, f"{scope} run {run_index}", w)
+            _check_direct_size(run_properties.find(w + "sz"), expected_size, f"{scope} run {run_index}", w)
+
+
+def require_tender_layout_contract(outline: dict, document_type: str, manifest_version: int) -> dict | None:
+    """Return the layout contract and reject unbound v2 tender deliveries."""
+    metadata = outline.get("metadata") if isinstance(outline, dict) else None
+    checks = metadata.get("checks") if isinstance(metadata, dict) else None
+    layout = checks.get("layout") if isinstance(checks, dict) else None
+    if manifest_version == 2 and document_type == "tender":
+        if not isinstance(layout, dict):
+            fail("tender layout contract is required for protocol-v2 delivery")
+        if layout.get("status") != "verified":
+            fail(f"tender layout status is not verified: {layout.get('status')!r}")
+        template = layout.get("template")
+        if not isinstance(template, dict):
+            fail("tender layout template declaration is required")
+        if template.get("mode") == "none" and not isinstance(template.get("reason"), str):
+            fail("tender layout template none mode requires a reason")
+        if template.get("mode") not in {"copy", "none"}:
+            fail("tender layout template mode is invalid")
+    return layout if isinstance(layout, dict) else None
+
+
+def verify_tender_template(project_root: Path, docx_path: Path, template_spec: object) -> None:
+    """Verify that a delivered DOCX inherits the approved tender template."""
+    if not isinstance(template_spec, dict) or template_spec.get("mode") != "copy":
+        return
+    try:
+        template_path = resolve_template(project_root, template_spec)
+        verify_template_application(template_path, docx_path)
+    except TemplateError as error:
+        fail(f"tender template application failed: {error}")
+
+
 def verify_tender_layout(
     docx_path: Path, layout: object, native_page_contract: bool
 ) -> None:
@@ -739,6 +902,7 @@ def verify_tender_layout(
                 f"tender layout line spacing differs: expected {expected_val:g}pt, "
                 f"got {actual_pt:g}pt"
             )
+    _verify_body_typography(document, styles, typography, w)
 def png_header(payload: bytes, label: str):
     try:
         if len(payload) < 33 or payload[:8] != b"\x89PNG\r\n\x1a\n":
@@ -1889,13 +2053,14 @@ def main() -> None:
     docx_text = extracted_text("DOCX", docx_path)
     pdf_text = extracted_text("PDF", pdf_path)
     pdf_text, native_furniture_removed = native_pdf_body_text(pdf_path, docx_path, merged, pdf_text)
-    tender_layout = (
-        manifest["version"] == 2
-        and _one_state_object(context["state"], "outline", "outline")["metadata"]
-            .get("checks", {}).get("layout")
+    tender_layout = require_tender_layout_contract(
+        _one_state_object(context["state"], "outline", "outline"),
+        document_type,
+        manifest["version"],
     )
     if tender_layout:
         verify_tender_layout(docx_path, tender_layout, native_furniture_removed)
+        verify_tender_template(root, docx_path, tender_layout.get("template"))
     extracted = (("DOCX", docx_text), ("PDF", pdf_text))
     source_blocks = markdown_block_sequence(merged)
     if not source_blocks:
