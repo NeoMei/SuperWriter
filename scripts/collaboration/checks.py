@@ -39,7 +39,7 @@ def _exact_dict_optional(value: object, required: set[str], optional: set[str], 
 
 
 def _layout_checks(value: object) -> None:
-    _exact_dict(value, {'status', 'source_locator', 'page', 'page_numbers', 'typography'}, 'layout')
+    _exact_dict(value, {'status', 'source_locator', 'page', 'page_numbers', 'typography', 'template'}, 'layout')
     if value['status'] not in ('verified', 'unverified', 'conflict'):
         raise CollaborationError('layout status must be verified, unverified or conflict')
     _nonempty(value['source_locator'], 'layout source_locator')
@@ -59,6 +59,24 @@ def _layout_checks(value: object) -> None:
     _nonempty(value['typography']['body_font'], 'layout typography body_font')
     _positive_number(value['typography']['body_size_pt'], 'layout typography body_size_pt')
     _nonempty(value['typography']['line_spacing'], 'layout typography line_spacing')
+    template = value['template']
+    if not isinstance(template, dict):
+        raise CollaborationError('layout template must be an object')
+    mode = template.get('mode')
+    if mode == 'none':
+        _exact_dict(template, {'mode', 'reason'}, 'layout template')
+        _nonempty(template['reason'], 'layout template reason')
+    elif mode == 'copy':
+        _exact_dict(template, {'mode', 'path', 'sha256', 'format'}, 'layout template')
+        canonical_path(template['path'])
+        _digest(template['sha256'], 'layout template sha256')
+        if template['format'] not in ('docx', 'dotx'):
+            raise CollaborationError('layout template format must be docx or dotx')
+        suffix = Path(template['path']).suffix.lower().lstrip('.')
+        if suffix != template['format']:
+            raise CollaborationError('layout template format must match template path suffix')
+    else:
+        raise CollaborationError('layout template mode must be copy or none')
 
 
 def validate_files(value: object) -> list:
