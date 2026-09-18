@@ -26,6 +26,7 @@ from verify_acceptance import (  # noqa: E402
     markdown_block_sequence,
     normalized_pixels,
     pdf_metadata,
+    require_tender_layout_contract,
     require_ordered_export_coverage,
     require_ordered_source_coverage,
     validate_figure,
@@ -347,12 +348,13 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
         line_rule="auto",
         pg_num_fmt="decimal",
         pg_num_start="1",
+        body_xml='<w:p><w:r><w:t>Sample</w:t></w:r></w:p>',
     ):
         import zipfile
         doc_xml = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
-    <w:p><w:r><w:t>Sample</w:t></w:r></w:p>
+    {body_xml}
     <w:sectPr>
       <w:pgSz w:w="{w_w}" w:h="{w_h}"/>
       <w:pgMar w:top="{top}" w:bottom="{bottom}" w:left="{left}" w:right="{right}"/>
@@ -383,6 +385,7 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
         return {
             "status": "verified",
             "source_locator": "投标人须知 3.2-3.4",
+            "template": {"mode": "none", "reason": "招标文件未提供Office格式模板"},
             "page": {
                 "width_mm": 210,
                 "height_mm": 297,
@@ -526,6 +529,36 @@ class TenderLayoutAcceptanceTest(unittest.TestCase):
             with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
                 verify_tender_layout(docx_auto, layout, native_page_contract=True)
             self.assertIn("tender layout line spacing rule differs", error.getvalue())
+
+    def test_direct_body_run_formatting_is_checked(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            docx_path = Path(temporary) / "doc.docx"
+            self.make_docx(
+                docx_path,
+                body_xml=(
+                    '<w:p><w:r><w:rPr><w:rFonts w:eastAsia="黑体" '
+                    'w:ascii="Arial"/><w:sz w:val="28"/></w:rPr>'
+                    '<w:t>格式漂移</w:t></w:r></w:p>'
+                ),
+            )
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+                verify_tender_layout(docx_path, self.valid_layout(), native_page_contract=True)
+            self.assertIn("tender layout body font differs", error.getvalue())
+
+    def test_v2_tender_delivery_requires_a_layout_contract(self):
+        outline = {"metadata": {"checks": {}}}
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+            require_tender_layout_contract(outline, "tender", 2)
+        self.assertIn("tender layout contract is required", error.getvalue())
+
+    def test_v2_tender_layout_requires_template_declaration(self):
+        outline = {"metadata": {"checks": {"layout": {"status": "verified"}}}}
+        error = io.StringIO()
+        with contextlib.redirect_stderr(error), self.assertRaises(SystemExit):
+            require_tender_layout_contract(outline, "tender", 2)
+        self.assertIn("template declaration is required", error.getvalue())
 
     def test_without_layout_verification_is_bypassed_compatibly(self):
         with tempfile.TemporaryDirectory() as temporary:

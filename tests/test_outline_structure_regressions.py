@@ -135,6 +135,10 @@ class OutlineLayoutSchemaTest(unittest.TestCase):
             "layout": {
                 "status": "verified",
                 "source_locator": "投标人须知 3.2-3.4",
+                "template": {
+                    "mode": "none",
+                    "reason": "已核验投标文件格式及补遗，未提供可直接复用的Office模板",
+                },
                 "page": {
                     "width_mm": 210,
                     "height_mm": 297,
@@ -193,6 +197,32 @@ class OutlineLayoutSchemaTest(unittest.TestCase):
         checks = self.base_checks()
         checks["layout"]["extra"] = True
         with self.assertRaisesRegex(CollaborationError, "layout"):
+            self.validate(checks, ["chapter-01"])
+
+    def test_missing_template_declaration_is_rejected(self):
+        checks = self.base_checks()
+        del checks["layout"]["template"]
+        with self.assertRaisesRegex(CollaborationError, "layout.*template"):
+            self.validate(checks, ["chapter-01"])
+
+    def test_template_copy_binding_requires_supported_format_and_digest(self):
+        checks = self.base_checks()
+        checks["layout"]["template"] = {
+            "mode": "copy",
+            "path": "模板/投标文件格式.docx",
+            "sha256": "a" * 64,
+            "format": "docx",
+        }
+        self.validate(checks, ["chapter-01"])
+
+        checks["layout"]["template"]["format"] = "pdf"
+        with self.assertRaisesRegex(CollaborationError, "template.*format"):
+            self.validate(checks, ["chapter-01"])
+
+    def test_template_none_requires_a_reason(self):
+        checks = self.base_checks()
+        checks["layout"]["template"] = {"mode": "none", "reason": ""}
+        with self.assertRaisesRegex(CollaborationError, "template reason"):
             self.validate(checks, ["chapter-01"])
 
 
