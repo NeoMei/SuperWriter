@@ -125,6 +125,8 @@ v1 的 0–9 阶段及仅 2/5/8 人工门规则被冻结在 `references/legacy-v
 - 招标提供 DOCX/DOTX 格式模板时，复制模板并绑定 SHA-256，以复制件作为生成基准，验收输出是否保留模板稳定排版部件。
 - 没有可复用 Office 模板时必须登记核验范围和理由；未声明模板不能当作“没有格式要求”。
 
+[SuperWriter 0.2.9 Release](https://github.com/NeoMei/SuperWriter/releases/tag/v0.2.9)
+
 ### v0.2.7 (2026-09-14)
 
 - 提供持久 Python 环境入口，显式安装依赖并优先执行该环境的命令。
